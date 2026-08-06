@@ -42,8 +42,8 @@ one category. Each section has a short slug used in its URL:
 - `/tasks/research`
 - `/tasks/mike`
 
-These category pages are the same app as the main page (checkboxes,
-notes, Save Changes, delete all work identically), just filtered to
+These category pages are the same app as the main page (status
+dropdowns, notes, Save Changes, delete all work identically), just filtered to
 one section, with a "&larr; All categories" link back to `/tasks`. The
 **+ New Task** button on a category page pre-selects that category in
 the form. Slugs live in each section's `"slug"` field in `data/tasks.json`,
@@ -73,8 +73,17 @@ Open `data/tasks.json` and edit directly, no HTML knowledge needed:
   each task, saved to disk via the Save Changes button
 - `tags`, an array of `{ "text": "...", "flag": true|false }`, `flag: true`
   renders the tag in red (used for the most urgent/important tags)
-- `done`, `true` or `false`, done tasks are pulled out into the
+- `done`, `true` or `false`, kept in sync with `status` (`true` only
+  when `status` is `"done"`), done tasks are pulled out into the
   Completed panel automatically
+- `status`, one of `"open"`, `"in-progress"`, or `"done"`, set via the
+  status dropdown on each task
+- `created`, the UTC timestamp the task was added, set automatically
+  and never changed afterward
+- `modified`, the UTC timestamp of the task's last notes or status
+  change, updated automatically
+- `completed`, the UTC timestamp `status` last became `"done"`, or
+  `""` if the task isn't done
 - a section can also have its own top-level `"note"` field, shown under
   its header (used for reference info that isn't tied to one task, like
   the TD rate note under Finance)
@@ -86,9 +95,11 @@ level and give it a unique `id`.
 
 ## Behavior
 
-- Checking a task's box moves it out of its section and into the
+- Each task has a status dropdown (Open / In Progress / Done). Setting
+  a task to Done moves it out of its section and into the
   **Completed** panel on the right, grouped under its original section
-  label. Unchecking it there moves it back to its section.
+  label. Setting it back to Open or In Progress there moves it back to
+  its section.
 - The Completed panel is collapsed by default, click its header to
   expand it. Each category group inside it is independently
   collapsible too, click a group's label to toggle just that group.

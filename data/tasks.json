@@ -27,7 +27,11 @@
           ],
           "done": false,
           "id": "d7edf9e2da04",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "check encampments log table.",
@@ -40,7 +44,11 @@
           ],
           "done": false,
           "id": "676272d4ee91",
-          "notes": "checked and no table updates or new tables were created. didn't see changes to log table detailed in ticket or SDSF.\nCHECK EMAILS FOR MORE INFO"
+          "notes": "checked and no table updates or new tables were created. didn't see changes to log table detailed in ticket or SDSF.\nCHECK EMAILS FOR MORE INFO",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Create PID overlay staging table from Contributing Heritage Resources for POSSE",
@@ -61,7 +69,11 @@
           ],
           "done": false,
           "id": "a6170ab4565b",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Restore deleted AssetIDs from 2024-2025 Asset Registry.gdb",
@@ -78,7 +90,11 @@
           ],
           "done": false,
           "id": "c673e9ff76ba",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Compare Target Hazard Analysis automation results to expected",
@@ -99,7 +115,11 @@
           ],
           "done": false,
           "id": "66ff15254b85",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Reply to Sanjeev Sharma re: S/4 Hana-GIS Cert issue",
@@ -120,7 +140,11 @@
           ],
           "done": false,
           "id": "f3fbbbd97f41",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Create new point feature class TRN_school_crossing_guard",
@@ -145,7 +169,11 @@
           ],
           "done": true,
           "id": "9a353fe72249",
-          "notes": ""
+          "notes": "",
+          "status": "done",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": "2026-08-06T19:41:31Z"
         },
         {
           "desc": "Asset ID issues resolved, verified via counts",
@@ -166,7 +194,11 @@
           ],
           "done": true,
           "id": "8eb451826828",
-          "notes": ""
+          "notes": "",
+          "status": "done",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": "2026-08-06T19:41:31Z"
         },
         {
           "desc": "Investigate issue with ast_tree_hwa and its attribute rule",
@@ -183,7 +215,11 @@
           ],
           "done": true,
           "id": "3a3527fd56d5",
-          "notes": ""
+          "notes": "",
+          "status": "done",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": "2026-08-06T19:41:31Z"
         },
         {
           "id": "8303b6dda872",
@@ -191,7 +227,11 @@
           "note": "",
           "notes": "RO features are all capitalized.\ndone in prod, qa, dev\nadd to project to wgs84 script.",
           "tags": [],
-          "done": false
+          "done": false,
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "id": "0e6ee6c1c406",
@@ -208,7 +248,11 @@
               "flag": false
             }
           ],
-          "done": false
+          "done": false,
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         }
       ],
       "slug": "work"
@@ -228,7 +272,11 @@
           ],
           "done": false,
           "id": "06c418a27cff",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Pay off Tangerine line of credit",
@@ -241,7 +289,11 @@
           ],
           "done": false,
           "id": "6fcac47d1878",
-          "notes": "sent $3000 to tangerine, from wealthsimple"
+          "notes": "sent $3000 to tangerine, from wealthsimple",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Email landlord about bathroom inconvenience compensation",
@@ -254,7 +306,11 @@
           ],
           "done": true,
           "id": "6f6d4de7ea70",
-          "notes": ""
+          "notes": "",
+          "status": "done",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": "2026-08-06T19:41:31Z"
         },
         {
           "desc": "Pay landlord",
@@ -267,7 +323,11 @@
           ],
           "done": false,
           "id": "1d59a881dec6",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Check end of season Adidas Copa Mundial sales",
@@ -280,7 +340,11 @@
           ],
           "done": false,
           "id": "b596be1078c9",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Connect to Trezor",
@@ -288,7 +352,11 @@
           "tags": [],
           "done": false,
           "id": "347d83f2bcdc",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Pay off Wealthsimple credit card",
@@ -301,7 +369,11 @@
           ],
           "done": true,
           "id": "ae0c87e8d411",
-          "notes": ""
+          "notes": "",
+          "status": "done",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": "2026-08-06T19:41:31Z"
         },
         {
           "desc": "Pay off RBC credit card",
@@ -314,7 +386,11 @@
           ],
           "done": true,
           "id": "f8371388d1d5",
-          "notes": ""
+          "notes": "",
+          "status": "done",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": "2026-08-06T19:41:31Z"
         },
         {
           "desc": "Check TD balance",
@@ -322,7 +398,11 @@
           "tags": [],
           "done": true,
           "id": "dabff5bd5d2d",
-          "notes": ""
+          "notes": "",
+          "status": "done",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": "2026-08-06T19:41:31Z"
         },
         {
           "desc": "Check Wealthsimple chequing balance",
@@ -330,7 +410,11 @@
           "tags": [],
           "done": true,
           "id": "cee7bc0d0faf",
-          "notes": ""
+          "notes": "",
+          "status": "done",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": "2026-08-06T19:41:31Z"
         },
         {
           "id": "4e9727fab173",
@@ -338,7 +422,11 @@
           "note": "email came in August 6th, 2026",
           "notes": "",
           "tags": [],
-          "done": false
+          "done": false,
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         }
       ],
       "note": "Rate reference: TD line of credit is also Prime + 2% (same as Tangerine). TD LOC balance: $0.",
@@ -354,7 +442,11 @@
           "tags": [],
           "done": false,
           "id": "1276f2d1bd88",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Buy new bicycle tire tubes",
@@ -362,7 +454,11 @@
           "tags": [],
           "done": false,
           "id": "bf3f0325aba6",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Buy new duvet cover",
@@ -370,7 +466,11 @@
           "tags": [],
           "done": false,
           "id": "ad4dedf15ea7",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Check about HDMI splitter",
@@ -378,7 +478,11 @@
           "tags": [],
           "done": false,
           "id": "beda78a67aad",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         }
       ],
       "slug": "admin"
@@ -393,7 +497,11 @@
           "tags": [],
           "done": false,
           "id": "5c5b58bb0e77",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Research creatine",
@@ -401,7 +509,11 @@
           "tags": [],
           "done": false,
           "id": "cc1715c07112",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         }
       ],
       "slug": "research"
@@ -429,7 +541,11 @@
           ],
           "done": false,
           "id": "6d70478cd4cc",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Update CARE Boundary layer in CAD files",
@@ -450,7 +566,11 @@
           ],
           "done": false,
           "id": "34cf620266fe",
-          "notes": ""
+          "notes": "",
+          "status": "open",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": ""
         },
         {
           "desc": "Add Portal user",
@@ -467,7 +587,11 @@
           ],
           "done": true,
           "id": "79afd919a6c5",
-          "notes": ""
+          "notes": "",
+          "status": "done",
+          "created": "2026-08-06T19:41:31Z",
+          "modified": "2026-08-06T19:41:31Z",
+          "completed": "2026-08-06T19:41:31Z"
         }
       ],
       "slug": "mike"
