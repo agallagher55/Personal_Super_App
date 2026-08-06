@@ -14,8 +14,8 @@ import socketserver
 from urllib.parse import parse_qs, urlparse
 
 PORT = 8000
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TASKS_FILE = os.path.join(BASE_DIR, 'tasks.json')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TASKS_FILE = os.path.join(BASE_DIR, 'data', 'tasks.json')
 
 
 class TaskHandler(http.server.SimpleHTTPRequestHandler):
@@ -25,20 +25,20 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         path = parsed.path
 
         if path == '/tasks/new':
-            self.path = '/new-task.html'
+            self.path = '/html/new-task.html'
             return super().do_GET()
         if path == '/':
-            self.path = '/index.html'
+            self.path = '/html/index.html'
             return super().do_GET()
         if path == '/tasks.json':
             return self.serve_tasks_json()
         if path == '/tasks':
-            self.path = '/tasks-index.html'
+            self.path = '/html/tasks-index.html'
             return super().do_GET()
         if path.startswith('/tasks/'):
             slug = path[len('/tasks/'):]
             if self.section_slug_exists(slug):
-                self.path = '/index.html'
+                self.path = '/html/index.html'
                 return super().do_GET()
             self.send_error(404, 'Unknown task category: ' + slug)
             return
