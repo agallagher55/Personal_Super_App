@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Personal Tasks - Aug 5, 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="page">
+    <div class="sheet">
+      <header>
+        <div class="title" id="page-title">Personal Tasks</div>
+        <div class="meta" id="page-meta">
+          WED AUG 5, 2026<br>
+          ALEX GALLAGHER
+        </div>
+      </header>
+
+      <a class="new-task-cta" id="new-task-cta" href="/tasks/new">+ New Task</a>
+
+      <div class="added-banner" id="added-banner">Task added.</div>
+
+      <div id="sections"></div>
+
+      <div class="footnote" id="footnote-text"></div>
+    </div>
+
+    <aside class="completed-panel">
+      <div class="completed-header" id="completed-header">
+        <span class="section-arrow" id="completed-arrow">&#9660;</span>
+        <span class="section-label">Completed</span>
+        <span class="section-count" id="completed-count"></span>
+      </div>
+      <div class="completed-body" id="completed-body"></div>
+    </aside>
+  </div>
+
+  <button type="button" id="save-changes-btn" class="save-changes-btn">Save Changes</button>
+  <div id="save-status" class="save-status"></div>
+
+  <script src="/script.js"></script>
+</body>
+</html>

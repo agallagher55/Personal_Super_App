@@ -1,0 +1,476 @@
+{
+  "sections": [
+    {
+      "id": "own-tasks",
+      "label": "Own Tasks",
+      "tasks": [
+        {
+          "desc": "Create lookup tables for domain values (Bldg_fsa_occupancy, AAA_yes_no)",
+          "note": "Modeled on BLD_USE_CLASS_LUT in ARCGIS.SDEADM.",
+          "tags": [
+            {
+              "text": "TASK0329353",
+              "flag": false
+            },
+            {
+              "text": "top priority",
+              "flag": true
+            },
+            {
+              "text": "Lisa O'Toole",
+              "flag": false
+            },
+            {
+              "text": "due Aug 7",
+              "flag": false
+            }
+          ],
+          "done": false,
+          "id": "d7edf9e2da04",
+          "notes": ""
+        },
+        {
+          "desc": "check encampments log table.",
+          "note": "should there be a new log table or were changes made to the existing?",
+          "tags": [
+            {
+              "text": "top priority",
+              "flag": true
+            }
+          ],
+          "done": false,
+          "id": "676272d4ee91",
+          "notes": "checked and no table updates or new tables were created. didn't see changes to log table detailed in ticket or SDSF.\nCHECK EMAILS FOR MORE INFO"
+        },
+        {
+          "desc": "Create PID overlay staging table from Contributing Heritage Resources for POSSE",
+          "note": "For Ken Larade (PLAN and DEV, Transformation and Innovation). Discussed with Tristan Marvin, Somya also to be included. 1) Create new PID overlay staging table using LND_parcel_polygon and LND_heritage_contributing_resources, only records from LND_heritage_contributing_resources where Status = 'Approved'. Proposed table name: PID_HERITAGE_CONTRIB_RESOURCE (unconfirmed). Fields: PID (varchar8), HCR (varchar50, populated for records meeting 'Heritage Contributing Resources' conditions). 2) In POSSE.EXTERNALPARCEL, append values from the new staging table to the HERITAGEPROPERTYDISTRICT field. Example: PID 00093922 -> HERITAGEPROPERTYDISTRICT: 'Schmidtville; Heritage Contributing Resources'. Reach out to Ken & Tristan with questions.",
+          "tags": [
+            {
+              "text": "TASK0328952",
+              "flag": false
+            },
+            {
+              "text": "Ken Larade",
+              "flag": false
+            },
+            {
+              "text": "Data Services Support",
+              "flag": false
+            }
+          ],
+          "done": false,
+          "id": "a6170ab4565b",
+          "notes": ""
+        },
+        {
+          "desc": "Restore deleted AssetIDs from 2024-2025 Asset Registry.gdb",
+          "note": "Records existed previously and no longer do, deleted. Client wants them restored. Breakdown: AST_parking_pay_station (2), LND_hrm_parcel (2), TRN_sectrav (179), TRN_street (7), TRN_traffic_calming_infra (27), TRN_transit_shelter (1), BLD_EXTERIOR (1), BLD_LIFESAFETY (2), BLD_SPECIALTY (1).",
+          "tags": [
+            {
+              "text": "TASK0316399",
+              "flag": false
+            },
+            {
+              "text": "restore requested",
+              "flag": true
+            }
+          ],
+          "done": false,
+          "id": "c673e9ff76ba",
+          "notes": ""
+        },
+        {
+          "desc": "Compare Target Hazard Analysis automation results to expected",
+          "note": "Automation itself is already built, just needs a results check.",
+          "tags": [
+            {
+              "text": "TASK0324829",
+              "flag": false
+            },
+            {
+              "text": "Lisa O'Toole",
+              "flag": false
+            },
+            {
+              "text": "no firm deadline",
+              "flag": false
+            }
+          ],
+          "done": false,
+          "id": "66ff15254b85",
+          "notes": ""
+        },
+        {
+          "desc": "Reply to Sanjeev Sharma re: S/4 Hana-GIS Cert issue",
+          "note": "Sanjeev is checking whether anyone has a Postman collection of a working call (endpoint, auth token, etc.) to share with Gravity so they can configure the SAP API calls on the DEV side faster. If not available, he says Gravity can still proceed without it.",
+          "tags": [
+            {
+              "text": "no ticket",
+              "flag": false
+            },
+            {
+              "text": "Sanjeev Sharma",
+              "flag": false
+            },
+            {
+              "text": "email reply",
+              "flag": false
+            }
+          ],
+          "done": false,
+          "id": "f3fbbbd97f41",
+          "notes": ""
+        },
+        {
+          "desc": "Create new point feature class TRN_school_crossing_guard",
+          "note": "Documents and maintains school crossing guards at elementary schools. Complete, ready to hand off to the data analyst for review.",
+          "tags": [
+            {
+              "text": "TASK0329016",
+              "flag": false
+            },
+            {
+              "text": "ready for review",
+              "flag": false
+            },
+            {
+              "text": "Tristan Marvin",
+              "flag": false
+            },
+            {
+              "text": "due Sep 10",
+              "flag": false
+            }
+          ],
+          "done": true,
+          "id": "9a353fe72249",
+          "notes": ""
+        },
+        {
+          "desc": "Asset ID issues resolved, verified via counts",
+          "note": "Mismatched/missing IDs plus Kirk's QC findings. Kirk emailed (cc Jill) for independent verification. Next: address deleted features (TASK0316399, see above).",
+          "tags": [
+            {
+              "text": "TASK0319535 / TASK0316399",
+              "flag": false
+            },
+            {
+              "text": "kirk emailed",
+              "flag": false
+            },
+            {
+              "text": "Jillian Landry",
+              "flag": false
+            }
+          ],
+          "done": true,
+          "id": "8eb451826828",
+          "notes": ""
+        },
+        {
+          "desc": "Investigate issue with ast_tree_hwa and its attribute rule",
+          "note": "For Tristan.",
+          "tags": [
+            {
+              "text": "no ticket",
+              "flag": false
+            },
+            {
+              "text": "Tristan",
+              "flag": false
+            }
+          ],
+          "done": true,
+          "id": "3a3527fd56d5",
+          "notes": ""
+        },
+        {
+          "id": "8303b6dda872",
+          "desc": "change POSITION field to LONG from SHORT in TRN_school_crossing_guard",
+          "note": "",
+          "notes": "RO features are all capitalized.\ndone in prod, qa, dev\nadd to project to wgs84 script.",
+          "tags": [],
+          "done": false
+        },
+        {
+          "id": "0e6ee6c1c406",
+          "desc": "test QA scripts for Mike",
+          "note": "",
+          "notes": "",
+          "tags": [
+            {
+              "text": "top priority",
+              "flag": true
+            },
+            {
+              "text": "Mike Potter",
+              "flag": false
+            }
+          ],
+          "done": false
+        }
+      ],
+      "slug": "own"
+    },
+    {
+      "id": "finance-tasks",
+      "label": "Finance",
+      "tasks": [
+        {
+          "desc": "Pay off Wealthsimple line of credit",
+          "note": "Rate: prime + 0%, 4.45% CAD / 6.75% USD. Balance: $4,553.71 (margin account).",
+          "tags": [
+            {
+              "text": "LOC",
+              "flag": true
+            }
+          ],
+          "done": false,
+          "id": "06c418a27cff",
+          "notes": ""
+        },
+        {
+          "desc": "Pay off Tangerine line of credit",
+          "note": "Owed: $5,000. Taken out Aug 4, 2026. Rate: 6.45% (prime + 2%). Plan: pay tomorrow after paycheque lands. Tangerine is linked directly as an external account in Wealthsimple, send funds straight there.",
+          "tags": [
+            {
+              "text": "LOC",
+              "flag": true
+            }
+          ],
+          "done": false,
+          "id": "6fcac47d1878",
+          "notes": "sent $3000 to tangerine, from wealthsimple"
+        },
+        {
+          "desc": "Email landlord about bathroom inconvenience compensation",
+          "note": "Follow-up, no response yet.",
+          "tags": [
+            {
+              "text": "landlord",
+              "flag": false
+            }
+          ],
+          "done": true,
+          "id": "6f6d4de7ea70",
+          "notes": ""
+        },
+        {
+          "desc": "Pay landlord",
+          "note": "Amount owed: $1,117.50.",
+          "tags": [
+            {
+              "text": "landlord",
+              "flag": true
+            }
+          ],
+          "done": false,
+          "id": "1d59a881dec6",
+          "notes": ""
+        },
+        {
+          "desc": "Check end of season Adidas Copa Mundial sales",
+          "note": "",
+          "tags": [
+            {
+              "text": "research",
+              "flag": false
+            }
+          ],
+          "done": false,
+          "id": "b596be1078c9",
+          "notes": ""
+        },
+        {
+          "desc": "Connect to Trezor",
+          "note": "",
+          "tags": [],
+          "done": false,
+          "id": "347d83f2bcdc",
+          "notes": ""
+        },
+        {
+          "desc": "Pay off Wealthsimple credit card",
+          "note": "",
+          "tags": [
+            {
+              "text": "credit card",
+              "flag": true
+            }
+          ],
+          "done": true,
+          "id": "ae0c87e8d411",
+          "notes": ""
+        },
+        {
+          "desc": "Pay off RBC credit card",
+          "note": "",
+          "tags": [
+            {
+              "text": "credit card",
+              "flag": true
+            }
+          ],
+          "done": true,
+          "id": "f8371388d1d5",
+          "notes": ""
+        },
+        {
+          "desc": "Check TD balance",
+          "note": "Balance: $197.58.",
+          "tags": [],
+          "done": true,
+          "id": "dabff5bd5d2d",
+          "notes": ""
+        },
+        {
+          "desc": "Check Wealthsimple chequing balance",
+          "note": "Balance: $6,069.",
+          "tags": [],
+          "done": true,
+          "id": "cee7bc0d0faf",
+          "notes": ""
+        },
+        {
+          "id": "4e9727fab173",
+          "desc": "review power bill",
+          "note": "email came in August 6th, 2026",
+          "notes": "",
+          "tags": [],
+          "done": false
+        }
+      ],
+      "note": "Rate reference: TD line of credit is also Prime + 2% (same as Tangerine). TD LOC balance: $0.",
+      "slug": "finance"
+    },
+    {
+      "id": "admin-tasks",
+      "label": "Admin",
+      "tasks": [
+        {
+          "desc": "Call autobody repair shop for a quote",
+          "note": "Top Point: 902-464-8888. Recon Express: 902-718-7070.",
+          "tags": [],
+          "done": false,
+          "id": "1276f2d1bd88",
+          "notes": ""
+        },
+        {
+          "desc": "Buy new bicycle tire tubes",
+          "note": "",
+          "tags": [],
+          "done": false,
+          "id": "bf3f0325aba6",
+          "notes": ""
+        },
+        {
+          "desc": "Buy new duvet cover",
+          "note": "",
+          "tags": [],
+          "done": false,
+          "id": "ad4dedf15ea7",
+          "notes": ""
+        },
+        {
+          "desc": "Check about HDMI splitter",
+          "note": "",
+          "tags": [],
+          "done": false,
+          "id": "beda78a67aad",
+          "notes": ""
+        }
+      ],
+      "slug": "admin"
+    },
+    {
+      "id": "research-tasks",
+      "label": "Research",
+      "tasks": [
+        {
+          "desc": "Look into Fitbit air",
+          "note": "",
+          "tags": [],
+          "done": false,
+          "id": "5c5b58bb0e77",
+          "notes": ""
+        },
+        {
+          "desc": "Research creatine",
+          "note": "",
+          "tags": [],
+          "done": false,
+          "id": "cc1715c07112",
+          "notes": ""
+        }
+      ],
+      "slug": "research"
+    },
+    {
+      "id": "mike-coverage",
+      "label": "Covering for Mike Potter",
+      "tasks": [
+        {
+          "desc": "Grant Jattin Nahta editor access: Road Safety, Pavement Markings, RoadWorks",
+          "note": "All three past due. RoadWorks (0328861) also needs AGOL setup, not just Portal, don't close it on Portal access alone.",
+          "tags": [
+            {
+              "text": "TASK0328859 / 0328860 / 0328861",
+              "flag": false
+            },
+            {
+              "text": "overdue",
+              "flag": true
+            },
+            {
+              "text": "Mapping Services Support",
+              "flag": false
+            }
+          ],
+          "done": false,
+          "id": "6d70478cd4cc",
+          "notes": ""
+        },
+        {
+          "desc": "Update CARE Boundary layer in CAD files",
+          "note": "Due date likely passed. Check with Tim Burns whether the overnight script run already happened before doing the update.",
+          "tags": [
+            {
+              "text": "TASK0329335",
+              "flag": false
+            },
+            {
+              "text": "check urgency",
+              "flag": true
+            },
+            {
+              "text": "Tim Burns",
+              "flag": false
+            }
+          ],
+          "done": false,
+          "id": "34cf620266fe",
+          "notes": ""
+        },
+        {
+          "desc": "Add Portal user",
+          "note": "Complete.",
+          "tags": [
+            {
+              "text": "TASK0329474",
+              "flag": false
+            },
+            {
+              "text": "Mike coverage",
+              "flag": false
+            }
+          ],
+          "done": true,
+          "id": "79afd919a6c5",
+          "notes": ""
+        }
+      ],
+      "slug": "mike"
+    }
+  ]
+}

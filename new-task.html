@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>New Task - Personal Tasks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="page">
+    <div class="sheet form-sheet">
+      <header>
+        <div class="title">New Task</div>
+        <div class="meta">
+          <a class="back-link" href="/">&larr; Back to tasks</a>
+        </div>
+      </header>
+
+      <form method="POST" action="/tasks/new" class="task-form" id="task-form">
+        <label class="field">
+          <span class="field-label">Section</span>
+          <select name="section" id="section-select" required>
+            <option value="" disabled selected>Loading sections...</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Description</span>
+          <input type="text" name="desc" required placeholder="What needs doing?">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Note (optional)</span>
+          <textarea name="note" placeholder="Any extra detail..."></textarea>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Priority tag (optional)</span>
+          <input type="text" name="flag_tag" placeholder="e.g. top priority, overdue">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Other tags (optional, comma separated)</span>
+          <input type="text" name="tags" placeholder="e.g. Lisa O'Toole, due Aug 7">
+        </label>
+
+        <label class="field field-inline">
+          <input type="checkbox" name="done" value="1">
+          <span class="field-label">Already complete</span>
+        </label>
+
+        <button type="submit" class="submit-btn">Add Task</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/new-task.js"></script>
+</body>
+</html>
