@@ -32,7 +32,7 @@ runs this same command for double-click use.
 ## Browsing by category
 
 Go to `http://localhost:8000/tasks` for a table of contents listing
-every section (Own Tasks, Finance, Admin, Research, Covering for Mike
+every section (Work Tasks, Finance, Admin, Research, Covering for Mike
 Potter) with its task count, each linking to a page showing just that
 one category. Each section has a short slug used in its URL:
 
