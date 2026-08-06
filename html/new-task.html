@@ -10,11 +10,14 @@
 <body>
   <div class="page">
     <div class="sheet form-sheet">
+      <nav class="site-nav">
+        <a href="/">Tasks</a>
+        <a href="/tasks">Categories</a>
+        <span class="current">+ New Task</span>
+      </nav>
+
       <header>
         <div class="title">New Task</div>
-        <div class="meta">
-          <a class="back-link" href="/">&larr; Back to tasks</a>
-        </div>
       </header>
 
       <form method="POST" action="/tasks/new" class="task-form" id="task-form">

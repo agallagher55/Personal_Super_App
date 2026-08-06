@@ -199,6 +199,29 @@ a:hover { color: var(--ink); }
   }
 }
 
+.site-nav {
+  display: flex;
+  gap: 18px;
+  font-family: var(--mono);
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+
+.site-nav a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.site-nav a:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.site-nav .current {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 header {
   border-bottom: 2px solid var(--ink);
   padding-bottom: 20px;
