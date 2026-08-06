@@ -36,7 +36,7 @@ every section (Work Tasks, Finance, Admin, Research, Covering for Mike
 Potter) with its task count, each linking to a page showing just that
 one category. Each section has a short slug used in its URL:
 
-- `/tasks/own`
+- `/tasks/work`
 - `/tasks/finance`
 - `/tasks/admin`
 - `/tasks/research`
