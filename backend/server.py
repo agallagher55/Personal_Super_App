@@ -27,6 +27,11 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         if path == '/tasks/new':
             self.path = '/html/new-task.html'
             return super().do_GET()
+        if path == '/new':
+            self.send_response(302)
+            self.send_header('Location', '/tasks/new')
+            self.end_headers()
+            return
         if path == '/':
             self.path = '/html/index.html'
             return super().do_GET()
