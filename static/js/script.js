@@ -11,6 +11,16 @@
   var sectionLabelMap = {};   // sectionId -> section label text
   var completedGroupMap = {}; // sectionId -> <ol> inside the completed panel
 
+  var DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  var MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+  var pageDateEl = document.getElementById('page-date');
+  if (pageDateEl) {
+    var today = new Date();
+    pageDateEl.textContent = DAY_NAMES[today.getDay()] + ' ' + MONTH_NAMES[today.getMonth()] +
+      ' ' + today.getDate() + ', ' + today.getFullYear();
+  }
+
   function buildTag(tag) {
     var span = document.createElement('span');
     span.className = tag.flag ? 'tag flag' : 'tag';

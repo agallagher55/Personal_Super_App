@@ -2,7 +2,7 @@
   "sections": [
     {
       "id": "own-tasks",
-      "label": "Own Tasks",
+      "label": "Work Tasks",
       "tasks": [
         {
           "desc": "Create lookup tables for domain values (Bldg_fsa_occupancy, AAA_yes_no)",
@@ -211,7 +211,7 @@
           "done": false
         }
       ],
-      "slug": "own"
+      "slug": "work"
     },
     {
       "id": "finance-tasks",
