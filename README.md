@@ -2,22 +2,22 @@
 
 Files:
 
-- `index.html`, the page shell for the main task list (also reused for
+- `html/index.html`, the page shell for the main task list (also reused for
   single-category views, see below)
-- `new-task.html`, the "add a task" form page, served at `/tasks/new`
-- `tasks-index.html` / `tasks-index.js`, the category table of contents
+- `html/new-task.html`, the "add a task" form page, served at `/tasks/new`
+- `html/tasks-index.html` / `js/tasks-index.js`, the category table of contents
   page, served at `/tasks`
-- `styles.css`, all styling
-- `script.js`, plain JavaScript for the main page, no modules, no build step
-- `new-task.js`, plain JavaScript that fills the form's section dropdown
+- `styles/styles.css`, all styling
+- `js/script.js`, plain JavaScript for the main page, no modules, no build step
+- `js/new-task.js`, plain JavaScript that fills the form's section dropdown
 - `server.py`, a small custom server (see below, this is what makes
   saving new tasks actually work)
-- `tasks.json`, the task data (sections, descriptions, notes, tags, done status)
+- `data/tasks.json`, the task data (sections, descriptions, notes, tags, done status)
 
 ## Running it
 
 Browsers block `fetch()` of local files opened via `file://` for
-security reasons, so double-clicking `index.html` won't load the tasks.
+security reasons, so double-clicking `html/index.html` won't load the tasks.
 This also has to be Python's server rather than a generic static
 server, since the new-task form needs somewhere to POST to.
 
@@ -45,7 +45,7 @@ These category pages are the same app as the main page (checkboxes,
 notes, Save Changes, delete all work identically), just filtered to
 one section, with a "&larr; All categories" link back to `/tasks`. The
 **+ New Task** button on a category page pre-selects that category in
-the form. Slugs live in each section's `"slug"` field in `tasks.json`,
+the form. Slugs live in each section's `"slug"` field in `data/tasks.json`,
 add one there if you add a new section by hand.
 
 ## Adding a task from the browser
@@ -55,12 +55,12 @@ Click **+ New task** in the header, or go straight to
 and optionally a note, a priority tag, other tags (comma separated),
 and whether it's already done. Submitting POSTs to `/tasks/new`, which
 `server.py` handles by appending the task to the matching section in
-`tasks.json` and writing the file back to disk, then redirects you back
+`data/tasks.json` and writing the file back to disk, then redirects you back
 to the main page with a "Task added" confirmation.
 
 ## Editing tasks
 
-Open `tasks.json` and edit directly, no HTML knowledge needed:
+Open `data/tasks.json` and edit directly, no HTML knowledge needed:
 
 - `id`, a unique identifier auto-assigned to every task, this is what
   the Save Changes button uses to match a task in the browser back to
@@ -97,11 +97,11 @@ level and give it a unique `id`.
 - Typing in a task's Notes box and clicking the floating **Save
   Changes** button (bottom right) POSTs every task's current notes
   text and checked state to `/tasks/update`, which `server.py` writes
-  back into `tasks.json` on disk, matched by each task's `id`. A small
+  back into `data/tasks.json` on disk, matched by each task's `id`. A small
   "Saved" confirmation appears near the button.
 - Each task has a small &times; button that permanently deletes it.
   Clicking it asks for confirmation first, then POSTs to
-  `/tasks/delete`, which removes that task from `tasks.json` on disk
+  `/tasks/delete`, which removes that task from `data/tasks.json` on disk
   immediately, this is not undoable and does not require pressing Save
   Changes first.
 - Collapsed sections and section drag order still reset on page
