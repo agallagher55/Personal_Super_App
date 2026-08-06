@@ -14,7 +14,9 @@
       list.innerHTML = '';
 
       data.sections.forEach(function (section) {
-        var count = (section.tasks || []).length;
+        var tasks = section.tasks || [];
+        var openCount = tasks.filter(function (t) { return !t.done; }).length;
+        var closedCount = tasks.length - openCount;
 
         var li = document.createElement('li');
         li.className = 'toc-item';
@@ -29,7 +31,7 @@
 
         var countEl = document.createElement('span');
         countEl.className = 'toc-count';
-        countEl.textContent = count + (count === 1 ? ' task' : ' tasks');
+        countEl.textContent = openCount + ' open · ' + closedCount + ' closed';
 
         link.appendChild(label);
         link.appendChild(countEl);
