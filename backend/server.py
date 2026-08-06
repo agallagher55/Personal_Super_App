@@ -14,7 +14,7 @@ import socketserver
 from urllib.parse import parse_qs, urlparse
 
 PORT = 8000
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TASKS_FILE = os.path.join(BASE_DIR, 'data', 'tasks.json')
 
 

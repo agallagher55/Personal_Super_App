@@ -5,13 +5,14 @@ Files:
 - `html/index.html`, the page shell for the main task list (also reused for
   single-category views, see below)
 - `html/new-task.html`, the "add a task" form page, served at `/tasks/new`
-- `html/tasks-index.html` / `js/tasks-index.js`, the category table of contents
-  page, served at `/tasks`
-- `styles/styles.css`, all styling
-- `js/script.js`, plain JavaScript for the main page, no modules, no build step
-- `js/new-task.js`, plain JavaScript that fills the form's section dropdown
-- `server.py`, a small custom server (see below, this is what makes
-  saving new tasks actually work)
+- `html/tasks-index.html` / `static/js/tasks-index.js`, the category table of
+  contents page, served at `/tasks`
+- `static/styles/styles.css`, all styling
+- `static/js/script.js`, plain JavaScript for the main page, no modules, no build step
+- `static/js/new-task.js`, plain JavaScript that fills the form's section dropdown
+- `backend/server.py`, a small custom server (see below, this is what makes
+  saving new tasks actually work); `backend/start-server.bat` runs it for
+  double-click use on Windows
 - `data/tasks.json`, the task data (sections, descriptions, notes, tags, done status)
 
 ## Running it
@@ -22,10 +23,10 @@ This also has to be Python's server rather than a generic static
 server, since the new-task form needs somewhere to POST to.
 
 ```bash
-python3 server.py
+python3 backend/server.py
 ```
 
-Then open http://localhost:8000 in your browser. `start-server.bat`
+Then open http://localhost:8000 in your browser. `backend/start-server.bat`
 runs this same command for double-click use.
 
 ## Browsing by category
@@ -54,7 +55,7 @@ Click **+ New task** in the header, or go straight to
 `http://localhost:8000/tasks/new`. Fill in the section, description,
 and optionally a note, a priority tag, other tags (comma separated),
 and whether it's already done. Submitting POSTs to `/tasks/new`, which
-`server.py` handles by appending the task to the matching section in
+`backend/server.py` handles by appending the task to the matching section in
 `data/tasks.json` and writing the file back to disk, then redirects you back
 to the main page with a "Task added" confirmation.
 
@@ -96,7 +97,7 @@ level and give it a unique `id`.
   sections, this works whether the section is expanded or collapsed.
 - Typing in a task's Notes box and clicking the floating **Save
   Changes** button (bottom right) POSTs every task's current notes
-  text and checked state to `/tasks/update`, which `server.py` writes
+  text and checked state to `/tasks/update`, which `backend/server.py` writes
   back into `data/tasks.json` on disk, matched by each task's `id`. A small
   "Saved" confirmation appears near the button.
 - Each task has a small &times; button that permanently deletes it.
