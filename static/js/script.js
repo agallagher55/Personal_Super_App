@@ -21,6 +21,8 @@
       ' ' + today.getDate() + ', ' + today.getFullYear();
   }
 
+  var STATUS_LABELS = { open: 'Open', 'in-progress': 'In Progress', done: 'Done' };
+
   function buildTag(tag) {
     var span = document.createElement('span');
     span.className = tag.flag ? 'tag flag' : 'tag';
@@ -29,17 +31,28 @@
   }
 
   function buildTask(taskData, sectionId) {
+    var status = taskData.status || (taskData.done ? 'done' : 'open');
+
     var li = document.createElement('li');
-    li.className = taskData.done ? 'task done' : 'task';
+    li.className = 'task' + (status === 'done' ? ' done' : '') + (status === 'in-progress' ? ' in-progress' : '');
     li.dataset.section = sectionId;
     li.dataset.taskId = taskData.id || '';
+    li.dataset.status = status;
 
     var num = document.createElement('div');
     num.className = 'num';
 
-    var checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = !!taskData.done;
+    var statusSelect = document.createElement('select');
+    statusSelect.className = 'status-select';
+    Object.keys(STATUS_LABELS).forEach(function (value) {
+      var option = document.createElement('option');
+      option.value = value;
+      option.textContent = STATUS_LABELS[value];
+      if (value === status) {
+        option.selected = true;
+      }
+      statusSelect.appendChild(option);
+    });
 
     var body = document.createElement('div');
     body.className = 'body';
@@ -84,15 +97,24 @@
     deleteBtn.setAttribute('aria-label', 'Delete task');
 
     li.appendChild(num);
-    li.appendChild(checkbox);
+    li.appendChild(statusSelect);
     li.appendChild(body);
     li.appendChild(deleteBtn);
 
-    checkbox.addEventListener('change', function () {
-      if (checkbox.checked) {
+    statusSelect.addEventListener('change', function () {
+      var newStatus = statusSelect.value;
+      var wasInCompleted = completedBody.contains(li);
+
+      li.dataset.status = newStatus;
+      li.classList.toggle('in-progress', newStatus === 'in-progress');
+
+      if (newStatus === 'done') {
         moveToCompleted(li, sectionId);
-      } else {
+      } else if (wasInCompleted) {
         moveToActive(li, sectionId);
+      } else {
+        li.classList.remove('done');
+        updateSectionCount(sectionId);
       }
     });
 
@@ -461,11 +483,10 @@
         return;
       }
       var textarea = li.querySelector('.notes-input');
-      var checkbox = li.querySelector('input[type="checkbox"]');
       updates.push({
         id: taskId,
         notes: textarea ? textarea.value : '',
-        done: checkbox ? checkbox.checked : false
+        status: li.dataset.status || 'open'
       });
     });
     return updates;

@@ -395,7 +395,6 @@ ol.tasks.collapsed {
   padding-top: 3px;
 }
 
-.task input[type="checkbox"],
 .field-inline input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -411,13 +410,11 @@ ol.tasks.collapsed {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.task input[type="checkbox"]:checked,
 .field-inline input[type="checkbox"]:checked {
   background: var(--ink);
   border-color: var(--ink);
 }
 
-.task input[type="checkbox"]:checked::after,
 .field-inline input[type="checkbox"]:checked::after {
   content: "\2713";
   position: absolute;
@@ -427,6 +424,43 @@ ol.tasks.collapsed {
   justify-content: center;
   font-size: 11px;
   color: var(--paper);
+}
+
+.task .status-select {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 3px 7px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.task .status-select:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.task.in-progress {
+  box-shadow: inset 3px 0 0 var(--flag);
+  padding-left: 11px;
+}
+
+.task.in-progress .status-select {
+  color: var(--flag);
+  border-color: var(--flag);
+}
+
+.task.done .status-select {
+  color: var(--ink);
+  border-color: var(--ink);
 }
 
 .task .body {

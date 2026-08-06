@@ -11,11 +11,17 @@ import os
 import uuid
 import http.server
 import socketserver
+from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlparse
 
 PORT = 8000
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TASKS_FILE = os.path.join(BASE_DIR, 'data', 'tasks.json')
+STATUSES = ('open', 'in-progress', 'done')
+
+
+def now_iso():
+    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 class TaskHandler(http.server.SimpleHTTPRequestHandler):
@@ -119,13 +125,18 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             if raw_tag:
                 tags.append({'text': raw_tag, 'flag': False})
 
+        created = now_iso()
         new_task = {
             'id': uuid.uuid4().hex[:12],
             'desc': desc,
             'note': note,
             'notes': '',
             'tags': tags,
-            'done': done
+            'done': done,
+            'status': 'done' if done else 'open',
+            'created': created,
+            'modified': created,
+            'completed': created if done else ''
         }
         section['tasks'].append(new_task)
 
@@ -161,15 +172,32 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             data = json.load(f)
 
         updated_count = 0
+        now = now_iso()
         for section in data.get('sections', []):
             for task in section.get('tasks', []):
                 update = updates_by_id.get(task.get('id'))
                 if update is None:
                     continue
-                if 'notes' in update:
+
+                changed = False
+
+                if 'notes' in update and update['notes'] != task.get('notes', ''):
                     task['notes'] = update['notes']
-                if 'done' in update:
-                    task['done'] = bool(update['done'])
+                    changed = True
+
+                if 'status' in update:
+                    new_status = update['status']
+                    if new_status not in STATUSES:
+                        new_status = 'done' if task.get('done') else 'open'
+                    if new_status != task.get('status'):
+                        task['status'] = new_status
+                        task['done'] = (new_status == 'done')
+                        task['completed'] = now if new_status == 'done' else ''
+                        changed = True
+
+                if changed:
+                    task['modified'] = now
+
                 updated_count += 1
 
         with open(TASKS_FILE, 'w') as f:
