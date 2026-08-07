@@ -184,6 +184,11 @@ a:hover { color: var(--ink); }
   font-size: 11.5px;
 }
 
+.completed-panel .task .task-dates {
+  font-size: 10px;
+  margin: 0 0 3px;
+}
+
 .completed-panel .task .tags {
   margin-top: 4px;
 }
@@ -567,6 +572,27 @@ a.num:hover {
   font-size: 13px;
   color: var(--ink-soft);
   line-height: 1.45;
+}
+
+.task-dates {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.3px;
+  color: var(--ink-soft);
+  opacity: 0.6;
+  margin: 0 0 4px;
+}
+
+.task-dates .completed-date {
+  display: none;
+}
+
+.completed-panel .task-dates .open-dates {
+  display: none;
+}
+
+.completed-panel .task-dates .completed-date {
+  display: inline;
 }
 
 .task .tags {

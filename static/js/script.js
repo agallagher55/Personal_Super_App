@@ -24,6 +24,19 @@
   var STATUS_LABELS = { open: 'Open', 'in-progress': 'In Progress', done: 'Done' };
   var PRIORITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High' };
 
+  function formatDate(iso) {
+    if (!iso) {
+      return '';
+    }
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) {
+      return '';
+    }
+    var month = MONTH_NAMES[d.getMonth()];
+    month = month.charAt(0) + month.slice(1).toLowerCase();
+    return month + ' ' + d.getDate() + ', ' + d.getFullYear();
+  }
+
   function buildTag(tag) {
     var span = document.createElement('span');
     span.className = tag.flag ? 'tag flag' : 'tag';
@@ -88,6 +101,32 @@
     desc.className = 'desc';
     desc.textContent = taskData.desc;
     body.appendChild(desc);
+
+    var createdStr = formatDate(taskData.created);
+    var modifiedStr = formatDate(taskData.modified);
+    var completedStr = formatDate(taskData.completed);
+
+    if (createdStr || completedStr) {
+      var datesMeta = document.createElement('div');
+      datesMeta.className = 'task-dates';
+
+      if (createdStr) {
+        var openDates = document.createElement('span');
+        openDates.className = 'open-dates';
+        openDates.textContent = 'Created ' + createdStr +
+          (modifiedStr && modifiedStr !== createdStr ? ' · Updated ' + modifiedStr : '');
+        datesMeta.appendChild(openDates);
+      }
+
+      if (completedStr) {
+        var completedDate = document.createElement('span');
+        completedDate.className = 'completed-date';
+        completedDate.textContent = 'Completed ' + completedStr;
+        datesMeta.appendChild(completedDate);
+      }
+
+      body.appendChild(datesMeta);
+    }
 
     if (taskData.note) {
       var note = document.createElement('div');
