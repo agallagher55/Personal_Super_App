@@ -403,6 +403,12 @@ ol.tasks.collapsed {
   font-size: 13px;
   color: var(--ink-soft);
   padding-top: 3px;
+  text-decoration: none;
+}
+
+a.num:hover {
+  color: var(--flag);
+  text-decoration: underline;
 }
 
 .field-inline input[type="checkbox"] {
@@ -612,6 +618,66 @@ ol.tasks.collapsed {
 
 .form-sheet {
   max-width: 560px;
+}
+
+.task-detail-sheet header {
+  align-items: flex-start;
+}
+
+.task-detail-sheet header .meta {
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: left;
+  white-space: normal;
+  max-width: 260px;
+}
+
+.task-detail-status {
+  display: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: var(--ink);
+  background: var(--flag-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+}
+
+.task-detail-status.show {
+  display: block;
+}
+
+.task-detail-status.error {
+  color: var(--flag);
+}
+
+.task-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.delete-task-btn {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  padding: 12px 22px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.delete-task-btn:hover {
+  color: var(--flag);
+  border-color: var(--flag);
+  background: var(--flag-soft);
 }
 
 .back-link {

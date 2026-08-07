@@ -54,6 +54,13 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 return super().do_GET()
             self.send_error(404, 'Unknown task category: ' + slug)
             return
+        if path.startswith('/task/'):
+            task_id = path[len('/task/'):]
+            if self.find_task(task_id) is not None:
+                self.path = '/html/task-detail.html'
+                return super().do_GET()
+            self.send_error(404, 'Unknown task: ' + task_id)
+            return
 
         return super().do_GET()
 
@@ -64,6 +71,18 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         except OSError:
             return False
         return any(s.get('slug') == slug for s in data.get('sections', []))
+
+    def find_task(self, task_id):
+        try:
+            with open(TASKS_FILE, 'r') as f:
+                data = json.load(f)
+        except OSError:
+            return None
+        for section in data.get('sections', []):
+            for task in section.get('tasks', []):
+                if task.get('id') == task_id:
+                    return task
+        return None
 
     def serve_tasks_json(self):
         try:
@@ -185,6 +204,30 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                     continue
 
                 changed = False
+
+                if 'desc' in update:
+                    new_desc = (update['desc'] or '').strip()
+                    if new_desc and new_desc != task.get('desc'):
+                        task['desc'] = new_desc
+                        changed = True
+
+                if 'note' in update:
+                    new_note = update['note'] if isinstance(update['note'], str) else ''
+                    if new_note != task.get('note', ''):
+                        task['note'] = new_note
+                        changed = True
+
+                if 'tags' in update and isinstance(update['tags'], list):
+                    new_tags = []
+                    for tag in update['tags']:
+                        if isinstance(tag, dict) and str(tag.get('text', '')).strip():
+                            new_tags.append({
+                                'text': str(tag['text']).strip(),
+                                'flag': bool(tag.get('flag'))
+                            })
+                    if new_tags != task.get('tags', []):
+                        task['tags'] = new_tags
+                        changed = True
 
                 if 'notes' in update and update['notes'] != task.get('notes', ''):
                     task['notes'] = update['notes']
