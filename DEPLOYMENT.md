@@ -27,27 +27,41 @@ included.
    make sure your GitHub account/org is connected.
 2. From the Render dashboard, click **New > Blueprint**.
 3. Select this repository. Render finds `render.yaml` at the repo
-   root automatically and shows a preview of what it'll create:
-   - a **web service** named `personal-super-app` on the free plan,
-     running `python3 backend/server.py`
-   - a **1GB persistent disk** mounted at `data/` inside the service
+   root automatically and shows a preview of what it'll create: a
+   **web service** named `personal-super-app` on the free plan,
+   running `python3 backend/server.py`.
 4. Click **Apply** to create the service. Render builds and starts it
    using the blueprint's config — no manual build/start command entry
    needed.
 
-### What the persistent disk does
+### Storage is not persistent on the free plan
 
 `data/tasks.json` is the only datastore this app has, and it's a
-plain file on disk. Render's ephemeral filesystem is wiped on every
-deploy, so without a disk every deploy would reset your tasks back to
-whatever's committed in the repo.
+plain file on disk. Render's **free plan doesn't support persistent
+disks** — only paid plans (Starter and up) do — so this blueprint
+runs without one.
 
-The disk in `render.yaml` is mounted directly over `data/`. On the
-**first** deploy, Render copies whatever's already at that path (the
-`tasks.json` committed to the repo) onto the new disk to seed it.
-After that, all reads/writes from `backend/server.py` go to the
-persistent disk, so edits made through the running app survive
-redeploys, restarts, and code pushes.
+That means:
+
+- Every deploy (a push to the connected branch, or a manual redeploy)
+  resets `data/tasks.json` back to whatever's committed in the repo,
+  discarding any edits, deletes, or new tasks made through the
+  running app since the last deploy.
+- The free plan also spins the service down after inactivity; when it
+  wakes back up for the next request it may start from a fresh
+  container, which can reset the file the same way even without a new
+  deploy.
+
+If you want changes made through the deployed app to actually stick,
+upgrade the service to the **Starter** plan (or higher) in the Render
+dashboard, then add a persistent disk mounted at
+`/opt/render/project/src/data` (Render's dashboard has a **Disks**
+tab per-service for this — `render.yaml` would also need a `disk:`
+block added back under the service to keep it declarative). On the
+first deploy with a disk attached, Render copies whatever's already
+at that mount path — the `tasks.json` committed to the repo — onto
+the disk to seed it, and every read/write after that goes to the
+persistent disk instead of the ephemeral container filesystem.
 
 ### Port binding
 
@@ -76,6 +90,8 @@ dashboard if you need to trigger one without a new commit.
 
 The free plan spins the service down after a period of inactivity;
 the next request after that wakes it back up, which takes a few
-seconds. This app is a personal task tracker, so that's a reasonable
-tradeoff for zero cost. Upgrade the `plan` in `render.yaml` if you
-want the service to stay warm.
+seconds. Combined with the lack of a persistent disk (see above),
+the free plan is best treated as a way to browse/demo the task list
+rather than a place to durably keep edits. Upgrade the `plan` in
+`render.yaml` if you want the service to stay warm and add a disk for
+real persistence.
