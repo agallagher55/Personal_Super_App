@@ -43,8 +43,12 @@
     li.dataset.status = status;
     li.dataset.priority = priority;
 
-    var num = document.createElement('div');
+    var num = document.createElement(taskData.id ? 'a' : 'div');
     num.className = 'num';
+    if (taskData.id) {
+      num.href = '/task/' + encodeURIComponent(taskData.id);
+      num.title = 'Open task';
+    }
 
     var statusSelect = document.createElement('select');
     statusSelect.className = 'status-select';

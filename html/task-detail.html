@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Task - Personal Tasks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles/styles.css">
+</head>
+<body>
+  <div class="page">
+    <div class="sheet form-sheet task-detail-sheet">
+      <nav class="site-nav">
+        <a href="/">Tasks</a>
+        <a href="/tasks">Categories</a>
+        <span class="current">Task</span>
+      </nav>
+
+      <header>
+        <div class="title">Edit Task</div>
+        <div class="meta" id="task-meta"></div>
+      </header>
+
+      <div class="task-detail-status" id="task-detail-status"></div>
+
+      <form class="task-form" id="task-detail-form">
+        <label class="field">
+          <span class="field-label">Description</span>
+          <input type="text" name="desc" id="field-desc" required>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Note (optional)</span>
+          <textarea name="note" id="field-note"></textarea>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Status</span>
+          <select name="status" id="field-status">
+            <option value="open">Open</option>
+            <option value="in-progress">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Priority</span>
+          <select name="priority" id="field-priority">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Priority tag (optional)</span>
+          <input type="text" name="flag_tag" id="field-flag-tag" placeholder="e.g. top priority, overdue">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Other tags (optional, comma separated)</span>
+          <input type="text" name="tags" id="field-tags" placeholder="e.g. Lisa O'Toole, due Aug 7">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Notes</span>
+          <textarea name="notes" id="field-notes" placeholder="Add notes..."></textarea>
+        </label>
+
+        <div class="task-detail-actions">
+          <button type="submit" class="submit-btn">Save Task</button>
+          <button type="button" class="delete-task-btn" id="delete-task-btn">Delete Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/js/task-detail.js"></script>
+</body>
+</html>
