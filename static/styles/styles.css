@@ -463,6 +463,38 @@ ol.tasks.collapsed {
   border-color: var(--ink);
 }
 
+.task .priority-select {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 3px 7px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.task .priority-select:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.task.priority-high .priority-select {
+  color: var(--flag);
+  border-color: var(--flag);
+}
+
+.task.priority-low .priority-select {
+  color: var(--ink-soft);
+  border-color: var(--line);
+}
+
 .task .body {
   flex: 1 1 auto;
   min-width: 0;

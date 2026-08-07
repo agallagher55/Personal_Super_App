@@ -18,6 +18,7 @@ PORT = 8000
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TASKS_FILE = os.path.join(BASE_DIR, 'data', 'tasks.json')
 STATUSES = ('open', 'in-progress', 'done')
+PRIORITIES = ('low', 'medium', 'high')
 
 
 def now_iso():
@@ -100,6 +101,9 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         note = fields.get('note', [''])[0].strip()
         tags_raw = fields.get('tags', [''])[0].strip()
         flag_tag = fields.get('flag_tag', [''])[0].strip()
+        priority = fields.get('priority', ['medium'])[0].strip()
+        if priority not in PRIORITIES:
+            priority = 'medium'
         done = 'done' in fields
 
         if not section_id or not desc:
@@ -134,6 +138,7 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             'tags': tags,
             'done': done,
             'status': 'done' if done else 'open',
+            'priority': priority,
             'created': created,
             'modified': created,
             'completed': created if done else ''
@@ -193,6 +198,14 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                         task['status'] = new_status
                         task['done'] = (new_status == 'done')
                         task['completed'] = now if new_status == 'done' else ''
+                        changed = True
+
+                if 'priority' in update:
+                    new_priority = update['priority']
+                    if new_priority not in PRIORITIES:
+                        new_priority = task.get('priority', 'medium')
+                    if new_priority != task.get('priority'):
+                        task['priority'] = new_priority
                         changed = True
 
                 if changed:
