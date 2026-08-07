@@ -330,6 +330,11 @@
       }
     });
 
+    if (!getFilterSlugFromPath()) {
+      header.classList.add('collapsed');
+      list.classList.add('collapsed');
+    }
+
     header.addEventListener('click', function () {
       header.classList.toggle('collapsed');
       list.classList.toggle('collapsed');
