@@ -24,6 +24,17 @@
   var STATUS_LABELS = { open: 'Open', 'in-progress': 'In Progress', done: 'Done' };
   var PRIORITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High' };
 
+  function formatDate(iso) {
+    if (!iso) {
+      return '';
+    }
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) {
+      return '';
+    }
+    return MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  }
+
   function buildTag(tag) {
     var span = document.createElement('span');
     span.className = tag.flag ? 'tag flag' : 'tag';
@@ -103,6 +114,21 @@
         tags.appendChild(buildTag(tag));
       });
       body.appendChild(tags);
+    }
+
+    var meta = document.createElement('div');
+    meta.className = 'task-meta';
+    if (status === 'done' && taskData.completed) {
+      meta.textContent = 'Completed ' + formatDate(taskData.completed);
+    } else if (taskData.created) {
+      var metaText = 'Created ' + formatDate(taskData.created);
+      if (taskData.modified && taskData.modified !== taskData.created) {
+        metaText += ' · Updated ' + formatDate(taskData.modified);
+      }
+      meta.textContent = metaText;
+    }
+    if (meta.textContent) {
+      body.appendChild(meta);
     }
 
     var notesLabel = document.createElement('div');

@@ -603,6 +603,15 @@ a.num:hover {
   margin: 10px 0 4px;
 }
 
+.task .task-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  color: var(--ink-soft);
+  opacity: 0.6;
+  margin-top: 6px;
+}
+
 .task textarea {
   width: 100%;
   min-height: 44px;
