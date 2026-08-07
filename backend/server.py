@@ -8,6 +8,7 @@ POST /tasks/new (appends a task to tasks.json and saves it to disk).
 
 import json
 import os
+import re
 import uuid
 import http.server
 import socketserver
@@ -20,9 +21,29 @@ TASKS_FILE = os.path.join(BASE_DIR, 'data', 'tasks.json')
 STATUSES = ('open', 'in-progress', 'done')
 PRIORITIES = ('low', 'medium', 'high')
 
+SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
+
 
 def now_iso():
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def format_sentence(text):
+    """Capitalize each sentence and ensure the text ends with punctuation."""
+    text = text.strip()
+    if not text:
+        return text
+
+    sentences = []
+    for sentence in SENTENCE_SPLIT_RE.split(text):
+        sentence = sentence.strip()
+        if sentence:
+            sentences.append(sentence[0].upper() + sentence[1:])
+    text = ' '.join(sentences)
+
+    if text and text[-1] not in '.!?':
+        text += '.'
+    return text
 
 
 class TaskHandler(http.server.SimpleHTTPRequestHandler):
@@ -116,8 +137,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         fields = parse_qs(body)
 
         section_id = fields.get('section', [''])[0]
-        desc = fields.get('desc', [''])[0].strip()
-        note = fields.get('note', [''])[0].strip()
+        desc = format_sentence(fields.get('desc', [''])[0])
+        note = format_sentence(fields.get('note', [''])[0])
         tags_raw = fields.get('tags', [''])[0].strip()
         flag_tag = fields.get('flag_tag', [''])[0].strip()
         priority = fields.get('priority', ['medium'])[0].strip()
