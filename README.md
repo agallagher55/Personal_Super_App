@@ -29,6 +29,27 @@ python3 backend/server.py
 Then open http://localhost:8000 in your browser. `backend/start-server.bat`
 runs this same command for double-click use.
 
+## Deploying
+
+GitHub Pages won't work for this app — it only serves static files, and
+saving, deleting, and creating tasks all depend on `backend/server.py`
+handling POSTs and writing to `data/tasks.json` on disk.
+
+This repo includes a `render.yaml` for deploying to
+[Render](https://render.com) instead:
+
+1. Create a new **Blueprint** on Render and point it at this repo; it
+   reads `render.yaml` automatically.
+2. Render provisions a free web service running
+   `python3 backend/server.py`, with a 1GB persistent disk mounted at
+   `data/` so `tasks.json` survives redeploys (seeded from the copy
+   committed in this repo on first deploy).
+3. Once deployed, use the Render-provided URL in place of
+   `http://localhost:8000`.
+
+The server already binds to `$PORT` when set (falling back to `8000`
+locally), which is what Render requires.
+
 ## Browsing by category
 
 Go to `http://localhost:8000/tasks` for a table of contents listing
