@@ -30,6 +30,22 @@
         <input type="text" id="task-search" class="task-search" placeholder="Search tasks..." autocomplete="off">
       </div>
 
+      <div class="task-filters" id="task-filters">
+        <select id="status-filter" class="filter-select" aria-label="Filter by status">
+          <option value="">All statuses</option>
+          <option value="open">Open</option>
+          <option value="in-progress">In Progress</option>
+          <option value="done">Done</option>
+        </select>
+        <select id="priority-filter" class="filter-select" aria-label="Filter by priority">
+          <option value="">All priorities</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+        <button type="button" id="clear-filters-btn" class="clear-filters-btn">Clear filters</button>
+      </div>
+
       <div class="added-banner" id="added-banner">Task added.</div>
 
       <div id="sections"></div>

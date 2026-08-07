@@ -882,6 +882,53 @@ a.num:hover {
   display: none !important;
 }
 
+.task-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -12px 0 24px;
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ink-soft);
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.clear-filters-btn {
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.clear-filters-btn:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
 .added-banner {
   display: none;
   font-family: var(--mono);
