@@ -187,10 +187,12 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         updates_by_id = {}
+        order_index = {}
         for item in updates:
             task_id = item.get('id')
             if task_id:
                 updates_by_id[task_id] = item
+                order_index.setdefault(task_id, len(order_index))
 
         with open(TASKS_FILE, 'r') as f:
             data = json.load(f)
@@ -255,6 +257,11 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                     task['modified'] = now
 
                 updated_count += 1
+
+        for section in data.get('sections', []):
+            section['tasks'].sort(
+                key=lambda t: order_index.get(t.get('id'), len(order_index))
+            )
 
         with open(TASKS_FILE, 'w') as f:
             json.dump(data, f, indent=2)
