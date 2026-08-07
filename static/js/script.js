@@ -411,6 +411,8 @@
     // Completed panel starts collapsed.
     completedHeader.classList.add('collapsed');
     completedBody.classList.add('collapsed');
+
+    applySearchFilter();
   }
 
   function getFilterSlugFromPath() {
@@ -448,6 +450,46 @@
     completedHeader.classList.toggle('collapsed');
     completedBody.classList.toggle('collapsed');
   });
+
+  var searchInput = document.getElementById('task-search');
+
+  function taskMatchesQuery(li, query) {
+    var desc = li.querySelector('.desc');
+    var note = li.querySelector('.note');
+    var text = (desc ? desc.textContent : '') + ' ' + (note ? note.textContent : '');
+    li.querySelectorAll('.tag').forEach(function (tag) {
+      text += ' ' + tag.textContent;
+    });
+    return text.toLowerCase().indexOf(query) !== -1;
+  }
+
+  function groupHasVisibleTask(list) {
+    return list ? Array.prototype.some.call(list.children, function (li) {
+      return !li.classList.contains('search-hidden');
+    }) : false;
+  }
+
+  function applySearchFilter() {
+    var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+    document.querySelectorAll('.task').forEach(function (li) {
+      li.classList.toggle('search-hidden', !!query && !taskMatchesQuery(li, query));
+    });
+
+    document.querySelectorAll('.section').forEach(function (section) {
+      var list = section.querySelector('ol.tasks');
+      section.classList.toggle('search-hidden', !!query && !groupHasVisibleTask(list));
+    });
+
+    document.querySelectorAll('.completed-group').forEach(function (group) {
+      var list = group.querySelector('ol.tasks');
+      group.classList.toggle('search-hidden', !!query && !groupHasVisibleTask(list));
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', applySearchFilter);
+  }
 
   var addedBanner = document.getElementById('added-banner');
   if (addedBanner && /[?&]added=1\b/.test(window.location.search)) {

@@ -705,6 +705,36 @@ ol.tasks.collapsed {
   background: var(--ink);
 }
 
+.task-search-wrap {
+  margin: 0 0 24px;
+}
+
+.task-search {
+  width: 100%;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 11px 20px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.task-search:focus {
+  border-color: var(--ink);
+}
+
+.task-search::placeholder {
+  color: var(--ink-soft);
+}
+
+.search-hidden {
+  display: none !important;
+}
+
 .added-banner {
   display: none;
   font-family: var(--mono);
