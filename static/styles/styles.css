@@ -426,10 +426,19 @@ ol.tasks.collapsed {
   color: var(--paper);
 }
 
-.task .status-select {
+.task-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   flex: 0 0 auto;
   align-self: flex-start;
+  width: 88px;
   margin-top: 1px;
+}
+
+.task .status-select {
+  width: 100%;
   padding: 3px 7px;
   font-family: var(--mono);
   font-size: 10.5px;
@@ -464,9 +473,7 @@ ol.tasks.collapsed {
 }
 
 .task .priority-select {
-  flex: 0 0 auto;
-  align-self: flex-start;
-  margin-top: 1px;
+  width: 100%;
   padding: 3px 7px;
   font-family: var(--mono);
   font-size: 10.5px;

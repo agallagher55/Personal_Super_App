@@ -112,9 +112,13 @@
     deleteBtn.title = 'Delete task';
     deleteBtn.setAttribute('aria-label', 'Delete task');
 
+    var controls = document.createElement('div');
+    controls.className = 'task-controls';
+    controls.appendChild(statusSelect);
+    controls.appendChild(prioritySelect);
+
     li.appendChild(num);
-    li.appendChild(statusSelect);
-    li.appendChild(prioritySelect);
+    li.appendChild(controls);
     li.appendChild(body);
     li.appendChild(deleteBtn);
 
