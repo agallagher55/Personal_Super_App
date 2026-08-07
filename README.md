@@ -29,6 +29,12 @@ python3 backend/server.py
 Then open http://localhost:8000 in your browser. `backend/start-server.bat`
 runs this same command for double-click use.
 
+## Deploying
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) — GitHub Pages won't work for this
+app (it needs `backend/server.py` running, not just static files), so
+it deploys to Render instead.
+
 ## Browsing by category
 
 Go to `http://localhost:8000/tasks` for a table of contents listing

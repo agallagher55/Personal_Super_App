@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: personal-super-app
+    runtime: python
+    plan: free
+    buildCommand: "true"
+    startCommand: python3 backend/server.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+    disk:
+      name: tasks-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1

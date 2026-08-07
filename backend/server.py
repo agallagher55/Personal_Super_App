@@ -14,7 +14,7 @@ import socketserver
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlparse
 
-PORT = 8000
+PORT = int(os.environ.get('PORT', 8000))
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TASKS_FILE = os.path.join(BASE_DIR, 'data', 'tasks.json')
 STATUSES = ('open', 'in-progress', 'done')
@@ -327,9 +327,13 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(response_body)
 
 
+class TaskServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
 def main():
     os.chdir(BASE_DIR)
-    with socketserver.TCPServer(('', PORT), TaskHandler) as httpd:
+    with TaskServer(('', PORT), TaskHandler) as httpd:
         print('Serving at http://localhost:%d' % PORT)
         httpd.serve_forever()
 
