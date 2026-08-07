@@ -43,6 +43,13 @@
     li.dataset.status = status;
     li.dataset.priority = priority;
 
+    var handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.setAttribute('draggable', 'true');
+    handle.setAttribute('aria-hidden', 'true');
+    handle.title = 'Drag to reorder';
+    handle.textContent = '⋮⋮';
+
     var num = document.createElement(taskData.id ? 'a' : 'div');
     num.className = 'num';
     if (taskData.id) {
@@ -121,10 +128,28 @@
     controls.appendChild(statusSelect);
     controls.appendChild(prioritySelect);
 
+    li.appendChild(handle);
     li.appendChild(num);
     li.appendChild(controls);
     li.appendChild(body);
     li.appendChild(deleteBtn);
+
+    handle.addEventListener('dragstart', function (e) {
+      li.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', taskData.id || '');
+      if (e.dataTransfer.setDragImage) {
+        e.dataTransfer.setDragImage(li, 20, 20);
+      }
+    });
+
+    handle.addEventListener('dragend', function () {
+      li.classList.remove('dragging');
+      var list = li.closest('ol.tasks');
+      if (list) {
+        renumber(list);
+      }
+    });
 
     prioritySelect.addEventListener('change', function () {
       li.classList.remove('priority-' + li.dataset.priority);
@@ -161,6 +186,34 @@
     return li;
   }
 
+  function getTaskDragAfterElement(list, y) {
+    var elements = Array.prototype.slice.call(list.querySelectorAll(':scope > .task:not(.dragging)'));
+    return elements.reduce(function (closest, child) {
+      var box = child.getBoundingClientRect();
+      var offset = y - box.top - box.height / 2;
+      if (offset < 0 && offset > closest.offset) {
+        return { offset: offset, element: child };
+      }
+      return closest;
+    }, { offset: -Infinity, element: null }).element;
+  }
+
+  function attachTaskReorder(list) {
+    list.addEventListener('dragover', function (e) {
+      var dragging = list.querySelector('.task.dragging');
+      if (!dragging) {
+        return;
+      }
+      e.preventDefault();
+      var afterElement = getTaskDragAfterElement(list, e.clientY);
+      if (afterElement == null) {
+        list.appendChild(dragging);
+      } else {
+        list.insertBefore(dragging, afterElement);
+      }
+    });
+  }
+
   function ensureCompletedGroup(sectionId) {
     if (completedGroupMap[sectionId]) {
       return completedGroupMap[sectionId];
@@ -186,6 +239,7 @@
 
     var list = document.createElement('ol');
     list.className = 'tasks';
+    attachTaskReorder(list);
 
     groupHeader.addEventListener('click', function () {
       groupHeader.classList.toggle('collapsed');
@@ -318,6 +372,7 @@
     var list = document.createElement('ol');
     list.className = 'tasks';
     list.id = sectionData.id;
+    attachTaskReorder(list);
     sectionListMap[sectionData.id] = list;
     section.appendChild(list);
 

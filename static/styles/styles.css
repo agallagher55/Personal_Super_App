@@ -364,6 +364,38 @@ ol.tasks.collapsed {
   pointer-events: none;
 }
 
+.task.dragging {
+  opacity: 0.4;
+}
+
+.drag-handle {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 14px;
+  padding-top: 4px;
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: -1px;
+  color: var(--ink-soft);
+  opacity: 0.3;
+  cursor: grab;
+  user-select: none;
+  text-align: center;
+  transition: opacity 0.15s ease;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.task:hover .drag-handle {
+  opacity: 0.7;
+}
+
+.completed-panel .drag-handle {
+  display: none;
+}
+
 .task .delete-btn {
   flex: 0 0 auto;
   align-self: flex-start;
