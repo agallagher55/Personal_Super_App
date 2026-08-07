@@ -22,6 +22,7 @@
   }
 
   var STATUS_LABELS = { open: 'Open', 'in-progress': 'In Progress', done: 'Done' };
+  var PRIORITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High' };
 
   function buildTag(tag) {
     var span = document.createElement('span');
@@ -32,12 +33,15 @@
 
   function buildTask(taskData, sectionId) {
     var status = taskData.status || (taskData.done ? 'done' : 'open');
+    var priority = taskData.priority && PRIORITY_LABELS[taskData.priority] ? taskData.priority : 'medium';
 
     var li = document.createElement('li');
-    li.className = 'task' + (status === 'done' ? ' done' : '') + (status === 'in-progress' ? ' in-progress' : '');
+    li.className = 'task priority-' + priority +
+      (status === 'done' ? ' done' : '') + (status === 'in-progress' ? ' in-progress' : '');
     li.dataset.section = sectionId;
     li.dataset.taskId = taskData.id || '';
     li.dataset.status = status;
+    li.dataset.priority = priority;
 
     var num = document.createElement('div');
     num.className = 'num';
@@ -52,6 +56,18 @@
         option.selected = true;
       }
       statusSelect.appendChild(option);
+    });
+
+    var prioritySelect = document.createElement('select');
+    prioritySelect.className = 'priority-select';
+    Object.keys(PRIORITY_LABELS).forEach(function (value) {
+      var option = document.createElement('option');
+      option.value = value;
+      option.textContent = PRIORITY_LABELS[value];
+      if (value === priority) {
+        option.selected = true;
+      }
+      prioritySelect.appendChild(option);
     });
 
     var body = document.createElement('div');
@@ -96,10 +112,21 @@
     deleteBtn.title = 'Delete task';
     deleteBtn.setAttribute('aria-label', 'Delete task');
 
+    var controls = document.createElement('div');
+    controls.className = 'task-controls';
+    controls.appendChild(statusSelect);
+    controls.appendChild(prioritySelect);
+
     li.appendChild(num);
-    li.appendChild(statusSelect);
+    li.appendChild(controls);
     li.appendChild(body);
     li.appendChild(deleteBtn);
+
+    prioritySelect.addEventListener('change', function () {
+      li.classList.remove('priority-' + li.dataset.priority);
+      li.dataset.priority = prioritySelect.value;
+      li.classList.add('priority-' + prioritySelect.value);
+    });
 
     statusSelect.addEventListener('change', function () {
       var newStatus = statusSelect.value;
@@ -528,7 +555,8 @@
       updates.push({
         id: taskId,
         notes: textarea ? textarea.value : '',
-        status: li.dataset.status || 'open'
+        status: li.dataset.status || 'open',
+        priority: li.dataset.priority || 'medium'
       });
     });
     return updates;
