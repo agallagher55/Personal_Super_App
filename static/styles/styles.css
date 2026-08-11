@@ -594,6 +594,36 @@ a.num:hover {
   background: var(--flag-soft);
 }
 
+.task-fields {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.field-pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.field-pill-ticket {
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+}
+
+.field-pill-group,
+.field-pill-requester,
+.field-pill-due {
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+}
+
 .task .notes-label {
   font-family: var(--mono);
   font-size: 10px;
@@ -793,6 +823,35 @@ a.num:hover {
 .field textarea {
   min-height: 64px;
   resize: vertical;
+}
+
+.field-row {
+  display: flex;
+  gap: 16px;
+}
+
+.field-row .field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.field input[type="date"] {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid var(--line);
+  border-radius: 0;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 8px 2px;
+  outline: none;
+  color-scheme: light;
+}
+
+.field input[type="date"]:focus {
+  border-color: var(--ink);
 }
 
 .field-inline {
