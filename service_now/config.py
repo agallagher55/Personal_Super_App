@@ -70,7 +70,7 @@ def load_config():
         password=password,
         token=token,
         user_sys_id=os.environ.get('SERVICENOW_USER_SYS_ID', '').strip(),
-        table=os.environ.get('SERVICENOW_TABLE', 'sc_task').strip(),
+        table=os.environ.get('SERVICENOW_TABLE', 'task').strip(),
         query=os.environ.get('SERVICENOW_QUERY', '').strip(),
         section_id=os.environ.get('SERVICENOW_SECTION_ID', 'own-tasks').strip(),
     )

@@ -44,9 +44,11 @@ future runs.
 
 ## What it does
 
-- Queries `SERVICENOW_TABLE` (default `sc_task`, i.e. Catalog Task — the
-  table your `TASK03291xx` records live in) for records where
-  `assigned_to` is you and `active=true`.
+- Queries `SERVICENOW_TABLE` (default `task`, the base table) for records
+  matching the same filter as the "My Work" dashboard list:
+  `(Assigned to = me OR Additional Assignee List contains me) AND Active
+  = true AND Task type not in [Request, Requested Item, Group approval,
+  KB Submission, Chat Queue Entry]`.
 - Maps each record onto the app's task schema:
 
   | ServiceNow field | App field |
@@ -67,21 +69,27 @@ future runs.
 
 ## Known limitation
 
-The dashboard's "My Work" list filters on `Additional Assignee List
-CONTAINS Alex Gallagher` and excludes several task types (Request,
-Requested Item, Group Approval, KB Submission, Chat Queue Entry) — those
-look like they query the base `task` table across multiple record types,
-and the "Additional Assignee List" field name isn't a stock ServiceNow
-field, so it's likely a custom field in the Halifax instance. Rather than
-guess at the real field/table names, this script defaults to a simpler
-`assigned_to=<you>^active=true` query against `sc_task` only. Once you
-confirm the actual field name (check the list's filter breadcrumb or ask
-your ServiceNow admin), set `SERVICENOW_QUERY` in `.env` to an encoded
-query that matches the dashboard exactly, e.g.:
+`additional_assignee_list` turned out to be a stock `task` table field
+(not custom), and "Task type" maps to `sys_class_name`. The default query
+in `sync.py` (`build_default_query`) uses the confirmed internal names:
 
-```
-SERVICENOW_QUERY=assigned_to=<sys_id>^ORu_additional_assignee_listLIKE<sys_id>^active=true^sys_class_nameNOT INrequest,sc_req_item,sysapproval_group,kb_submission
-```
+| Dashboard "Task type" | `sys_class_name` |
+|---|---|
+| Request | `sc_request` |
+| Requested Item | `sc_req_item` |
+| Group approval | `sysapproval_group` |
+| KB Submission | `kb_submission` |
+| Chat Queue Entry | `chat_queue_entry` **(unconfirmed — verify before relying on it)** |
+
+Everything except Chat Queue Entry is a well-known stock class name.
+`chat_queue_entry` is a reasonable guess but Live Agent/chat tables vary
+by ServiceNow version and plugin, so double check it in your instance
+(System Definition > Tables, or ask your admin) before assuming it's
+filtering correctly. If it's wrong, chat queue entries just won't get
+excluded — nothing will error, so it's worth a quick dry-run check.
+
+You can always bypass `build_default_query` entirely by setting
+`SERVICENOW_QUERY` directly in `.env`.
 
 ## Not yet wired up
 

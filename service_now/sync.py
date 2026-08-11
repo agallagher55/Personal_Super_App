@@ -34,6 +34,32 @@ STATE_TO_STATUS = {
     'in progress': 'in-progress',
 }
 
+# sys_class_name values for the "Task type != ..." exclusions on the "My
+# Work" dashboard list. Confirmed against the Halifax instance's filter
+# breakdown except chat_queue_entry -- verify that one before relying on
+# it (Live Agent tables vary by ServiceNow version/plugin).
+EXCLUDED_TASK_TYPES = [
+    'sc_request',        # Request
+    'sc_req_item',        # Requested Item
+    'sysapproval_group',  # Group approval
+    'kb_submission',      # KB Submission
+    'chat_queue_entry',   # Chat Queue Entry -- unconfirmed, double check
+]
+
+
+def build_default_query(user_sys_id):
+    """Mirrors the "My Work" dashboard list filter:
+    (Assigned to = me OR Additional Assignee List contains me)
+    AND Active = true AND Task type not in [...]
+    """
+    parts = [
+        'assigned_to=%s' % user_sys_id,
+        'ORadditional_assignee_listLIKE%s' % user_sys_id,
+        'active=true',
+    ]
+    parts += ['sys_class_name!=%s' % t for t in EXCLUDED_TASK_TYPES]
+    return '^'.join(parts)
+
 
 def now_iso():
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -168,7 +194,7 @@ def main():
         print('Found sys_id=%s -- pin this as SERVICENOW_USER_SYS_ID in service_now/.env '
               'to skip this lookup next time.' % config.user_sys_id)
 
-    query = config.query or ('assigned_to=%s^active=true' % config.user_sys_id)
+    query = config.query or build_default_query(config.user_sys_id)
     print('Querying %s: %s' % (config.table, query))
 
     try:
