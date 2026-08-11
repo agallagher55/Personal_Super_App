@@ -36,6 +36,11 @@ a:hover { color: var(--ink); }
   max-width: 1440px;
 }
 
+.page-single {
+  max-width: none;
+  justify-content: center;
+}
+
 .sheet {
   flex: 1 1 auto;
   min-width: 0;
@@ -691,6 +696,15 @@ a.num:hover {
   max-width: 560px;
 }
 
+@media (min-width: 881px) {
+  .task-detail-sheet {
+    flex: none;
+    width: 66vw;
+    max-width: 1040px;
+    min-width: 640px;
+  }
+}
+
 .task-detail-sheet header {
   align-items: flex-start;
 }
@@ -778,9 +792,10 @@ a.num:hover {
 .field-label {
   font-family: var(--mono);
   font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink);
 }
 
 .field select,
@@ -852,6 +867,18 @@ a.num:hover {
 
 .field input[type="date"]:focus {
   border-color: var(--ink);
+}
+
+.section-divider {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
 
 .field-inline {
