@@ -36,6 +36,11 @@ a:hover { color: var(--ink); }
   max-width: 1440px;
 }
 
+.page-single {
+  max-width: none;
+  justify-content: center;
+}
+
 .sheet {
   flex: 1 1 auto;
   min-width: 0;
@@ -689,6 +694,15 @@ a.num:hover {
 
 .form-sheet {
   max-width: 560px;
+}
+
+@media (min-width: 881px) {
+  .task-detail-sheet {
+    flex: none;
+    width: 66vw;
+    max-width: 1040px;
+    min-width: 640px;
+  }
 }
 
 .task-detail-sheet header {
