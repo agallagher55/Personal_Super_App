@@ -13,6 +13,10 @@
   var fieldFlagTag = document.getElementById('field-flag-tag');
   var fieldTags = document.getElementById('field-tags');
   var fieldNotes = document.getElementById('field-notes');
+  var fieldTicketNumber = document.getElementById('field-ticket-number');
+  var fieldAssignmentGroup = document.getElementById('field-assignment-group');
+  var fieldRequestedBy = document.getElementById('field-requested-by');
+  var fieldDueDate = document.getElementById('field-due-date');
 
   function getTaskIdFromPath() {
     var match = window.location.pathname.match(/^\/task\/([^/]+)$/);
@@ -57,6 +61,10 @@
     fieldStatus.value = task.status || (task.done ? 'done' : 'open');
     fieldPriority.value = task.priority || 'medium';
     fieldNotes.value = task.notes || '';
+    fieldTicketNumber.value = task.ticket_number || '';
+    fieldAssignmentGroup.value = task.assignment_group || '';
+    fieldRequestedBy.value = task.requested_by || '';
+    fieldDueDate.value = task.due_date || '';
 
     var tags = task.tags || [];
     var flagTag = tags.filter(function (t) { return t.flag; })[0];
@@ -132,7 +140,11 @@
           status: fieldStatus.value,
           priority: fieldPriority.value,
           tags: buildTagsPayload(),
-          notes: fieldNotes.value
+          notes: fieldNotes.value,
+          ticket_number: fieldTicketNumber.value,
+          assignment_group: fieldAssignmentGroup.value,
+          requested_by: fieldRequestedBy.value,
+          due_date: fieldDueDate.value
         }])
       })
         .then(function (response) {

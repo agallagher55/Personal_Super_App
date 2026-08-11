@@ -145,6 +145,10 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         if priority not in PRIORITIES:
             priority = 'medium'
         done = 'done' in fields
+        ticket_number = fields.get('ticket_number', [''])[0].strip()
+        assignment_group = fields.get('assignment_group', [''])[0].strip()
+        requested_by = fields.get('requested_by', [''])[0].strip()
+        due_date = fields.get('due_date', [''])[0].strip()
 
         if not section_id or not desc:
             self.send_error(400, 'Section and description are required')
@@ -179,6 +183,10 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             'done': done,
             'status': 'done' if done else 'open',
             'priority': priority,
+            'ticket_number': ticket_number,
+            'assignment_group': assignment_group,
+            'requested_by': requested_by,
+            'due_date': due_date,
             'created': created,
             'modified': created,
             'completed': created if done else ''
@@ -273,6 +281,13 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                     if new_priority != task.get('priority'):
                         task['priority'] = new_priority
                         changed = True
+
+                for field in ('ticket_number', 'assignment_group', 'requested_by', 'due_date'):
+                    if field in update:
+                        new_value = update[field].strip() if isinstance(update[field], str) else ''
+                        if new_value != task.get(field, ''):
+                            task[field] = new_value
+                            changed = True
 
                 if changed:
                     task['modified'] = now

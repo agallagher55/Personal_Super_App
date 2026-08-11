@@ -107,6 +107,25 @@
       body.appendChild(note);
     }
 
+    var fieldEntries = [
+      { key: 'ticket_number', label: '', className: 'ticket' },
+      { key: 'assignment_group', label: '', className: 'group' },
+      { key: 'requested_by', label: 'req: ', className: 'requester' },
+      { key: 'due_date', label: 'due ', className: 'due' }
+    ].filter(function (entry) { return taskData[entry.key]; });
+
+    if (fieldEntries.length > 0) {
+      var fields = document.createElement('div');
+      fields.className = 'task-fields';
+      fieldEntries.forEach(function (entry) {
+        var pill = document.createElement('span');
+        pill.className = 'field-pill field-pill-' + entry.className;
+        pill.textContent = entry.label + (entry.key === 'due_date' ? formatDate(taskData[entry.key] + 'T00:00:00Z') || taskData[entry.key] : taskData[entry.key]);
+        fields.appendChild(pill);
+      });
+      body.appendChild(fields);
+    }
+
     if (taskData.tags && taskData.tags.length > 0) {
       var tags = document.createElement('div');
       tags.className = 'tags';
