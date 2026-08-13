@@ -13,6 +13,8 @@ How URLs map to HTML pages, their JS, and the backend handlers in
 | `/tasks/new` | `html/new-task.html` | `static/js/new-task.js` | New task form. `?section=<id>` preselects a section. |
 | `/tasks/<slug>` | `html/index.html` | `static/js/script.js` | Same page as `/`, but `script.js` reads the slug from the URL and renders only the matching section. 404 if `<slug>` doesn't match any section's `slug`. |
 | `/task/<id>` | `html/task-detail.html` | `static/js/task-detail.js` | Edit/delete a single task by id. 404 if `<id>` doesn't exist. |
+| `/fitness` | `html/fitness.html` | — | Placeholder page for personal fitness tracking. |
+| `/finance` | `html/finance.html` | — | Placeholder page for personal finance tracking. |
 | `/new` | — | — | 302 redirect to `/tasks/new`. |
 | `/tasks.json` | `data/tasks.json` | — | Raw data, `no-store` cache headers. Every page above fetches this client-side to render. |
 

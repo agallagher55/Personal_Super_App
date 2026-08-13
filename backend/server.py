@@ -68,6 +68,12 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         if path == '/tasks':
             self.path = '/html/tasks-index.html'
             return super().do_GET()
+        if path == '/fitness':
+            self.path = '/html/fitness.html'
+            return super().do_GET()
+        if path == '/finance':
+            self.path = '/html/finance.html'
+            return super().do_GET()
         if path.startswith('/tasks/'):
             slug = path[len('/tasks/'):]
             if self.section_slug_exists(slug):

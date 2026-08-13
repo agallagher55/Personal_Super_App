@@ -1067,6 +1067,13 @@ a.num:hover {
   max-width: 620px;
 }
 
+.coming-soon {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 20px 4px;
+}
+
 .toc-list {
   list-style: none;
   margin: 8px 0 0;
