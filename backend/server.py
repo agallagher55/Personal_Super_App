@@ -24,6 +24,11 @@ PRIORITIES = ('low', 'medium', 'high')
 SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
 
 
+def slugify(text):
+    slug = re.sub(r'[^a-z0-9]+', '-', text.strip().lower()).strip('-')
+    return slug
+
+
 def now_iso():
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -54,6 +59,9 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
 
         if path == '/tasks/new':
             self.path = '/html/new-task.html'
+            return super().do_GET()
+        if path == '/tasks/new-category':
+            self.path = '/html/new-category.html'
             return super().do_GET()
         if path == '/new':
             self.send_response(302)
@@ -131,6 +139,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == '/tasks/new':
             return self.handle_new_task()
+        if parsed.path == '/tasks/new-category':
+            return self.handle_new_category()
         if parsed.path == '/tasks/update':
             return self.handle_update_tasks()
         if parsed.path == '/tasks/delete':
@@ -205,6 +215,44 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
 
         self.send_response(303)
         self.send_header('Location', '/?added=1')
+        self.end_headers()
+
+    def handle_new_category(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+        fields = parse_qs(body)
+
+        label = fields.get('label', [''])[0].strip()
+        if not label:
+            self.send_error(400, 'Category name is required')
+            return
+
+        slug = slugify(label)
+        if not slug:
+            self.send_error(400, 'Category name must contain letters or numbers')
+            return
+
+        with open(TASKS_FILE, 'r') as f:
+            data = json.load(f)
+
+        sections = data.setdefault('sections', [])
+        if any(s.get('slug') == slug or s.get('id') == slug for s in sections):
+            self.send_error(400, 'A category with that name already exists')
+            return
+
+        sections.append({
+            'id': slug,
+            'label': label,
+            'slug': slug,
+            'tasks': []
+        })
+
+        with open(TASKS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+            f.write('\n')
+
+        self.send_response(303)
+        self.send_header('Location', '/tasks?added=1')
         self.end_headers()
 
     def handle_update_tasks(self):
