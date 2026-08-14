@@ -6,6 +6,9 @@
   --line: oklch(88% 0.015 75);
   --flag: oklch(56% 0.16 35);
   --flag-soft: oklch(93% 0.03 35);
+  --status-red: oklch(56% 0.19 25);
+  --status-yellow: oklch(75% 0.15 85);
+  --status-green: oklch(60% 0.13 145);
   --mono: 'JetBrains Mono', ui-monospace, monospace;
   --serif: 'Newsreader', 'Georgia', serif;
   --sans: 'Work Sans', 'Helvetica Neue', Arial, sans-serif;
@@ -359,8 +362,9 @@ ol.tasks.collapsed {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 16px 0;
+  padding: 16px 0 16px 11px;
   border-bottom: 1px solid var(--line);
+  box-shadow: inset 3px 0 0 var(--status-red);
   transition: opacity 0.2s ease;
 }
 
@@ -497,9 +501,9 @@ a.num:hover {
   font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  color: var(--ink-soft);
+  color: var(--status-red);
   background: transparent;
-  border: 1px solid var(--line);
+  border: 1px solid var(--status-red);
   border-radius: 4px;
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
@@ -511,18 +515,21 @@ a.num:hover {
 }
 
 .task.in-progress {
-  box-shadow: inset 3px 0 0 var(--flag);
-  padding-left: 11px;
+  box-shadow: inset 3px 0 0 var(--status-yellow);
 }
 
 .task.in-progress .status-select {
-  color: var(--flag);
-  border-color: var(--flag);
+  color: var(--status-yellow);
+  border-color: var(--status-yellow);
+}
+
+.task.done {
+  box-shadow: inset 3px 0 0 var(--status-green);
 }
 
 .task.done .status-select {
-  color: var(--ink);
-  border-color: var(--ink);
+  color: var(--status-green);
+  border-color: var(--status-green);
 }
 
 .task .priority-select {
