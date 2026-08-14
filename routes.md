@@ -11,6 +11,7 @@ How URLs map to HTML pages, their JS, and the backend handlers in
 | `/` | `html/index.html` | `static/js/script.js` | All sections, unfiltered. |
 | `/tasks` | `html/tasks-index.html` | `static/js/tasks-index.js` | Category (section) list with open/closed counts. |
 | `/tasks/new` | `html/new-task.html` | `static/js/new-task.js` | New task form. `?section=<id>` preselects a section. |
+| `/tasks/new-category` | `html/new-category.html` | — | New category (section) form. |
 | `/tasks/<slug>` | `html/index.html` | `static/js/script.js` | Same page as `/`, but `script.js` reads the slug from the URL and renders only the matching section. 404 if `<slug>` doesn't match any section's `slug`. |
 | `/task/<id>` | `html/task-detail.html` | `static/js/task-detail.js` | Edit/delete a single task by id. 404 if `<id>` doesn't exist. |
 | `/fitness` | `html/fitness.html` | — | Placeholder page for personal fitness tracking. |
@@ -26,6 +27,7 @@ static file serving from the repo root (`/static/...`, etc.).
 | Route | Handler | Effect |
 |---|---|---|
 | `/tasks/new` | `handle_new_task` | Appends a task to the given section in `tasks.json`. Redirects `303` to `/?added=1`. |
+| `/tasks/new-category` | `handle_new_category` | Appends a new (empty) section, slugified from `label`. Redirects `303` to `/tasks?added=1`. 400 if the name is empty or a category with that slug/id already exists. |
 | `/tasks/update` | `handle_update_tasks` | Bulk update by task id (desc, note, tags, notes, status, priority, ticket_number, assignment_group, requested_by, due_date, reorder). Returns JSON. |
 | `/tasks/delete` | `handle_delete_task` | Removes a task by id. Returns JSON. |
 
@@ -42,7 +44,9 @@ in `tasks/update` payloads) and a `slug` (used in the `/tasks/<slug>` URL).
 | `research-tasks` | `research` | Research |
 | `mike-coverage` | `mike` | Covering for Mike Potter |
 
-Adding a new section means adding an entry to `data/tasks.json`'s
-`sections` array with a unique `id` and `slug` — no server changes needed,
-since `/tasks/<slug>` and the `section-select` dropdown on `/tasks/new`
-both read sections from `tasks.json` directly.
+New sections can be added via the `/tasks/new-category` form (from the
+"+ New Category" link on `/tasks`), which slugifies the given name into
+both `id` and `slug`. They can still be added by hand by editing
+`data/tasks.json`'s `sections` array directly, as long as `id`/`slug`
+stay unique, since `/tasks/<slug>` and the `section-select` dropdown on
+`/tasks/new` both read sections from `tasks.json` directly.

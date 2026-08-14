@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>New Category - Personal Tasks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles/styles.css">
+</head>
+<body>
+  <div class="page page-single">
+    <div class="sheet form-sheet">
+      <nav class="site-nav">
+        <a href="/">Tasks</a>
+        <a href="/tasks">Categories</a>
+        <span class="current">+ New Category</span>
+        <a href="/fitness">Fitness</a>
+        <a href="/finance">Finance</a>
+      </nav>
+
+      <header>
+        <div class="title">New Category</div>
+      </header>
+
+      <form method="POST" action="/tasks/new-category" class="task-form" id="category-form">
+        <label class="field">
+          <span class="field-label">Name</span>
+          <input type="text" name="label" required placeholder="e.g. Home Projects">
+        </label>
+
+        <button type="submit" class="submit-btn">Add Category</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
