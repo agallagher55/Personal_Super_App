@@ -108,16 +108,61 @@ a:hover { color: var(--ink); }
   transform: rotate(-90deg);
 }
 
+.completed-filter-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-top: 14px;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.completed-filter-bar.collapsed {
+  display: none;
+}
+
+.completed-filter-pill {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.completed-filter-pill:hover {
+  border-color: var(--ink-soft);
+}
+
+.completed-filter-pill.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-raised);
+}
+
 .completed-body {
-  overflow: hidden;
-  max-height: 6000px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 70vh;
   transition: max-height 0.2s ease;
   margin-top: 14px;
+  scroll-behavior: smooth;
 }
 
 .completed-body.collapsed {
   max-height: 0;
   margin-top: 0;
+  overflow: hidden;
 }
 
 .completed-group {
