@@ -6,6 +6,8 @@
   var completedHeader = document.getElementById('completed-header');
   var completedBody = document.getElementById('completed-body');
   var completedCountEl = document.getElementById('completed-count');
+  var completedFilterBar = document.getElementById('completed-filter-bar');
+  var completedCategoryFilter = 'all';
 
   var sectionListMap = {};    // sectionId -> main <ol> in the left column
   var sectionLabelMap = {};   // sectionId -> section label text
@@ -504,6 +506,39 @@
     completedCountEl.textContent = total;
   }
 
+  function buildCompletedFilterBar(sections) {
+    if (!completedFilterBar) {
+      return;
+    }
+    completedFilterBar.innerHTML = '';
+
+    var allPill = document.createElement('button');
+    allPill.type = 'button';
+    allPill.className = 'completed-filter-pill' + (completedCategoryFilter === 'all' ? ' active' : '');
+    allPill.dataset.filter = 'all';
+    allPill.textContent = 'All';
+    completedFilterBar.appendChild(allPill);
+
+    sections.forEach(function (sectionData) {
+      var pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'completed-filter-pill' + (completedCategoryFilter === sectionData.id ? ' active' : '');
+      pill.dataset.filter = sectionData.id;
+      pill.textContent = sectionData.label;
+      completedFilterBar.appendChild(pill);
+    });
+
+    completedFilterBar.querySelectorAll('.completed-filter-pill').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        completedCategoryFilter = pill.dataset.filter;
+        completedFilterBar.querySelectorAll('.completed-filter-pill').forEach(function (p) {
+          p.classList.toggle('active', p === pill);
+        });
+        applySearchFilter();
+      });
+    });
+  }
+
   function render(data) {
     var filterSlug = getFilterSlugFromPath();
     var sectionsToRender = data.sections;
@@ -543,10 +578,14 @@
       renumber(completedGroupMap[id]);
     });
     updateCompletedCount();
+    buildCompletedFilterBar(sectionsToRender);
 
     // Completed panel starts collapsed.
     completedHeader.classList.add('collapsed');
     completedBody.classList.add('collapsed');
+    if (completedFilterBar) {
+      completedFilterBar.classList.add('collapsed');
+    }
 
     applySearchFilter();
   }
@@ -585,6 +624,9 @@
   completedHeader.addEventListener('click', function () {
     completedHeader.classList.toggle('collapsed');
     completedBody.classList.toggle('collapsed');
+    if (completedFilterBar) {
+      completedFilterBar.classList.toggle('collapsed');
+    }
   });
 
   var searchInput = document.getElementById('task-search');
@@ -609,7 +651,11 @@
     var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
 
     document.querySelectorAll('.task').forEach(function (li) {
-      li.classList.toggle('search-hidden', !!query && !taskMatchesQuery(li, query));
+      var matchesSearch = !query || taskMatchesQuery(li, query);
+      var inCompleted = completedBody.contains(li);
+      var matchesCategory = !inCompleted || completedCategoryFilter === 'all' ||
+        li.dataset.section === completedCategoryFilter;
+      li.classList.toggle('search-hidden', !(matchesSearch && matchesCategory));
     });
 
     document.querySelectorAll('.section').forEach(function (section) {
