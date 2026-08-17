@@ -174,7 +174,16 @@ a:hover { color: var(--ink); }
 
 .completed-panel .task {
   padding: 10px 0;
+  margin-bottom: 0;
   gap: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.completed-panel .task:last-child {
+  border-bottom: none;
 }
 
 .completed-panel .task .num {
@@ -361,11 +370,18 @@ ol.tasks.collapsed {
 .task {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 16px 0 16px 11px;
-  border-bottom: 1px solid var(--line);
+  gap: 16px;
+  padding: 18px 18px 18px 16px;
+  margin-bottom: 14px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
   box-shadow: inset 3px 0 0 var(--status-red);
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, box-shadow 0.15s ease;
+}
+
+ol.tasks > .task:last-child {
+  margin-bottom: 0;
 }
 
 .task.deleting {
@@ -487,7 +503,7 @@ a.num:hover {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: 8px;
   flex: 0 0 auto;
   align-self: flex-start;
   width: 88px;
@@ -496,9 +512,10 @@ a.num:hover {
 
 .task .status-select {
   width: 100%;
-  padding: 3px 7px;
+  padding: 4px 7px;
   font-family: var(--mono);
   font-size: 10.5px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--status-red);
@@ -534,9 +551,10 @@ a.num:hover {
 
 .task .priority-select {
   width: 100%;
-  padding: 3px 7px;
+  padding: 4px 7px;
   font-family: var(--mono);
   font-size: 10.5px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--ink-soft);
@@ -570,19 +588,20 @@ a.num:hover {
 
 .task .desc {
   font-family: var(--sans);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 15.5px;
-  margin: 2px 0 4px;
+  line-height: 1.35;
+  margin: 2px 0 6px;
 }
 
 .task .note {
   font-size: 13px;
   color: var(--ink-soft);
-  line-height: 1.45;
+  line-height: 1.55;
 }
 
 .task .tags {
-  margin-top: 6px;
+  margin-top: 10px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -607,7 +626,7 @@ a.num:hover {
 }
 
 .task-fields {
-  margin-top: 6px;
+  margin-top: 10px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -639,10 +658,11 @@ a.num:hover {
 .task .notes-label {
   font-family: var(--mono);
   font-size: 10px;
+  font-weight: 600;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--ink-soft);
-  margin: 10px 0 4px;
+  margin: 12px 0 6px;
 }
 
 .task .task-meta {
@@ -651,14 +671,16 @@ a.num:hover {
   letter-spacing: 0.3px;
   color: var(--ink-soft);
   opacity: 0.6;
-  margin-top: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
 }
 
 .task textarea {
   width: 100%;
   min-height: 44px;
   resize: vertical;
-  background: var(--paper-raised);
+  background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--ink);
