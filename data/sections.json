@@ -28,5 +28,11 @@
     "label": "Covering for Mike Potter",
     "slug": "mike",
     "note": ""
+  },
+  {
+    "id": "personal",
+    "label": "Personal",
+    "slug": "personal",
+    "note": ""
   }
 ]
