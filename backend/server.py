@@ -3,7 +3,17 @@
 
 Serves the same files `python3 -m http.server` would, plus a
 GET /tasks/new (the new-task form page) and a
-POST /tasks/new (appends a task to tasks.json and saves it to disk).
+POST /tasks/new (appends a task to data/tasks.json and saves it to disk).
+
+Data is stored on disk as three normalized tables that mirror the shape
+this app will eventually use in a real database:
+
+  data/sections.json  - one row per task category (id, label, slug, note)
+  data/tasks.json      - one row per task (section_id foreign key)
+  data/tags.json        - one row per tag (task_id foreign key)
+
+GET /tasks.json joins them back into the nested shape the frontend expects,
+the same way a database query/view would.
 """
 
 import json
@@ -17,7 +27,10 @@ from urllib.parse import parse_qs, urlparse
 
 PORT = int(os.environ.get('PORT', 8000))
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TASKS_FILE = os.path.join(BASE_DIR, 'data', 'tasks.json')
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+SECTIONS_FILE = os.path.join(DATA_DIR, 'sections.json')
+TASKS_FILE = os.path.join(DATA_DIR, 'tasks.json')
+TAGS_FILE = os.path.join(DATA_DIR, 'tags.json')
 STATUSES = ('open', 'in-progress', 'done')
 PRIORITIES = ('low', 'medium', 'high')
 
@@ -49,6 +62,96 @@ def format_sentence(text):
     if text and text[-1] not in '.!?':
         text += '.'
     return text
+
+
+def load_json(path, default):
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except OSError:
+        return default
+
+
+def save_json(path, data):
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+
+
+def load_sections():
+    return load_json(SECTIONS_FILE, [])
+
+
+def load_tasks():
+    return load_json(TASKS_FILE, [])
+
+
+def load_tags():
+    return load_json(TAGS_FILE, [])
+
+
+def save_sections(sections):
+    save_json(SECTIONS_FILE, sections)
+
+
+def save_tasks(tasks):
+    save_json(TASKS_FILE, tasks)
+
+
+def save_tags(tags):
+    save_json(TAGS_FILE, tags)
+
+
+def reposition_section(tasks, section_id):
+    """Renumber the 'position' field of a section's tasks to 0..n-1,
+    keeping their current relative order."""
+    section_tasks = sorted(
+        (t for t in tasks if t.get('section_id') == section_id),
+        key=lambda t: t.get('position', 0)
+    )
+    for i, task in enumerate(section_tasks):
+        task['position'] = i
+
+
+def build_nested():
+    """Join sections + tasks + tags into the nested shape the frontend
+    expects, the same way a database view would."""
+    sections = load_sections()
+    tasks = load_tasks()
+    tags = load_tags()
+
+    tags_by_task = {}
+    for tag in sorted(tags, key=lambda t: t.get('position', 0)):
+        tags_by_task.setdefault(tag['task_id'], []).append({
+            'text': tag['text'],
+            'flag': bool(tag.get('flag'))
+        })
+
+    tasks_by_section = {}
+    for task in tasks:
+        tasks_by_section.setdefault(task.get('section_id'), []).append(task)
+    for section_tasks in tasks_by_section.values():
+        section_tasks.sort(key=lambda t: t.get('position', 0))
+
+    result_sections = []
+    for section in sections:
+        nested_tasks = []
+        for task in tasks_by_section.get(section['id'], []):
+            nested_task = {k: v for k, v in task.items() if k not in ('section_id', 'position')}
+            nested_task['tags'] = tags_by_task.get(task['id'], [])
+            nested_tasks.append(nested_task)
+
+        nested_section = {
+            'id': section['id'],
+            'label': section['label'],
+            'slug': section['slug'],
+            'tasks': nested_tasks
+        }
+        if section.get('note'):
+            nested_section['note'] = section['note']
+        result_sections.append(nested_section)
+
+    return {'sections': result_sections}
 
 
 class TaskHandler(http.server.SimpleHTTPRequestHandler):
@@ -100,32 +203,16 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def section_slug_exists(self, slug):
-        try:
-            with open(TASKS_FILE, 'r') as f:
-                data = json.load(f)
-        except OSError:
-            return False
-        return any(s.get('slug') == slug for s in data.get('sections', []))
+        return any(s.get('slug') == slug for s in load_sections())
 
     def find_task(self, task_id):
-        try:
-            with open(TASKS_FILE, 'r') as f:
-                data = json.load(f)
-        except OSError:
-            return None
-        for section in data.get('sections', []):
-            for task in section.get('tasks', []):
-                if task.get('id') == task_id:
-                    return task
+        for task in load_tasks():
+            if task.get('id') == task_id:
+                return task
         return None
 
     def serve_tasks_json(self):
-        try:
-            with open(TASKS_FILE, 'rb') as f:
-                body = f.read()
-        except OSError:
-            self.send_error(404, 'tasks.json not found')
-            return
+        body = json.dumps(build_nested(), indent=2).encode('utf-8')
 
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
@@ -170,34 +257,35 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(400, 'Section and description are required')
             return
 
-        with open(TASKS_FILE, 'r') as f:
-            data = json.load(f)
-
-        section = next(
-            (s for s in data.get('sections', []) if s['id'] == section_id),
-            None
-        )
+        sections = load_sections()
+        section = next((s for s in sections if s['id'] == section_id), None)
         if section is None:
             self.send_error(400, 'Unknown section: ' + section_id)
             return
 
-        tags = []
+        tasks = load_tasks()
+        tags = load_tags()
+
+        raw_tags = []
         if flag_tag:
-            tags.append({'text': flag_tag, 'flag': True})
+            raw_tags.append({'text': flag_tag, 'flag': True})
         for raw_tag in tags_raw.split(','):
             raw_tag = raw_tag.strip()
             if raw_tag:
-                tags.append({'text': raw_tag, 'flag': False})
+                raw_tags.append({'text': raw_tag, 'flag': False})
 
         created = now_iso()
+        task_id = uuid.uuid4().hex[:12]
+        position = sum(1 for t in tasks if t.get('section_id') == section_id)
         new_task = {
-            'id': uuid.uuid4().hex[:12],
+            'id': task_id,
+            'section_id': section_id,
+            'position': position,
             'desc': desc,
             'note': note,
             'notes': '',
-            'tags': tags,
-            'done': done,
             'status': 'done' if done else 'open',
+            'done': done,
             'priority': priority,
             'ticket_number': ticket_number,
             'assignment_group': assignment_group,
@@ -207,11 +295,19 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             'modified': created,
             'completed': created if done else ''
         }
-        section['tasks'].append(new_task)
+        tasks.append(new_task)
 
-        with open(TASKS_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-            f.write('\n')
+        for tag_position, tag in enumerate(raw_tags):
+            tags.append({
+                'id': uuid.uuid4().hex[:12],
+                'task_id': task_id,
+                'position': tag_position,
+                'text': tag['text'],
+                'flag': tag['flag']
+            })
+
+        save_tasks(tasks)
+        save_tags(tags)
 
         self.send_response(303)
         self.send_header('Location', '/?added=1')
@@ -232,10 +328,7 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(400, 'Category name must contain letters or numbers')
             return
 
-        with open(TASKS_FILE, 'r') as f:
-            data = json.load(f)
-
-        sections = data.setdefault('sections', [])
+        sections = load_sections()
         if any(s.get('slug') == slug or s.get('id') == slug for s in sections):
             self.send_error(400, 'A category with that name already exists')
             return
@@ -244,12 +337,9 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             'id': slug,
             'label': label,
             'slug': slug,
-            'tasks': []
+            'note': ''
         })
-
-        with open(TASKS_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-            f.write('\n')
+        save_sections(sections)
 
         self.send_response(303)
         self.send_header('Location', '/tasks?added=1')
@@ -277,85 +367,101 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 updates_by_id[task_id] = item
                 order_index.setdefault(task_id, len(order_index))
 
-        with open(TASKS_FILE, 'r') as f:
-            data = json.load(f)
+        tasks = load_tasks()
+        tags = load_tags()
 
         updated_count = 0
         now = now_iso()
-        for section in data.get('sections', []):
-            for task in section.get('tasks', []):
-                update = updates_by_id.get(task.get('id'))
-                if update is None:
-                    continue
+        touched_sections = set()
+        for task in tasks:
+            update = updates_by_id.get(task.get('id'))
+            if update is None:
+                continue
 
-                changed = False
+            changed = False
 
-                if 'desc' in update:
-                    new_desc = (update['desc'] or '').strip()
-                    if new_desc and new_desc != task.get('desc'):
-                        task['desc'] = new_desc
-                        changed = True
-
-                if 'note' in update:
-                    new_note = update['note'] if isinstance(update['note'], str) else ''
-                    if new_note != task.get('note', ''):
-                        task['note'] = new_note
-                        changed = True
-
-                if 'tags' in update and isinstance(update['tags'], list):
-                    new_tags = []
-                    for tag in update['tags']:
-                        if isinstance(tag, dict) and str(tag.get('text', '')).strip():
-                            new_tags.append({
-                                'text': str(tag['text']).strip(),
-                                'flag': bool(tag.get('flag'))
-                            })
-                    if new_tags != task.get('tags', []):
-                        task['tags'] = new_tags
-                        changed = True
-
-                if 'notes' in update and update['notes'] != task.get('notes', ''):
-                    task['notes'] = update['notes']
+            if 'desc' in update:
+                new_desc = (update['desc'] or '').strip()
+                if new_desc and new_desc != task.get('desc'):
+                    task['desc'] = new_desc
                     changed = True
 
-                if 'status' in update:
-                    new_status = update['status']
-                    if new_status not in STATUSES:
-                        new_status = 'done' if task.get('done') else 'open'
-                    if new_status != task.get('status'):
-                        task['status'] = new_status
-                        task['done'] = (new_status == 'done')
-                        task['completed'] = now if new_status == 'done' else ''
+            if 'note' in update:
+                new_note = update['note'] if isinstance(update['note'], str) else ''
+                if new_note != task.get('note', ''):
+                    task['note'] = new_note
+                    changed = True
+
+            if 'tags' in update and isinstance(update['tags'], list):
+                new_tags = []
+                for tag in update['tags']:
+                    if isinstance(tag, dict) and str(tag.get('text', '')).strip():
+                        new_tags.append({
+                            'text': str(tag['text']).strip(),
+                            'flag': bool(tag.get('flag'))
+                        })
+                existing_tags = sorted(
+                    (t for t in tags if t.get('task_id') == task['id']),
+                    key=lambda t: t.get('position', 0)
+                )
+                existing_simple = [{'text': t['text'], 'flag': bool(t.get('flag'))} for t in existing_tags]
+                if new_tags != existing_simple:
+                    tags = [t for t in tags if t.get('task_id') != task['id']]
+                    for tag_position, tag in enumerate(new_tags):
+                        tags.append({
+                            'id': uuid.uuid4().hex[:12],
+                            'task_id': task['id'],
+                            'position': tag_position,
+                            'text': tag['text'],
+                            'flag': tag['flag']
+                        })
+                    changed = True
+
+            if 'notes' in update and update['notes'] != task.get('notes', ''):
+                task['notes'] = update['notes']
+                changed = True
+
+            if 'status' in update:
+                new_status = update['status']
+                if new_status not in STATUSES:
+                    new_status = 'done' if task.get('done') else 'open'
+                if new_status != task.get('status'):
+                    task['status'] = new_status
+                    task['done'] = (new_status == 'done')
+                    task['completed'] = now if new_status == 'done' else ''
+                    changed = True
+
+            if 'priority' in update:
+                new_priority = update['priority']
+                if new_priority not in PRIORITIES:
+                    new_priority = task.get('priority', 'medium')
+                if new_priority != task.get('priority'):
+                    task['priority'] = new_priority
+                    changed = True
+
+            for field in ('ticket_number', 'assignment_group', 'requested_by', 'due_date'):
+                if field in update:
+                    new_value = update[field].strip() if isinstance(update[field], str) else ''
+                    if new_value != task.get(field, ''):
+                        task[field] = new_value
                         changed = True
 
-                if 'priority' in update:
-                    new_priority = update['priority']
-                    if new_priority not in PRIORITIES:
-                        new_priority = task.get('priority', 'medium')
-                    if new_priority != task.get('priority'):
-                        task['priority'] = new_priority
-                        changed = True
+            if changed:
+                task['modified'] = now
 
-                for field in ('ticket_number', 'assignment_group', 'requested_by', 'due_date'):
-                    if field in update:
-                        new_value = update[field].strip() if isinstance(update[field], str) else ''
-                        if new_value != task.get(field, ''):
-                            task[field] = new_value
-                            changed = True
+            touched_sections.add(task.get('section_id'))
+            updated_count += 1
 
-                if changed:
-                    task['modified'] = now
-
-                updated_count += 1
-
-        for section in data.get('sections', []):
-            section['tasks'].sort(
+        for section_id in touched_sections:
+            section_tasks = [t for t in tasks if t.get('section_id') == section_id]
+            section_tasks.sort(
                 key=lambda t: order_index.get(t.get('id'), len(order_index))
             )
+            for i, task in enumerate(section_tasks):
+                task['position'] = i
 
-        with open(TASKS_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-            f.write('\n')
+        save_tasks(tasks)
+        save_tags(tags)
 
         response_body = json.dumps({'status': 'ok', 'updated': updated_count}).encode('utf-8')
         self.send_response(200)
@@ -379,27 +485,20 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_error(400, 'Missing task id')
             return
 
-        with open(TASKS_FILE, 'r') as f:
-            data = json.load(f)
-
-        deleted = False
-        for section in data.get('sections', []):
-            tasks = section.get('tasks', [])
-            for i, task in enumerate(tasks):
-                if task.get('id') == task_id:
-                    del tasks[i]
-                    deleted = True
-                    break
-            if deleted:
-                break
-
-        if not deleted:
+        tasks = load_tasks()
+        target = next((t for t in tasks if t.get('id') == task_id), None)
+        if target is None:
             self.send_json_error(404, 'No task found with that id')
             return
 
-        with open(TASKS_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-            f.write('\n')
+        section_id = target.get('section_id')
+        tasks = [t for t in tasks if t.get('id') != task_id]
+        reposition_section(tasks, section_id)
+        save_tasks(tasks)
+
+        tags = load_tags()
+        tags = [t for t in tags if t.get('task_id') != task_id]
+        save_tags(tags)
 
         response_body = json.dumps({'status': 'ok', 'deleted': True}).encode('utf-8')
         self.send_response(200)

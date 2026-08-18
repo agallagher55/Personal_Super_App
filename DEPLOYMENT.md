@@ -8,7 +8,8 @@ no writable filesystem. This app needs both:
 - `POST /tasks/update` (saving notes/status/priority changes)
 - `POST /tasks/delete` (deleting a task)
 - `POST /tasks/new` (creating a task)
-- reading and writing `data/tasks.json` on disk as the datastore
+- reading and writing `data/sections.json`, `data/tasks.json`, and
+  `data/tags.json` on disk as the datastore
 
 All of that is handled by `backend/server.py`, a small Python
 `http.server`-based server. Pages can't run it, so deploying there
@@ -37,14 +38,14 @@ included.
 
 ### What the persistent disk does
 
-`data/tasks.json` is the only datastore this app has, and it's a
-plain file on disk. Render's ephemeral filesystem is wiped on every
-deploy, so without a disk every deploy would reset your tasks back to
-whatever's committed in the repo.
+`data/sections.json`, `data/tasks.json`, and `data/tags.json` are the
+only datastore this app has, and they're plain files on disk. Render's
+ephemeral filesystem is wiped on every deploy, so without a disk every
+deploy would reset your tasks back to whatever's committed in the repo.
 
 The disk in `render.yaml` is mounted directly over `data/`. On the
 **first** deploy, Render copies whatever's already at that path (the
-`tasks.json` committed to the repo) onto the new disk to seed it.
+three JSON files committed to the repo) onto the new disk to seed it.
 After that, all reads/writes from `backend/server.py` go to the
 persistent disk, so edits made through the running app survive
 redeploys, restarts, and code pushes.
