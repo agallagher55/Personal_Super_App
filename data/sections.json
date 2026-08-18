@@ -1,0 +1,32 @@
+[
+  {
+    "id": "own-tasks",
+    "label": "Work Tasks",
+    "slug": "work",
+    "note": ""
+  },
+  {
+    "id": "finance-tasks",
+    "label": "Finance",
+    "slug": "finance",
+    "note": "Rate reference: TD line of credit is also Prime + 2% (same as Tangerine). TD LOC balance: $0."
+  },
+  {
+    "id": "admin-tasks",
+    "label": "Admin",
+    "slug": "admin",
+    "note": ""
+  },
+  {
+    "id": "research-tasks",
+    "label": "Research",
+    "slug": "research",
+    "note": ""
+  },
+  {
+    "id": "mike-coverage",
+    "label": "Covering for Mike Potter",
+    "slug": "mike",
+    "note": ""
+  }
+]

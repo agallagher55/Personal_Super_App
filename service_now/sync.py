@@ -7,9 +7,10 @@ Usage:
 Requires service_now/.env (see .env.example) with instance + credentials.
 Fetches records from SERVICENOW_TABLE (default sc_task) assigned to you,
 maps them onto the app's task schema, and upserts them into the section
-named by SERVICENOW_SECTION_ID in data/tasks.json — matching existing
-tasks by ServiceNow sys_id (falling back to ticket number) so re-running
-this doesn't create duplicates or clobber notes you've added locally.
+named by SERVICENOW_SECTION_ID (matched against data/sections.json) —
+matching existing tasks in data/tasks.json by ServiceNow sys_id (falling
+back to ticket number) so re-running this doesn't create duplicates or
+clobber notes you've added locally.
 """
 
 import argparse
@@ -25,6 +26,7 @@ from client import ServiceNowClient, ServiceNowError
 from config import load_config
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SECTIONS_FILE = os.path.join(BASE_DIR, 'data', 'sections.json')
 TASKS_FILE = os.path.join(BASE_DIR, 'data', 'tasks.json')
 
 STATE_TO_STATUS = {
@@ -103,26 +105,33 @@ def map_record(record):
     }
 
 
+def load_sections():
+    with open(SECTIONS_FILE, 'r') as f:
+        return json.load(f)
+
+
 def load_tasks():
     with open(TASKS_FILE, 'r') as f:
         return json.load(f)
 
 
-def save_tasks(data):
+def save_tasks(tasks):
     with open(TASKS_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+        json.dump(tasks, f, indent=2)
         f.write('\n')
 
 
-def find_section(data, section_id):
-    for section in data.get('sections', []):
+def find_section(section_id):
+    for section in load_sections():
         if section['id'] == section_id:
             return section
-    raise SystemExit('No section with id=%s in data/tasks.json' % section_id)
+    raise SystemExit('No section with id=%s in data/sections.json' % section_id)
 
 
-def find_existing_task(section, mapped):
-    for task in section.get('tasks', []):
+def find_existing_task(tasks, section_id, mapped):
+    for task in tasks:
+        if task.get('section_id') != section_id:
+            continue
         if mapped['servicenow_sys_id'] and task.get('servicenow_sys_id') == mapped['servicenow_sys_id']:
             return task
         if task.get('ticket_number') and task.get('ticket_number') == mapped['ticket_number']:
@@ -130,17 +139,19 @@ def find_existing_task(section, mapped):
     return None
 
 
-def upsert(section, mapped, dry_run):
-    existing = find_existing_task(section, mapped)
+def upsert(tasks, section_id, mapped, dry_run):
+    existing = find_existing_task(tasks, section_id, mapped)
     now = now_iso()
 
     if existing is None:
+        position = sum(1 for t in tasks if t.get('section_id') == section_id)
         new_task = {
             'id': uuid.uuid4().hex[:12],
+            'section_id': section_id,
+            'position': position,
             'desc': mapped['desc'],
             'note': mapped['note'],
             'notes': '',
-            'tags': [],
             'done': mapped['status'] == 'done',
             'status': mapped['status'],
             'priority': 'medium',
@@ -154,7 +165,7 @@ def upsert(section, mapped, dry_run):
             'completed': now if mapped['status'] == 'done' else '',
         }
         if not dry_run:
-            section['tasks'].append(new_task)
+            tasks.append(new_task)
         return 'created'
 
     changed = False
@@ -204,13 +215,13 @@ def main():
 
     print('Fetched %d record(s).' % len(records))
 
-    data = load_tasks()
-    section = find_section(data, config.section_id)
+    section = find_section(config.section_id)
+    tasks = load_tasks()
 
     counts = {'created': 0, 'updated': 0, 'unchanged': 0}
     for record in records:
         mapped = map_record(record)
-        outcome = upsert(section, mapped, args.dry_run)
+        outcome = upsert(tasks, section['id'], mapped, args.dry_run)
         counts[outcome] += 1
         print('  [%s] %s - %s' % (outcome, mapped['ticket_number'] or '(no number)', mapped['desc']))
 
@@ -219,7 +230,7 @@ def main():
     if args.dry_run:
         print('Dry run -- data/tasks.json was not modified.')
     else:
-        save_tasks(data)
+        save_tasks(tasks)
         print('Saved to %s' % TASKS_FILE)
 
 
