@@ -12,6 +12,26 @@
   --mono: 'JetBrains Mono', ui-monospace, monospace;
   --serif: 'Newsreader', 'Georgia', serif;
   --sans: 'Work Sans', 'Helvetica Neue', Arial, sans-serif;
+  color-scheme: light;
+}
+
+/* Same warm parchment identity, lightness/hue flipped for a dark room
+   rather than a different palette - kept in sync with static/fitness/css/
+   styles.css's own :root[data-theme="dark"] override, and driven by the
+   same data-theme attribute + "theme" localStorage key (see
+   static/js/theme.js) so the preference is shared across every page. */
+:root[data-theme="dark"] {
+  --paper: oklch(20% 0.014 75);
+  --paper-raised: oklch(25% 0.016 75);
+  --ink: oklch(92% 0.015 75);
+  --ink-soft: oklch(68% 0.02 75);
+  --line: oklch(36% 0.02 75);
+  --flag: oklch(70% 0.17 35);
+  --flag-soft: oklch(32% 0.07 35);
+  --status-red: oklch(66% 0.19 25);
+  --status-yellow: oklch(78% 0.15 85);
+  --status-green: oklch(70% 0.14 145);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -22,6 +42,39 @@ body {
   color: var(--ink);
   font-family: var(--sans);
   padding: 48px 24px 100px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.theme-toggle {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 100;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px oklch(24% 0.02 75 / 0.15);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.theme-toggle:hover {
+  border-color: var(--flag);
+}
+
+@media (max-width: 880px) {
+  .theme-toggle {
+    left: 16px;
+    bottom: 16px;
+  }
 }
 
 a { color: var(--flag); }
@@ -936,7 +989,6 @@ a.num:hover {
   line-height: 1.5;
   padding: 8px 2px;
   outline: none;
-  color-scheme: light;
 }
 
 .field input[type="date"]:focus {
