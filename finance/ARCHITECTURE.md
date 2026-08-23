@@ -18,6 +18,30 @@ Confirmed with the user 2026-08-23:
 |---|---|---|
 | Backend framework | Stay on stdlib `http.server`, extend it | Matches the rest of the app; a framework isn't needed to call an external API and write to SQLite |
 | Datastore | SQLite (file on the same Render persistent disk as `data/`) | Real relational queries (by date/account/category) without adding a hosted DB service |
+
+**Framework migration, tracked but not decided (2026-08-23):** the user is
+considering moving the whole app to Flask or Django at some point. Not
+decided yet, so the plan above stands and Phase 1 can start on stdlib —
+but this is worth resurfacing before too much finance-specific route code
+piles up, since the two candidates have very different costs:
+
+- **Flask** would be a low-cost migration. Its view functions map almost
+  directly onto the `finance/routes.py` handlers described below, and it
+  doesn't force an ORM — `db.py`'s raw `sqlite3` usage and `schema.sql`
+  could carry over largely as-is. Building finance now on stdlib and
+  migrating later is fine under this option.
+- **Django** would be a bigger rework but solves more at once: its ORM
+  would replace `schema.sql`/hand-written SQL with models + migrations,
+  and — notably — its built-in auth/session system would largely satisfy
+  the "this app has no authentication" gap flagged as a hard prerequisite
+  in §6, plus its admin panel is a genuinely useful tool for eyeballing
+  synced Plaid data during development. If Django looks likely, it's
+  worth migrating the base app to it *before* Phase 1 of finance, rather
+  than building the finance layer twice.
+
+Revisit this decision before Phase 1 if a framework choice firms up in
+the meantime; nothing below assumes one outcome over the other beyond
+"stdlib for now."
 | Sync model | Poll on demand (page load + manual Refresh button), no public webhook endpoint | Simpler, no inbound HTTPS endpoint to secure/verify; acceptable since Plaid itself only refreshes Transactions/Investments/Liabilities ~once/day server-side anyway |
 
 Two new third-party dependencies are unavoidable and are a deliberate,
@@ -287,3 +311,8 @@ below and adjust later, just don't want to bake in the wrong one:
   service (same process as today), not a second service — consistent
   with "poll on demand" needing no public webhook endpoint. Flag if you'd
   rather split finance into its own service for any reason.
+- **Framework migration timing** (see §1): if Flask or Django firms up as
+  a real near-term plan for the whole app, decide *before* starting Phase
+  1 whether to migrate first — especially for Django, where the ORM and
+  built-in auth would otherwise mean rebuilding `schema.sql`/`db.py` and
+  the auth gate in §6/Phase 5 shortly after writing them.
