@@ -6,6 +6,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/styles/styles.css">
+<script>
+  (function () {
+    var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
 </head>
 <body>
   <div class="page page-single">
@@ -32,5 +38,7 @@
       </form>
     </div>
   </div>
+
+  <script src="/static/js/theme.js"></script>
 </body>
 </html>
