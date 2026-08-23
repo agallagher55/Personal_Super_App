@@ -19,6 +19,7 @@ the same way a database query/view would.
 import json
 import os
 import re
+import sys
 import uuid
 import http.server
 import socketserver
@@ -33,6 +34,23 @@ TASKS_FILE = os.path.join(DATA_DIR, 'tasks.json')
 TAGS_FILE = os.path.join(DATA_DIR, 'tags.json')
 STATUSES = ('open', 'in-progress', 'done')
 PRIORITIES = ('low', 'medium', 'high')
+
+# The ported Personal Health app (see fitness/ARCHITECTURE.md) lives at
+# backend/fitness/ as its own flat-import module set (config.py, auth.py,
+# http_client.py, google_health_client.py, store.py, sync.py, api.py) -
+# same style as the rest of this stdlib-only backend, just namespaced into
+# its own directory. Adding it to sys.path lets `import api as fitness_api`
+# resolve, and lets that module's own `import store` / `import sync` resolve
+# in turn.
+FITNESS_DIR = os.path.join(BASE_DIR, 'backend', 'fitness')
+if FITNESS_DIR not in sys.path:
+    sys.path.insert(0, FITNESS_DIR)
+import api as fitness_api
+
+FITNESS_PAGES = (
+    'steps', 'heart-rate', 'sleep', 'activity', 'spo2', 'hrv',
+    'breathing-rate', 'temperature', 'weight',
+)
 
 SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
 
@@ -180,8 +198,17 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.path = '/html/tasks-index.html'
             return super().do_GET()
         if path == '/fitness':
-            self.path = '/html/fitness.html'
+            self.path = '/html/fitness/index.html'
             return super().do_GET()
+        if path.startswith('/fitness/api/'):
+            return self.handle_fitness_api_get(path, parsed)
+        if path.startswith('/fitness/'):
+            page = path[len('/fitness/'):]
+            if page in FITNESS_PAGES:
+                self.path = '/html/fitness/pages/' + page + '.html'
+                return super().do_GET()
+            self.send_error(404, 'Unknown fitness page: ' + page)
+            return
         if path == '/finance':
             self.path = '/html/finance.html'
             return super().do_GET()
@@ -211,6 +238,31 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 return task
         return None
 
+    def handle_fitness_api_get(self, path, parsed):
+        query = parse_qs(parsed.query)
+        sub = path[len('/fitness/api/'):]
+        if sub == 'health':
+            status, body = fitness_api.health()
+        elif sub == 'metrics':
+            status, body = fitness_api.metrics_summary(query)
+        elif sub.startswith('metrics/') and sub.endswith('/samples'):
+            metric = sub[len('metrics/'):-len('/samples')]
+            status, body = fitness_api.metric_samples(metric, query)
+        elif sub.startswith('metrics/'):
+            metric = sub[len('metrics/'):]
+            status, body = fitness_api.metric_detail(metric, query)
+        else:
+            status, body = 404, {'error': 'not found'}
+        self.send_fitness_json(status, body)
+
+    def send_fitness_json(self, status, body):
+        payload = json.dumps(body).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
     def serve_tasks_json(self):
         body = json.dumps(build_nested(), indent=2).encode('utf-8')
 
@@ -224,6 +276,10 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == '/fitness/api/sync':
+            status, body = fitness_api.trigger_sync()
+            self.send_fitness_json(status, body)
+            return
         if parsed.path == '/tasks/new':
             return self.handle_new_task()
         if parsed.path == '/tasks/new-category':

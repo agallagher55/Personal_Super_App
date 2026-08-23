@@ -16,10 +16,15 @@ mutated only through the POST routes below.
 | `/tasks/new-category` | `html/new-category.html` | — | New category (section) form. |
 | `/tasks/<slug>` | `html/index.html` | `static/js/script.js` | Same page as `/`, but `script.js` reads the slug from the URL and renders only the matching section. 404 if `<slug>` doesn't match any section's `slug`. |
 | `/task/<id>` | `html/task-detail.html` | `static/js/task-detail.js` | Edit/delete a single task by id. 404 if `<id>` doesn't exist. |
-| `/fitness` | `html/fitness.html` | — | Placeholder page for personal fitness tracking. |
+| `/fitness` | `html/fitness/index.html` | `static/fitness/js/dashboard.js` | Personal Health dashboard — see `fitness/README.md`. |
+| `/fitness/<page>` | `html/fitness/pages/<page>.html` | `static/fitness/js/pages/<page>.js` | Per-metric detail view. `<page>` is one of `steps`, `heart-rate`, `sleep`, `activity`, `spo2`, `hrv`, `breathing-rate`, `temperature`, `weight` (`FITNESS_PAGES` in `backend/server.py`). 404 otherwise. |
+| `/fitness/api/health` | JSON | — | Liveness check; see `fitness/API-CONTRACT.md`. |
+| `/fitness/api/metrics` | JSON | — | Dashboard summary across all metrics, `?from=&to=` (default last 7 days). |
+| `/fitness/api/metrics/<metric>` | JSON | — | Single-metric detail, `?from=&to=` (default last 30 days). 404 if `<metric>` isn't in `KNOWN_METRICS`. |
+| `/fitness/api/metrics/<metric>/samples` | JSON | — | Raw intraday readings in `[from, to]` (full ISO 8601 instants). Only `heart_rate` today. |
 | `/finance` | `html/finance.html` | — | Placeholder page for personal finance tracking. |
 | `/new` | — | — | 302 redirect to `/tasks/new`. |
-| `/tasks.json` | `sections.json` + `tasks.json` + `tags.json`, joined | — | `no-store` cache headers. Every page above fetches this client-side to render. |
+| `/tasks.json` | `sections.json` + `tasks.json` + `tags.json`, joined | — | `no-store` cache headers. Every task-tracker page above fetches this client-side to render. |
 
 Any other path falls through to `SimpleHTTPRequestHandler`, i.e. plain
 static file serving from the repo root (`/static/...`, etc.).
@@ -32,6 +37,7 @@ static file serving from the repo root (`/static/...`, etc.).
 | `/tasks/new-category` | `handle_new_category` | Appends a new (empty) row to `sections.json`, slugified from `label`. Redirects `303` to `/tasks?added=1`. 400 if the name is empty or a category with that slug/id already exists. |
 | `/tasks/update` | `handle_update_tasks` | Bulk update by task id (desc, note, tags, notes, status, priority, ticket_number, assignment_group, requested_by, due_date, reorder). Writes `tasks.json` and, if tags changed, `tags.json`. Returns JSON. |
 | `/tasks/delete` | `handle_delete_task` | Removes a task from `tasks.json` and its tags from `tags.json`. Returns JSON. |
+| `/fitness/api/sync` | `fitness_api.trigger_sync()` | Pulls new data from the Google Health API into `data/fitness/health_data.json`. Synchronous; see `fitness/API-CONTRACT.md`. |
 
 ## Sections (current `data/sections.json`)
 
