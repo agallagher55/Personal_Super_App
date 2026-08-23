@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HRV — Personal Health</title>
+  <link rel="stylesheet" href="/static/fitness/css/styles.css" />
+  <script>
+    (function () {
+      var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+</head>
+<body>
+  <a class="back-link" href="/fitness">&larr; Dashboard</a>
+
+  <header class="app-header" id="page-header"></header>
+
+  <p id="status" class="status" role="status"></p>
+
+  <div class="detail-layout">
+    <div class="detail-main">
+      <section class="card">
+        <canvas id="chart" class="detail-chart"></canvas>
+      </section>
+
+      <section class="card">
+        <h2>Statistics</h2>
+        <div id="stats"></div>
+      </section>
+    </div>
+
+    <aside class="detail-side">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Date</th><th>HRV</th></tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </aside>
+  </div>
+
+  <script type="module" src="/static/fitness/js/pages/hrv.js"></script>
+</body>
+</html>
