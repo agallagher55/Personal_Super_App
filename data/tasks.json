@@ -2,7 +2,7 @@
   {
     "id": "d7edf9e2da04",
     "section_id": "own-tasks",
-    "position": 0,
+    "position": 1,
     "desc": "Create lookup tables for domain values (Bldg_fsa_occupancy, AAA_yes_no)",
     "note": "Modeled on BLD_USE_CLASS_LUT in ARCGIS.SDEADM.",
     "notes": "",
@@ -28,7 +28,7 @@
   {
     "id": "676272d4ee91",
     "section_id": "own-tasks",
-    "position": 1,
+    "position": 10,
     "desc": "check encampments log table.",
     "note": "should there be a new log table or were changes made to the existing?",
     "notes": "checked and no table updates or new tables were created. didn't see changes to log table detailed in ticket or SDSF.\nCHECK EMAILS FOR MORE INFO",
@@ -132,7 +132,7 @@
   {
     "id": "f3fbbbd97f41",
     "section_id": "own-tasks",
-    "position": 5,
+    "position": 11,
     "desc": "Reply to Sanjeev Sharma re: S/4 Hana-GIS Cert issue",
     "note": "Sanjeev is checking whether anyone has a Postman collection of a working call (endpoint, auth token, etc.) to share with Gravity so they can configure the SAP API calls on the DEV side faster. If not available, he says Gravity can still proceed without it.",
     "notes": "",
@@ -158,7 +158,7 @@
   {
     "id": "9a353fe72249",
     "section_id": "own-tasks",
-    "position": 7,
+    "position": 12,
     "desc": "Create new point feature class TRN_school_crossing_guard",
     "note": "Documents and maintains school crossing guards at elementary schools. Complete, ready to hand off to the data analyst for review.",
     "notes": "",
@@ -184,7 +184,7 @@
   {
     "id": "8eb451826828",
     "section_id": "own-tasks",
-    "position": 8,
+    "position": 13,
     "desc": "Asset ID issues resolved, verified via counts",
     "note": "Mismatched/missing IDs plus Kirk's QC findings. Kirk emailed (cc Jill) for independent verification. Next: address deleted features (TASK0316399, see above).",
     "notes": "",
@@ -210,7 +210,7 @@
   {
     "id": "3a3527fd56d5",
     "section_id": "own-tasks",
-    "position": 9,
+    "position": 14,
     "desc": "Investigate issue with ast_tree_hwa and its attribute rule",
     "note": "For Tristan.",
     "notes": "",
@@ -236,7 +236,7 @@
   {
     "id": "8303b6dda872",
     "section_id": "own-tasks",
-    "position": 10,
+    "position": 5,
     "desc": "change POSITION field to LONG from SHORT in TRN_school_crossing_guard",
     "note": "",
     "notes": "RO features are all capitalized.\ndone in prod, qa, dev\nadd to project to wgs84 script.",
@@ -262,7 +262,7 @@
   {
     "id": "0e6ee6c1c406",
     "section_id": "own-tasks",
-    "position": 11,
+    "position": 6,
     "desc": "test QA scripts for Mike",
     "note": "",
     "notes": "",
@@ -288,7 +288,7 @@
   {
     "id": "bcc563c3c540",
     "section_id": "own-tasks",
-    "position": 12,
+    "position": 15,
     "desc": "Local Area Transit Rate - Report from pre-prod.",
     "note": "Hi Alex\r\n\r\nI was wondering if you have a report from the GIS call made in pre-prod with respect to the local area transit rate. We have a number of differences both ways and hoping that a listing might help to understand what resulted from new / changed routes and what might be from measurement differences. Thanks, Alex !! Vicki.",
     "notes": "",
@@ -314,7 +314,7 @@
   {
     "id": "ba5556009735",
     "section_id": "own-tasks",
-    "position": 13,
+    "position": 7,
     "desc": "Create VW based on E_SafeSchoolStreets.",
     "note": "Please create VW based on E_SafeSchoolStreets to be used in Open Data release. The data form can be found here:\nR:\\ICT\\ICT GIS\\GIS Design Authority\\Change Requests\\Safe School Initiative\\Create_VW_Safe_School_Street_260810.xlsx.",
     "notes": "",
@@ -340,7 +340,7 @@
   {
     "id": "bf408ad09012",
     "section_id": "own-tasks",
-    "position": 14,
+    "position": 8,
     "desc": "Check Kirk Emails.",
     "note": "",
     "notes": "",
@@ -366,7 +366,7 @@
   {
     "id": "5355a9b3eeac",
     "section_id": "own-tasks",
-    "position": 15,
+    "position": 9,
     "desc": "Check features for any ID field attribute rule not using sdeadm in the sequence naming.",
     "note": "",
     "notes": "",
@@ -529,7 +529,7 @@
     "status": "in-progress",
     "done": false,
     "created": "2026-08-17T17:34:43Z",
-    "modified": "2026-08-24T11:31:59Z",
+    "modified": "2026-08-24T12:37:48Z",
     "completed": "",
     "priority": "medium",
     "ticket_number": "TASK0330408",
@@ -539,11 +539,11 @@
     "time_estimate": "2",
     "related_files": "",
     "parent_id": "",
-    "new_feature": false,
+    "new_feature": true,
     "schema_change": false,
-    "env_dev": false,
-    "env_qa": false,
-    "env_prod": false
+    "env_dev": true,
+    "env_qa": true,
+    "env_prod": true
   },
   {
     "id": "06c418a27cff",
