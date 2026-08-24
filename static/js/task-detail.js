@@ -20,8 +20,7 @@
   var fieldTimeEstimate = document.getElementById('field-time-estimate');
   var fieldRelatedFiles = document.getElementById('field-related-files');
   var fieldParentId = document.getElementById('field-parent-id');
-  var fieldNewFeature = document.getElementById('field-new-feature');
-  var fieldSchemaChange = document.getElementById('field-schema-change');
+  var workTypeRadios = document.querySelectorAll('input[name="work_type"]');
   var fieldEnvDev = document.getElementById('field-env-dev');
   var fieldEnvQa = document.getElementById('field-env-qa');
   var fieldEnvProd = document.getElementById('field-env-prod');
@@ -31,13 +30,26 @@
   var cmdbField = document.getElementById('detail-cmdb-field');
   var WORK_SECTION_ID = 'own-tasks';
 
-  function updateEnvFieldsVisibility() {
-    envFields.style.display = (fieldNewFeature.checked || fieldSchemaChange.checked) ? '' : 'none';
-    cmdbField.style.display = fieldNewFeature.checked ? '' : 'none';
+  function getWorkType() {
+    var checked = document.querySelector('input[name="work_type"]:checked');
+    return checked ? checked.value : '';
   }
 
-  fieldNewFeature.addEventListener('change', updateEnvFieldsVisibility);
-  fieldSchemaChange.addEventListener('change', updateEnvFieldsVisibility);
+  function setWorkType(value) {
+    workTypeRadios.forEach(function (radio) {
+      radio.checked = radio.value === (value || '');
+    });
+  }
+
+  function updateEnvFieldsVisibility() {
+    var workType = getWorkType();
+    envFields.style.display = workType ? '' : 'none';
+    cmdbField.style.display = workType === 'new-feature' ? '' : 'none';
+  }
+
+  workTypeRadios.forEach(function (radio) {
+    radio.addEventListener('change', updateEnvFieldsVisibility);
+  });
 
   function getTaskIdFromPath() {
     var match = window.location.pathname.match(/^\/task\/([^/]+)$/);
@@ -103,8 +115,7 @@
     fieldDueDate.value = task.due_date || '';
     fieldTimeEstimate.value = task.time_estimate || '';
     fieldRelatedFiles.value = task.related_files || '';
-    fieldNewFeature.checked = !!task.new_feature;
-    fieldSchemaChange.checked = !!task.schema_change;
+    setWorkType(task.work_type);
     fieldEnvDev.checked = !!task.env_dev;
     fieldEnvQa.checked = !!task.env_qa;
     fieldEnvProd.checked = !!task.env_prod;
@@ -200,8 +211,7 @@
           time_estimate: fieldTimeEstimate.value,
           related_files: fieldRelatedFiles.value,
           parent_id: fieldParentId.value,
-          new_feature: fieldNewFeature.checked,
-          schema_change: fieldSchemaChange.checked,
+          work_type: getWorkType(),
           env_dev: fieldEnvDev.checked,
           env_qa: fieldEnvQa.checked,
           env_prod: fieldEnvProd.checked,

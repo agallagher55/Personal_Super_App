@@ -22,11 +22,12 @@ ticket_number (TASK), time_estimate (Time Estimate), related_files (Related
 Files), and parent_id (Parent item - a task's sub-items are just the other
 tasks whose parent_id points back at it). assignment_group and requested_by
 are this app's own additions on top of that shape, for ServiceNow-sourced
-tasks. new_feature/schema_change/env_dev/env_qa/env_prod/cmdb_updated are
-Work Tasks (section_id == WORK_SECTION_ID) -only sub-attributes: the first
-two classify the kind of work; the env_* flags track which environments it
-has shipped to, shown once either classification is set; cmdb_updated
-tracks the CMDB update new_feature tasks specifically require.
+tasks. work_type/env_dev/env_qa/env_prod/cmdb_updated are Work Tasks
+(section_id == WORK_SECTION_ID) -only sub-attributes: work_type classifies
+the kind of work ('new-feature', 'schema-change', or '' for neither - a
+task is at most one, never both); the env_* flags track which environments
+it has shipped to, shown once work_type is set; cmdb_updated tracks the
+CMDB update new-feature tasks specifically require.
 """
 
 import json
@@ -51,10 +52,12 @@ TAGS_FILE = os.path.join(DATA_DIR, 'tags.json')
 STATUSES = ('open', 'in-progress', 'pending', 'done', 'cancelled')
 PRIORITIES = ('low', 'medium', 'high')
 
-# Work Tasks is the only section that gets the new_feature/schema_change
-# sub-attributes (and, in turn, the dev/qa/prod environment checkboxes
-# the frontend shows once one of those is set).
+# Work Tasks is the only section that gets the work_type sub-attribute
+# (and, in turn, the dev/qa/prod environment checkboxes the frontend shows
+# once it's set). A task is at most one of these, never both, hence radio
+# buttons in the UI rather than independent checkboxes.
 WORK_SECTION_ID = 'own-tasks'
+WORK_TYPES = ('new-feature', 'schema-change')
 ENVIRONMENTS = ('dev', 'qa', 'prod')
 
 # The ported Personal Health app (see fitness/ARCHITECTURE.md) lives at
@@ -333,8 +336,9 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         time_estimate = fields.get('time_estimate', [''])[0].strip()
         related_files = fields.get('related_files', [''])[0].strip()
         parent_id = fields.get('parent_id', [''])[0].strip()
-        new_feature = section_id == WORK_SECTION_ID and 'new_feature' in fields
-        schema_change = section_id == WORK_SECTION_ID and 'schema_change' in fields
+        work_type = fields.get('work_type', [''])[0].strip()
+        if section_id != WORK_SECTION_ID or work_type not in WORK_TYPES:
+            work_type = ''
 
         if not section_id or not desc:
             self.send_error(400, 'Section and description are required')
@@ -380,8 +384,7 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             'time_estimate': time_estimate,
             'related_files': related_files,
             'parent_id': parent_id,
-            'new_feature': new_feature,
-            'schema_change': schema_change,
+            'work_type': work_type,
             'env_dev': False,
             'env_qa': False,
             'env_prod': False,
@@ -552,12 +555,13 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                     task['parent_id'] = new_parent_id
                     changed = True
 
-            for field in ('new_feature', 'schema_change'):
-                if field in update:
-                    new_value = bool(update[field]) and task.get('section_id') == WORK_SECTION_ID
-                    if new_value != bool(task.get(field, False)):
-                        task[field] = new_value
-                        changed = True
+            if 'work_type' in update:
+                new_work_type = update['work_type'] if isinstance(update['work_type'], str) else ''
+                if new_work_type not in WORK_TYPES or task.get('section_id') != WORK_SECTION_ID:
+                    new_work_type = ''
+                if new_work_type != task.get('work_type', ''):
+                    task['work_type'] = new_work_type
+                    changed = True
 
             for env in ENVIRONMENTS:
                 field = 'env_' + env

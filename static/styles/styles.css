@@ -1113,6 +1113,33 @@ a.num:hover {
   border-radius: 4px;
 }
 
+.field-inline input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  margin: 2px 0 0;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s ease;
+}
+
+.field-inline input[type="radio"]:checked {
+  border-color: var(--ink);
+}
+
+.field-inline input[type="radio"]:checked::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
 .field-inline .field-label {
   text-transform: none;
   letter-spacing: 0;
