@@ -15,7 +15,7 @@
 </script>
 </head>
 <body>
-  <div class="page page-single">
+  <div class="page page-finance">
     <div class="sheet toc-sheet">
       <nav class="site-nav">
         <a href="/">Tasks</a>
@@ -27,14 +27,19 @@
         <div class="title">Finance</div>
       </header>
 
-      <div class="ticker-bar" id="ticker-bar"></div>
-      <div class="ticker-bar-footer">
-        <button class="ticker-refresh" id="ticker-refresh" type="button">Refresh prices</button>
-        <span class="ticker-updated" id="ticker-updated"></span>
-      </div>
-
       <p class="coming-soon">Finance tracking is coming soon.</p>
     </div>
+
+    <aside class="ticker-panel">
+      <div class="ticker-panel-header">
+        <span class="ticker-panel-title">Watchlist</span>
+      </div>
+      <div class="ticker-bar" id="ticker-bar"></div>
+      <div class="ticker-panel-footer">
+        <button class="ticker-refresh" id="ticker-refresh" type="button">Refresh</button>
+      </div>
+      <span class="ticker-updated" id="ticker-updated"></span>
+    </aside>
   </div>
 
   <script src="/static/js/theme.js"></script>

@@ -71,6 +71,7 @@ FITNESS_DIR = os.path.join(BASE_DIR, 'backend', 'fitness')
 if FITNESS_DIR not in sys.path:
     sys.path.insert(0, FITNESS_DIR)
 import api as fitness_api
+import finance_prices
 
 FITNESS_PAGES = (
     'steps', 'heart-rate', 'sleep', 'activity', 'spo2', 'hrv',
@@ -204,10 +205,10 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         path = parsed.path
 
         if path == '/tasks/new':
-            self.path = '/html/new-task.html'
+            self.path = '/html/tasks/new-task.html'
             return super().do_GET()
         if path == '/tasks/new-category':
-            self.path = '/html/new-category.html'
+            self.path = '/html/tasks/new-category.html'
             return super().do_GET()
         if path == '/new':
             self.send_response(302)
@@ -215,12 +216,12 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
         if path == '/':
-            self.path = '/html/index.html'
+            self.path = '/html/tasks/index.html'
             return super().do_GET()
         if path == '/tasks.json':
             return self.serve_tasks_json()
         if path == '/tasks':
-            self.path = '/html/tasks-index.html'
+            self.path = '/html/tasks/tasks-index.html'
             return super().do_GET()
         if path == '/fitness':
             self.path = '/html/fitness/index.html'
@@ -237,17 +238,21 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         if path == '/finance':
             self.path = '/html/finance.html'
             return super().do_GET()
+        if path == '/finance/api/prices':
+            status, body = finance_prices.fetch_prices()
+            self.send_json(status, body)
+            return
         if path.startswith('/tasks/'):
             slug = path[len('/tasks/'):]
             if self.section_slug_exists(slug):
-                self.path = '/html/index.html'
+                self.path = '/html/tasks/index.html'
                 return super().do_GET()
             self.send_error(404, 'Unknown task category: ' + slug)
             return
         if path.startswith('/task/'):
             task_id = path[len('/task/'):]
             if self.find_task(task_id) is not None:
-                self.path = '/html/task-detail.html'
+                self.path = '/html/tasks/task-detail.html'
                 return super().do_GET()
             self.send_error(404, 'Unknown task: ' + task_id)
             return
@@ -278,9 +283,9 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             status, body = fitness_api.metric_detail(metric, query)
         else:
             status, body = 404, {'error': 'not found'}
-        self.send_fitness_json(status, body)
+        self.send_json(status, body)
 
-    def send_fitness_json(self, status, body):
+    def send_json(self, status, body):
         payload = json.dumps(body).encode('utf-8')
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
@@ -303,7 +308,7 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == '/fitness/api/sync':
             status, body = fitness_api.trigger_sync()
-            self.send_fitness_json(status, body)
+            self.send_json(status, body)
             return
         if parsed.path == '/tasks/new':
             return self.handle_new_task()
