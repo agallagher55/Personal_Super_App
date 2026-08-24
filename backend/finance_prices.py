@@ -10,7 +10,10 @@ plans to proxy Plaid.
 
 import csv
 import io
+import sys
+import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 
 STOOQ_URL = "https://stooq.com/q/l/?s={symbols}&f=sd2t2ohlc&h&e=csv"
@@ -39,13 +42,22 @@ def _parse_quote(ticker, row):
 
 def fetch_prices():
     """Returns (status, body) - body is {"prices": [...]} or {"error": ...}."""
-    symbols = ",".join(t["symbol"] for t in WATCHLIST)
+    # Stooq's own symbols use "^" for indices (^spx), which isn't a valid
+    # raw URL character - quote each symbol so a malformed query doesn't
+    # get the whole multi-symbol request rejected.
+    symbols = ",".join(urllib.parse.quote(t["symbol"], safe="") for t in WATCHLIST)
     url = STOOQ_URL.format(symbols=symbols)
     request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
             text = response.read().decode("utf-8")
-    except (urllib.error.URLError, TimeoutError):
+    except Exception:
+        # Logged server-side (stderr) rather than exposed to the client -
+        # print so it shows up in the terminal running backend/server.py
+        # when this endpoint fails, since the failure mode (blocked,
+        # rate-limited, DNS, TLS...) matters for diagnosing it.
+        print("finance_prices.fetch_prices: request to Stooq failed:", file=sys.stderr)
+        traceback.print_exc()
         return 502, {"error": "market data provider unavailable"}
 
     rows_by_symbol = {row["Symbol"].lower(): row for row in csv.DictReader(io.StringIO(text))}
