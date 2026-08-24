@@ -214,6 +214,22 @@
         envField.appendChild(envLabel);
         envFields.appendChild(envField);
       });
+
+      if (taskData.new_feature) {
+        var cmdbField = document.createElement('label');
+        cmdbField.className = 'env-field';
+        var cmdbInput = document.createElement('input');
+        cmdbInput.type = 'checkbox';
+        cmdbInput.className = 'cmdb-updated-input';
+        cmdbInput.checked = !!taskData.cmdb_updated;
+        var cmdbLabel = document.createElement('span');
+        cmdbLabel.className = 'quick-field-label';
+        cmdbLabel.textContent = 'CMDB';
+        cmdbField.appendChild(cmdbInput);
+        cmdbField.appendChild(cmdbLabel);
+        envFields.appendChild(cmdbField);
+      }
+
       body.appendChild(envFields);
     }
 
@@ -823,6 +839,10 @@
           update['env_' + env] = envInput.checked;
         }
       });
+      var cmdbInput = li.querySelector('.cmdb-updated-input');
+      if (cmdbInput) {
+        update.cmdb_updated = cmdbInput.checked;
+      }
       updates.push(update);
     });
     return updates;

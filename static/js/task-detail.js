@@ -25,12 +25,15 @@
   var fieldEnvDev = document.getElementById('field-env-dev');
   var fieldEnvQa = document.getElementById('field-env-qa');
   var fieldEnvProd = document.getElementById('field-env-prod');
+  var fieldCmdbUpdated = document.getElementById('field-cmdb-updated');
   var workTypeFields = document.getElementById('detail-work-type-fields');
   var envFields = document.getElementById('detail-env-fields');
+  var cmdbField = document.getElementById('detail-cmdb-field');
   var WORK_SECTION_ID = 'own-tasks';
 
   function updateEnvFieldsVisibility() {
     envFields.style.display = (fieldNewFeature.checked || fieldSchemaChange.checked) ? '' : 'none';
+    cmdbField.style.display = fieldNewFeature.checked ? '' : 'none';
   }
 
   fieldNewFeature.addEventListener('change', updateEnvFieldsVisibility);
@@ -105,6 +108,7 @@
     fieldEnvDev.checked = !!task.env_dev;
     fieldEnvQa.checked = !!task.env_qa;
     fieldEnvProd.checked = !!task.env_prod;
+    fieldCmdbUpdated.checked = !!task.cmdb_updated;
 
     var isWorkTask = section && section.id === WORK_SECTION_ID;
     workTypeFields.style.display = isWorkTask ? '' : 'none';
@@ -200,7 +204,8 @@
           schema_change: fieldSchemaChange.checked,
           env_dev: fieldEnvDev.checked,
           env_qa: fieldEnvQa.checked,
-          env_prod: fieldEnvProd.checked
+          env_prod: fieldEnvProd.checked,
+          cmdb_updated: fieldCmdbUpdated.checked
         }])
       })
         .then(function (response) {

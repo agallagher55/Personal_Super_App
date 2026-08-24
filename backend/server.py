@@ -22,10 +22,11 @@ ticket_number (TASK), time_estimate (Time Estimate), related_files (Related
 Files), and parent_id (Parent item - a task's sub-items are just the other
 tasks whose parent_id points back at it). assignment_group and requested_by
 are this app's own additions on top of that shape, for ServiceNow-sourced
-tasks. new_feature/schema_change/env_dev/env_qa/env_prod are Work Tasks
-(section_id == WORK_SECTION_ID) -only sub-attributes: the first two classify
-the kind of work, and the env_* flags track which environments it has
-shipped to, shown once either classification is set.
+tasks. new_feature/schema_change/env_dev/env_qa/env_prod/cmdb_updated are
+Work Tasks (section_id == WORK_SECTION_ID) -only sub-attributes: the first
+two classify the kind of work; the env_* flags track which environments it
+has shipped to, shown once either classification is set; cmdb_updated
+tracks the CMDB update new_feature tasks specifically require.
 """
 
 import json
@@ -384,6 +385,7 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             'env_dev': False,
             'env_qa': False,
             'env_prod': False,
+            'cmdb_updated': False,
             'created': created,
             'modified': created,
             'completed': created if done else ''
@@ -564,6 +566,12 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                     if new_value != bool(task.get(field, False)):
                         task[field] = new_value
                         changed = True
+
+            if 'cmdb_updated' in update:
+                new_value = bool(update['cmdb_updated'])
+                if new_value != bool(task.get('cmdb_updated', False)):
+                    task['cmdb_updated'] = new_value
+                    changed = True
 
             if changed:
                 task['modified'] = now
