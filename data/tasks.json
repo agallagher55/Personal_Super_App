@@ -2,7 +2,7 @@
   {
     "id": "d7edf9e2da04",
     "section_id": "own-tasks",
-    "position": 1,
+    "position": 0,
     "desc": "Create lookup tables for domain values (Bldg_fsa_occupancy, AAA_yes_no)",
     "note": "Modeled on BLD_USE_CLASS_LUT in ARCGIS.SDEADM.",
     "notes": "",
@@ -18,12 +18,17 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "676272d4ee91",
     "section_id": "own-tasks",
-    "position": 2,
+    "position": 1,
     "desc": "check encampments log table.",
     "note": "should there be a new log table or were changes made to the existing?",
     "notes": "checked and no table updates or new tables were created. didn't see changes to log table detailed in ticket or SDSF.\nCHECK EMAILS FOR MORE INFO",
@@ -39,12 +44,17 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "a6170ab4565b",
     "section_id": "own-tasks",
-    "position": 3,
+    "position": 2,
     "desc": "Create PID overlay staging table from Contributing Heritage Resources for POSSE",
     "note": "For Ken Larade (PLAN and DEV, Transformation and Innovation). Discussed with Tristan Marvin, Somya also to be included. 1) Create new PID overlay staging table using LND_parcel_polygon and LND_heritage_contributing_resources, only records from LND_heritage_contributing_resources where Status = 'Approved'. Proposed table name: PID_HERITAGE_CONTRIB_RESOURCE (unconfirmed). Fields: PID (varchar8), HCR (varchar50, populated for records meeting 'Heritage Contributing Resources' conditions). 2) In POSSE.EXTERNALPARCEL, append values from the new staging table to the HERITAGEPROPERTYDISTRICT field. Example: PID 00093922 -> HERITAGEPROPERTYDISTRICT: 'Schmidtville; Heritage Contributing Resources'. Reach out to Ken & Tristan with questions.",
     "notes": "",
@@ -60,12 +70,17 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "c673e9ff76ba",
     "section_id": "own-tasks",
-    "position": 4,
+    "position": 3,
     "desc": "Restore deleted AssetIDs from 2024-2025 Asset Registry.gdb",
     "note": "Records existed previously and no longer do, deleted. Client wants them restored. Breakdown: AST_parking_pay_station (2), LND_hrm_parcel (2), TRN_sectrav (179), TRN_street (7), TRN_traffic_calming_infra (27), TRN_transit_shelter (1), BLD_EXTERIOR (1), BLD_LIFESAFETY (2), BLD_SPECIALTY (1).",
     "notes": "",
@@ -81,12 +96,17 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "66ff15254b85",
     "section_id": "own-tasks",
-    "position": 5,
+    "position": 4,
     "desc": "Compare Target Hazard Analysis automation results to expected",
     "note": "Automation itself is already built, just needs a results check.",
     "notes": "",
@@ -102,12 +122,17 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "f3fbbbd97f41",
     "section_id": "own-tasks",
-    "position": 6,
+    "position": 5,
     "desc": "Reply to Sanjeev Sharma re: S/4 Hana-GIS Cert issue",
     "note": "Sanjeev is checking whether anyone has a Postman collection of a working call (endpoint, auth token, etc.) to share with Gravity so they can configure the SAP API calls on the DEV side faster. If not available, he says Gravity can still proceed without it.",
     "notes": "",
@@ -123,12 +148,17 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "9a353fe72249",
     "section_id": "own-tasks",
-    "position": 0,
+    "position": 6,
     "desc": "Create new point feature class TRN_school_crossing_guard",
     "note": "Documents and maintains school crossing guards at elementary schools. Complete, ready to hand off to the data analyst for review.",
     "notes": "",
@@ -144,7 +174,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "8eb451826828",
@@ -165,7 +200,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "3a3527fd56d5",
@@ -186,7 +226,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "8303b6dda872",
@@ -207,7 +252,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "0e6ee6c1c406",
@@ -228,7 +278,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "bcc563c3c540",
@@ -249,7 +304,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "ba5556009735",
@@ -270,7 +330,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "bf408ad09012",
@@ -291,7 +356,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "5355a9b3eeac",
@@ -312,7 +382,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "7c741f68e9ae",
@@ -333,7 +408,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "b9bf69483622",
@@ -354,7 +434,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "84502fef3a2d",
@@ -375,7 +460,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "4d56f46eb37b",
@@ -396,7 +486,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "f8833044f82d",
@@ -417,7 +512,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "6b0f948bd6de",
@@ -438,7 +538,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "06c418a27cff",
@@ -459,7 +564,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "6fcac47d1878",
@@ -480,7 +590,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "6f6d4de7ea70",
@@ -501,7 +616,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "1d59a881dec6",
@@ -522,7 +642,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "b596be1078c9",
@@ -543,7 +668,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "347d83f2bcdc",
@@ -564,7 +694,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "ae0c87e8d411",
@@ -585,7 +720,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "f8371388d1d5",
@@ -606,7 +746,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "dabff5bd5d2d",
@@ -627,7 +772,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "cee7bc0d0faf",
@@ -648,7 +798,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "4e9727fab173",
@@ -669,7 +824,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "1276f2d1bd88",
@@ -690,7 +850,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "bf3f0325aba6",
@@ -711,7 +876,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "ad4dedf15ea7",
@@ -732,7 +902,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "beda78a67aad",
@@ -753,7 +928,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "5c5b58bb0e77",
@@ -774,7 +954,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "cc1715c07112",
@@ -795,7 +980,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "6d70478cd4cc",
@@ -816,7 +1006,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "34cf620266fe",
@@ -837,7 +1032,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "79afd919a6c5",
@@ -858,7 +1058,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "4620f772a25d",
@@ -879,7 +1084,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "bb7a1287994b",
@@ -900,7 +1110,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "85e126299786",
@@ -921,7 +1136,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "8f29e3d9e7c1",
@@ -942,7 +1162,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "2a5f3cbb7f12",
@@ -963,7 +1188,12 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   },
   {
     "id": "0bbc3a1d1aa6",
@@ -984,6 +1214,11 @@
     "due_date": "",
     "time_estimate": "",
     "related_files": "",
-    "parent_id": ""
+    "parent_id": "",
+    "new_feature": false,
+    "schema_change": false,
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false
   }
 ]

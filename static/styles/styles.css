@@ -778,6 +778,27 @@ a.num:hover {
   border: 1px solid var(--line);
 }
 
+.field-pill-worktype {
+  font-weight: 600;
+  color: var(--flag);
+  border: 1px solid var(--flag);
+  background: var(--flag-soft);
+}
+
+.task-env-fields {
+  margin-top: 10px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.env-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
 .task-quick-fields {
   margin-top: 10px;
   display: flex;

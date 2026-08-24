@@ -20,6 +20,21 @@
   var fieldTimeEstimate = document.getElementById('field-time-estimate');
   var fieldRelatedFiles = document.getElementById('field-related-files');
   var fieldParentId = document.getElementById('field-parent-id');
+  var fieldNewFeature = document.getElementById('field-new-feature');
+  var fieldSchemaChange = document.getElementById('field-schema-change');
+  var fieldEnvDev = document.getElementById('field-env-dev');
+  var fieldEnvQa = document.getElementById('field-env-qa');
+  var fieldEnvProd = document.getElementById('field-env-prod');
+  var workTypeFields = document.getElementById('detail-work-type-fields');
+  var envFields = document.getElementById('detail-env-fields');
+  var WORK_SECTION_ID = 'own-tasks';
+
+  function updateEnvFieldsVisibility() {
+    envFields.style.display = (fieldNewFeature.checked || fieldSchemaChange.checked) ? '' : 'none';
+  }
+
+  fieldNewFeature.addEventListener('change', updateEnvFieldsVisibility);
+  fieldSchemaChange.addEventListener('change', updateEnvFieldsVisibility);
 
   function getTaskIdFromPath() {
     var match = window.location.pathname.match(/^\/task\/([^/]+)$/);
@@ -85,6 +100,18 @@
     fieldDueDate.value = task.due_date || '';
     fieldTimeEstimate.value = task.time_estimate || '';
     fieldRelatedFiles.value = task.related_files || '';
+    fieldNewFeature.checked = !!task.new_feature;
+    fieldSchemaChange.checked = !!task.schema_change;
+    fieldEnvDev.checked = !!task.env_dev;
+    fieldEnvQa.checked = !!task.env_qa;
+    fieldEnvProd.checked = !!task.env_prod;
+
+    var isWorkTask = section && section.id === WORK_SECTION_ID;
+    workTypeFields.style.display = isWorkTask ? '' : 'none';
+    envFields.style.display = isWorkTask ? '' : 'none';
+    if (isWorkTask) {
+      updateEnvFieldsVisibility();
+    }
 
     var tags = task.tags || [];
     var flagTag = tags.filter(function (t) { return t.flag; })[0];
@@ -168,7 +195,12 @@
           due_date: fieldDueDate.value,
           time_estimate: fieldTimeEstimate.value,
           related_files: fieldRelatedFiles.value,
-          parent_id: fieldParentId.value
+          parent_id: fieldParentId.value,
+          new_feature: fieldNewFeature.checked,
+          schema_change: fieldSchemaChange.checked,
+          env_dev: fieldEnvDev.checked,
+          env_qa: fieldEnvQa.checked,
+          env_prod: fieldEnvProd.checked
         }])
       })
         .then(function (response) {
