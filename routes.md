@@ -23,7 +23,7 @@ mutated only through the POST routes below.
 | `/fitness/api/metrics/<metric>` | JSON | — | Single-metric detail, `?from=&to=` (default last 30 days). 404 if `<metric>` isn't in `KNOWN_METRICS`. |
 | `/fitness/api/metrics/<metric>/samples` | JSON | — | Raw intraday readings in `[from, to]` (full ISO 8601 instants). Only `heart_rate` today. |
 | `/finance` | `html/finance.html` | `static/finance/js/ticker.js` | Placeholder page for personal finance tracking, plus a sidebar watchlist (Bitcoin, gold, WTI crude, S&P 500). |
-| `/finance/api/prices` | JSON | — | Watchlist quotes, proxied server-side from Stooq's free CSV endpoint (`backend/finance_prices.py`) to avoid browser CORS issues. `change_pct` is today's close-vs-open %, not vs. previous close. 502 if Stooq is unreachable. |
+| `/finance/api/prices` | JSON | — | Watchlist quotes, proxied server-side from Yahoo Finance's free keyless chart endpoint (`backend/finance_prices.py`) to avoid browser CORS issues. Always 200; each ticker is fetched independently and comes back with `price`/`change_pct` as `null` if its own fetch failed, rather than failing the whole response. |
 | `/new` | — | — | 302 redirect to `/tasks/new`. |
 | `/tasks.json` | `sections.json` + `tasks.json` + `tags.json`, joined | — | `no-store` cache headers. Every task-tracker page above fetches this client-side to render. |
 
