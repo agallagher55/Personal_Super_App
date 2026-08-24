@@ -137,7 +137,7 @@
     document.title = (task.desc || 'Task') + ' - Personal Tasks';
 
     var metaParts = [];
-    metaParts.push('<a class="back-link" href="/">&larr; All tasks</a>');
+    metaParts.push('<a class="back-link" href="/tasks">&larr; All tasks</a>');
     metaParts.push((section && section.label ? section.label : 'Unknown section'));
     metaParts.push('Created ' + formatDate(task.created));
     metaParts.push('Modified ' + formatDate(task.modified));
@@ -256,7 +256,7 @@
           return response.json();
         })
         .then(function () {
-          window.location.href = '/';
+          window.location.href = '/tasks';
         })
         .catch(function (err) {
           deleteBtn.disabled = false;

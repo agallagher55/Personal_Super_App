@@ -210,18 +210,21 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         if path == '/tasks/new-category':
             self.path = '/html/tasks/new-category.html'
             return super().do_GET()
+        if path == '/tasks/categories':
+            self.path = '/html/tasks/tasks-index.html'
+            return super().do_GET()
         if path == '/new':
             self.send_response(302)
             self.send_header('Location', '/tasks/new')
             self.end_headers()
             return
         if path == '/':
-            self.path = '/html/tasks/index.html'
+            self.path = '/html/home.html'
             return super().do_GET()
         if path == '/tasks.json':
             return self.serve_tasks_json()
         if path == '/tasks':
-            self.path = '/html/tasks/tasks-index.html'
+            self.path = '/html/tasks/index.html'
             return super().do_GET()
         if path == '/fitness':
             self.path = '/html/fitness/index.html'
@@ -413,7 +416,7 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         save_tags(tags)
 
         self.send_response(303)
-        self.send_header('Location', '/?added=1')
+        self.send_header('Location', '/tasks?added=1')
         self.end_headers()
 
     def handle_new_category(self):
@@ -445,7 +448,7 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         save_sections(sections)
 
         self.send_response(303)
-        self.send_header('Location', '/tasks?added=1')
+        self.send_header('Location', '/tasks/categories?added=1')
         self.end_headers()
 
     def handle_update_tasks(self):

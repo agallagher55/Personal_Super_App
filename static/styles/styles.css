@@ -1375,3 +1375,58 @@ a.num:hover {
   color: var(--ink-soft);
   white-space: nowrap;
 }
+
+.home-sheet {
+  max-width: 900px;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 700px) {
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.home-card {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 24px 20px;
+  text-decoration: none;
+  color: var(--ink);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.home-card:hover {
+  border-color: var(--flag);
+  color: var(--ink);
+  transform: translateY(-2px);
+}
+
+.home-card-label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+}
+
+.home-card-metric {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.home-card-sub {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
