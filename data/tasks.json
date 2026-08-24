@@ -23,7 +23,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "676272d4ee91",
@@ -49,7 +50,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "a6170ab4565b",
@@ -75,7 +77,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "c673e9ff76ba",
@@ -101,7 +104,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "66ff15254b85",
@@ -127,7 +131,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "f3fbbbd97f41",
@@ -153,7 +158,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "9a353fe72249",
@@ -179,7 +185,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "8eb451826828",
@@ -205,7 +212,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "3a3527fd56d5",
@@ -231,7 +239,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "8303b6dda872",
@@ -257,7 +266,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "0e6ee6c1c406",
@@ -283,7 +293,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "bcc563c3c540",
@@ -309,7 +320,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "ba5556009735",
@@ -335,7 +347,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "bf408ad09012",
@@ -361,7 +374,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "5355a9b3eeac",
@@ -387,7 +401,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "7c741f68e9ae",
@@ -413,7 +428,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "b9bf69483622",
@@ -439,7 +455,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "84502fef3a2d",
@@ -465,7 +482,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "4d56f46eb37b",
@@ -491,7 +509,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "f8833044f82d",
@@ -517,7 +536,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "6b0f948bd6de",
@@ -541,9 +561,10 @@
     "parent_id": "",
     "new_feature": true,
     "schema_change": false,
-    "env_dev": true,
-    "env_qa": true,
-    "env_prod": true
+    "env_dev": false,
+    "env_qa": false,
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "06c418a27cff",
@@ -569,7 +590,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "6fcac47d1878",
@@ -595,7 +617,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "6f6d4de7ea70",
@@ -621,7 +644,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "1d59a881dec6",
@@ -647,7 +671,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "b596be1078c9",
@@ -673,7 +698,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "347d83f2bcdc",
@@ -699,7 +725,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "ae0c87e8d411",
@@ -725,7 +752,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "f8371388d1d5",
@@ -751,7 +779,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "dabff5bd5d2d",
@@ -777,7 +806,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "cee7bc0d0faf",
@@ -803,7 +833,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "4e9727fab173",
@@ -829,7 +860,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "1276f2d1bd88",
@@ -855,7 +887,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "bf3f0325aba6",
@@ -881,7 +914,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "ad4dedf15ea7",
@@ -907,7 +941,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "beda78a67aad",
@@ -933,7 +968,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "5c5b58bb0e77",
@@ -959,7 +995,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "cc1715c07112",
@@ -985,7 +1022,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "6d70478cd4cc",
@@ -1011,7 +1049,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "34cf620266fe",
@@ -1037,7 +1076,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "79afd919a6c5",
@@ -1063,7 +1103,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "4620f772a25d",
@@ -1089,7 +1130,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "bb7a1287994b",
@@ -1115,7 +1157,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "85e126299786",
@@ -1141,7 +1184,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "8f29e3d9e7c1",
@@ -1167,7 +1211,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "2a5f3cbb7f12",
@@ -1193,7 +1238,8 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   },
   {
     "id": "0bbc3a1d1aa6",
@@ -1219,6 +1265,7 @@
     "schema_change": false,
     "env_dev": false,
     "env_qa": false,
-    "env_prod": false
+    "env_prod": false,
+    "cmdb_updated": false
   }
 ]
