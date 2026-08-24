@@ -7,10 +7,17 @@
 (function () {
   var SECTIONS = [
     {
-      label: "Tasks",
+      label: "Home",
       href: "/",
       match: function (path) {
-        return path === "/" || path.indexOf("/tasks") === 0 || path.indexOf("/task/") === 0 || path === "/new";
+        return path === "/";
+      },
+    },
+    {
+      label: "Tasks",
+      href: "/tasks",
+      match: function (path) {
+        return path.indexOf("/tasks") === 0 || path.indexOf("/task/") === 0 || path === "/new";
       },
     },
     {

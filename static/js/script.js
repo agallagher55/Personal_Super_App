@@ -722,7 +722,7 @@
     }
 
     if (metaEl) {
-      metaEl.innerHTML = '<a class="back-link" href="/tasks">&larr; All categories</a>';
+      metaEl.innerHTML = '<a class="back-link" href="/tasks/categories">&larr; All categories</a>';
     }
 
     if (ctaEl && matchedSection) {

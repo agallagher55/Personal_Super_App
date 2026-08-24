@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Personal Super App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles/styles.css">
+<link rel="stylesheet" href="/static/styles/nav.css">
+<script>
+  (function () {
+    var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+</head>
+<body>
+  <div id="site-nav"></div>
+  <script src="/static/js/nav.js"></script>
+  <div class="page page-single">
+    <div class="sheet home-sheet">
+      <header>
+        <div class="title">Personal Super App</div>
+        <div class="meta" id="home-date"></div>
+      </header>
+
+      <div class="home-grid" id="home-grid">
+        <a class="home-card" href="/tasks" id="home-card-tasks">
+          <div class="home-card-label">Tasks</div>
+          <div class="home-card-metric" id="home-tasks-metric">&middot;&middot;&middot;</div>
+          <div class="home-card-sub" id="home-tasks-sub">Loading...</div>
+        </a>
+
+        <a class="home-card" href="/fitness" id="home-card-fitness">
+          <div class="home-card-label">Fitness</div>
+          <div class="home-card-metric" id="home-fitness-metric">&middot;&middot;&middot;</div>
+          <div class="home-card-sub" id="home-fitness-sub">Loading...</div>
+        </a>
+
+        <a class="home-card" href="/finance" id="home-card-finance">
+          <div class="home-card-label">Finance</div>
+          <div class="home-card-metric" id="home-finance-metric">&middot;&middot;&middot;</div>
+          <div class="home-card-sub" id="home-finance-sub">Loading...</div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/theme.js"></script>
+  <script src="/static/js/home.js"></script>
+</body>
+</html>

@@ -6,7 +6,7 @@ Files:
   single-category views, see below)
 - `html/tasks/new-task.html`, the "add a task" form page, served at `/tasks/new`
 - `html/tasks/tasks-index.html` / `static/js/tasks-index.js`, the category table of
-  contents page, served at `/tasks`
+  contents page, served at `/tasks/categories`
 - `static/styles/styles.css`, all styling
 - `static/js/script.js`, plain JavaScript for the main page, no modules, no build step
 - `static/js/new-task.js`, plain JavaScript that fills the form's section dropdown
@@ -29,8 +29,10 @@ server, since the new-task form needs somewhere to POST to.
 python3 backend/server.py
 ```
 
-Then open http://localhost:8000 in your browser. `backend/start-server.bat`
-runs this same command for double-click use.
+Then open http://localhost:8000/tasks in your browser (the task tracker
+lives under `/tasks`; `/` itself is the app's dashboard home page, see
+`routes.md`). `backend/start-server.bat` runs this same command for
+double-click use.
 
 ## Deploying
 
@@ -40,7 +42,7 @@ it deploys to Render instead.
 
 ## Browsing by category
 
-Go to `http://localhost:8000/tasks` for a table of contents listing
+Go to `http://localhost:8000/tasks/categories` for a table of contents listing
 every section (Work Tasks, Finance, Admin, Research, Covering for Mike
 Potter) with its task count, each linking to a page showing just that
 one category. Each section has a short slug used in its URL:
@@ -53,7 +55,7 @@ one category. Each section has a short slug used in its URL:
 
 These category pages are the same app as the main page (status
 dropdowns, notes, Save Changes, delete all work identically), just filtered to
-one section, with a "&larr; All categories" link back to `/tasks`. The
+one section, with a "&larr; All categories" link back to `/tasks/categories`. The
 **+ New Task** button on a category page pre-selects that category in
 the form. Slugs live in each section's `"slug"` field in `data/sections.json`,
 add one there if you add a new section by hand.
