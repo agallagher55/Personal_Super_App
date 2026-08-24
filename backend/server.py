@@ -22,7 +22,10 @@ ticket_number (TASK), time_estimate (Time Estimate), related_files (Related
 Files), and parent_id (Parent item - a task's sub-items are just the other
 tasks whose parent_id points back at it). assignment_group and requested_by
 are this app's own additions on top of that shape, for ServiceNow-sourced
-tasks.
+tasks. new_feature/schema_change/env_dev/env_qa/env_prod are Work Tasks
+(section_id == WORK_SECTION_ID) -only sub-attributes: the first two classify
+the kind of work, and the env_* flags track which environments it has
+shipped to, shown once either classification is set.
 """
 
 import json
@@ -46,6 +49,12 @@ TAGS_FILE = os.path.join(DATA_DIR, 'tags.json')
 # open/in-progress/done names for the three states it already had.
 STATUSES = ('open', 'in-progress', 'pending', 'done', 'cancelled')
 PRIORITIES = ('low', 'medium', 'high')
+
+# Work Tasks is the only section that gets the new_feature/schema_change
+# sub-attributes (and, in turn, the dev/qa/prod environment checkboxes
+# the frontend shows once one of those is set).
+WORK_SECTION_ID = 'own-tasks'
+ENVIRONMENTS = ('dev', 'qa', 'prod')
 
 # The ported Personal Health app (see fitness/ARCHITECTURE.md) lives at
 # backend/fitness/ as its own flat-import module set (config.py, auth.py,
@@ -323,6 +332,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         time_estimate = fields.get('time_estimate', [''])[0].strip()
         related_files = fields.get('related_files', [''])[0].strip()
         parent_id = fields.get('parent_id', [''])[0].strip()
+        new_feature = section_id == WORK_SECTION_ID and 'new_feature' in fields
+        schema_change = section_id == WORK_SECTION_ID and 'schema_change' in fields
 
         if not section_id or not desc:
             self.send_error(400, 'Section and description are required')
@@ -368,6 +379,11 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             'time_estimate': time_estimate,
             'related_files': related_files,
             'parent_id': parent_id,
+            'new_feature': new_feature,
+            'schema_change': schema_change,
+            'env_dev': False,
+            'env_qa': False,
+            'env_prod': False,
             'created': created,
             'modified': created,
             'completed': created if done else ''
@@ -534,14 +550,38 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                     task['parent_id'] = new_parent_id
                     changed = True
 
+            for field in ('new_feature', 'schema_change'):
+                if field in update:
+                    new_value = bool(update[field]) and task.get('section_id') == WORK_SECTION_ID
+                    if new_value != bool(task.get(field, False)):
+                        task[field] = new_value
+                        changed = True
+
+            for env in ENVIRONMENTS:
+                field = 'env_' + env
+                if field in update:
+                    new_value = bool(update[field])
+                    if new_value != bool(task.get(field, False)):
+                        task[field] = new_value
+                        changed = True
+
             if changed:
                 task['modified'] = now
 
             touched_sections.add(task.get('section_id'))
             updated_count += 1
 
+        # order_index reflects drag-and-drop reordering: the frontend's
+        # "Save Changes" always submits every task currently rendered on the
+        # page, in the section's intended new order. Only reposition a
+        # section when the payload actually covers all of its tasks -
+        # otherwise (e.g. task-detail.js saving a single task) order_index
+        # only knows about that one task and would wrongly shove it to the
+        # front of its section.
         for section_id in touched_sections:
             section_tasks = [t for t in tasks if t.get('section_id') == section_id]
+            if not all(t.get('id') in updates_by_id for t in section_tasks):
+                continue
             section_tasks.sort(
                 key=lambda t: order_index.get(t.get('id'), len(order_index))
             )

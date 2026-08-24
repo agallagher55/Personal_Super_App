@@ -3,6 +3,14 @@
 
   var select = document.getElementById('section-select');
   var parentSelect = document.getElementById('parent-select');
+  var workTypeFields = document.getElementById('work-type-fields');
+  var WORK_SECTION_ID = 'own-tasks';
+
+  function updateWorkTypeVisibility() {
+    workTypeFields.style.display = select.value === WORK_SECTION_ID ? '' : 'none';
+  }
+
+  select.addEventListener('change', updateWorkTypeVisibility);
 
   fetch('/tasks.json')
     .then(function (response) {
@@ -45,6 +53,8 @@
           placeholder.selected = false;
         }
       }
+
+      updateWorkTypeVisibility();
     })
     .catch(function (err) {
       select.innerHTML = '';

@@ -14,6 +14,9 @@
   var completedGroupMap = {}; // sectionId -> <ol> inside the completed panel
   var taskById = {};          // task id -> task data, for resolving parent_id
 
+  var WORK_SECTION_ID = 'own-tasks';
+  var ENVIRONMENTS = ['dev', 'qa', 'prod'];
+
   var DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   var MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -176,6 +179,43 @@
     quickFields.appendChild(dueField);
     quickFields.appendChild(estimateField);
     body.appendChild(quickFields);
+
+    var isWorkTask = sectionId === WORK_SECTION_ID;
+    if (isWorkTask && (taskData.new_feature || taskData.schema_change)) {
+      var workTypeTags = document.createElement('div');
+      workTypeTags.className = 'task-fields';
+      if (taskData.new_feature) {
+        var newFeaturePill = document.createElement('span');
+        newFeaturePill.className = 'field-pill field-pill-worktype';
+        newFeaturePill.textContent = 'New Feature';
+        workTypeTags.appendChild(newFeaturePill);
+      }
+      if (taskData.schema_change) {
+        var schemaChangePill = document.createElement('span');
+        schemaChangePill.className = 'field-pill field-pill-worktype';
+        schemaChangePill.textContent = 'Schema Change';
+        workTypeTags.appendChild(schemaChangePill);
+      }
+      body.appendChild(workTypeTags);
+
+      var envFields = document.createElement('div');
+      envFields.className = 'task-env-fields';
+      ENVIRONMENTS.forEach(function (env) {
+        var envField = document.createElement('label');
+        envField.className = 'env-field';
+        var envInput = document.createElement('input');
+        envInput.type = 'checkbox';
+        envInput.className = 'env-' + env + '-input';
+        envInput.checked = !!taskData['env_' + env];
+        var envLabel = document.createElement('span');
+        envLabel.className = 'quick-field-label';
+        envLabel.textContent = env.toUpperCase();
+        envField.appendChild(envInput);
+        envField.appendChild(envLabel);
+        envFields.appendChild(envField);
+      });
+      body.appendChild(envFields);
+    }
 
     if (taskData.tags && taskData.tags.length > 0) {
       var tags = document.createElement('div');
@@ -769,14 +809,21 @@
       var textarea = li.querySelector('.notes-input');
       var dueInput = li.querySelector('.due-date-input');
       var estimateInput = li.querySelector('.time-estimate-input');
-      updates.push({
+      var update = {
         id: taskId,
         notes: textarea ? textarea.value : '',
         status: li.dataset.status || 'open',
         priority: li.dataset.priority || 'medium',
         due_date: dueInput ? dueInput.value : '',
         time_estimate: estimateInput ? estimateInput.value : ''
+      };
+      ENVIRONMENTS.forEach(function (env) {
+        var envInput = li.querySelector('.env-' + env + '-input');
+        if (envInput) {
+          update['env_' + env] = envInput.checked;
+        }
       });
+      updates.push(update);
     });
     return updates;
   }
