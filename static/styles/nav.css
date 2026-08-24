@@ -1,0 +1,113 @@
+/* Universal top nav bar (Tasks / Fitness / Finance + live BTC price),
+   shared by every page in the app - see static/js/nav.js, which renders
+   into the `<div id="site-nav">` placeholder each page includes.
+   Self-contained tokens rather than reusing styles.css's oklch tokens or
+   fitness/css/styles.css's hex tokens, so the bar looks identical on every
+   page regardless of which of those two (currently divergent) stylesheets
+   the rest of the page happens to load. Driven by the same data-theme
+   attribute + "theme" localStorage key every page's inline bootstrap
+   script sets before first paint. */
+:root {
+  --gnav-bg: #fffdf9;
+  --gnav-border: #e7e1d6;
+  --gnav-ink: #262220;
+  --gnav-ink-soft: #7a736a;
+  --gnav-accent: #b34a1f;
+  --gnav-green: #1a7d3d;
+  --gnav-red: #c13a2e;
+}
+
+:root[data-theme="dark"] {
+  --gnav-bg: #232019;
+  --gnav-border: #3a352c;
+  --gnav-ink: #f1ece3;
+  --gnav-ink-soft: #a89f92;
+  --gnav-accent: #e08a52;
+  --gnav-green: #4fbf76;
+  --gnav-red: #e0685c;
+}
+
+.global-nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  max-width: 1440px;
+  margin: 0 auto 28px;
+  padding: 10px 18px;
+  background: var(--gnav-bg);
+  border: 1px solid var(--gnav-border);
+  border-radius: 10px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+}
+
+.global-nav-brand {
+  font-family: 'Newsreader', Georgia, serif;
+  font-style: italic;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--gnav-ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.global-nav-links {
+  display: flex;
+  gap: 18px;
+  flex: 1 1 auto;
+}
+
+.global-nav-links a {
+  color: var(--gnav-ink-soft);
+  text-decoration: none;
+  padding-bottom: 2px;
+}
+
+.global-nav-links a:hover {
+  color: var(--gnav-ink);
+}
+
+.global-nav-links a.is-active {
+  color: var(--gnav-ink);
+  font-weight: 600;
+  border-bottom: 2px solid var(--gnav-accent);
+}
+
+.global-nav-btc {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.global-nav-btc-label {
+  color: var(--gnav-ink-soft);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.global-nav-btc-price {
+  color: var(--gnav-ink);
+  font-weight: 600;
+}
+
+.global-nav-btc-change.is-up { color: var(--gnav-green); }
+.global-nav-btc-change.is-down { color: var(--gnav-red); }
+.global-nav-btc-change.is-flat { color: var(--gnav-ink-soft); }
+
+.global-nav-btc.is-error .global-nav-btc-price {
+  color: var(--gnav-ink-soft);
+}
+
+@media (max-width: 640px) {
+  .global-nav {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  .global-nav-links {
+    order: 3;
+    flex: 1 1 100%;
+    gap: 14px;
+  }
+}
