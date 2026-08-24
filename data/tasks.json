@@ -23,7 +23,7 @@
   {
     "id": "676272d4ee91",
     "section_id": "own-tasks",
-    "position": 18,
+    "position": 2,
     "desc": "check encampments log table.",
     "note": "should there be a new log table or were changes made to the existing?",
     "notes": "checked and no table updates or new tables were created. didn't see changes to log table detailed in ticket or SDSF.\nCHECK EMAILS FOR MORE INFO",
@@ -44,7 +44,7 @@
   {
     "id": "a6170ab4565b",
     "section_id": "own-tasks",
-    "position": 2,
+    "position": 3,
     "desc": "Create PID overlay staging table from Contributing Heritage Resources for POSSE",
     "note": "For Ken Larade (PLAN and DEV, Transformation and Innovation). Discussed with Tristan Marvin, Somya also to be included. 1) Create new PID overlay staging table using LND_parcel_polygon and LND_heritage_contributing_resources, only records from LND_heritage_contributing_resources where Status = 'Approved'. Proposed table name: PID_HERITAGE_CONTRIB_RESOURCE (unconfirmed). Fields: PID (varchar8), HCR (varchar50, populated for records meeting 'Heritage Contributing Resources' conditions). 2) In POSSE.EXTERNALPARCEL, append values from the new staging table to the HERITAGEPROPERTYDISTRICT field. Example: PID 00093922 -> HERITAGEPROPERTYDISTRICT: 'Schmidtville; Heritage Contributing Resources'. Reach out to Ken & Tristan with questions.",
     "notes": "",
@@ -65,7 +65,7 @@
   {
     "id": "c673e9ff76ba",
     "section_id": "own-tasks",
-    "position": 3,
+    "position": 4,
     "desc": "Restore deleted AssetIDs from 2024-2025 Asset Registry.gdb",
     "note": "Records existed previously and no longer do, deleted. Client wants them restored. Breakdown: AST_parking_pay_station (2), LND_hrm_parcel (2), TRN_sectrav (179), TRN_street (7), TRN_traffic_calming_infra (27), TRN_transit_shelter (1), BLD_EXTERIOR (1), BLD_LIFESAFETY (2), BLD_SPECIALTY (1).",
     "notes": "",
@@ -86,7 +86,7 @@
   {
     "id": "66ff15254b85",
     "section_id": "own-tasks",
-    "position": 4,
+    "position": 5,
     "desc": "Compare Target Hazard Analysis automation results to expected",
     "note": "Automation itself is already built, just needs a results check.",
     "notes": "",
@@ -107,7 +107,7 @@
   {
     "id": "f3fbbbd97f41",
     "section_id": "own-tasks",
-    "position": 19,
+    "position": 6,
     "desc": "Reply to Sanjeev Sharma re: S/4 Hana-GIS Cert issue",
     "note": "Sanjeev is checking whether anyone has a Postman collection of a working call (endpoint, auth token, etc.) to share with Gravity so they can configure the SAP API calls on the DEV side faster. If not available, he says Gravity can still proceed without it.",
     "notes": "",
@@ -128,7 +128,7 @@
   {
     "id": "9a353fe72249",
     "section_id": "own-tasks",
-    "position": 17,
+    "position": 7,
     "desc": "Create new point feature class TRN_school_crossing_guard",
     "note": "Documents and maintains school crossing guards at elementary schools. Complete, ready to hand off to the data analyst for review.",
     "notes": "",
@@ -149,7 +149,7 @@
   {
     "id": "8eb451826828",
     "section_id": "own-tasks",
-    "position": 10,
+    "position": 8,
     "desc": "Asset ID issues resolved, verified via counts",
     "note": "Mismatched/missing IDs plus Kirk's QC findings. Kirk emailed (cc Jill) for independent verification. Next: address deleted features (TASK0316399, see above).",
     "notes": "",
@@ -170,7 +170,7 @@
   {
     "id": "3a3527fd56d5",
     "section_id": "own-tasks",
-    "position": 11,
+    "position": 9,
     "desc": "Investigate issue with ast_tree_hwa and its attribute rule",
     "note": "For Tristan.",
     "notes": "",
@@ -191,7 +191,7 @@
   {
     "id": "8303b6dda872",
     "section_id": "own-tasks",
-    "position": 5,
+    "position": 10,
     "desc": "change POSITION field to LONG from SHORT in TRN_school_crossing_guard",
     "note": "",
     "notes": "RO features are all capitalized.\ndone in prod, qa, dev\nadd to project to wgs84 script.",
@@ -212,7 +212,7 @@
   {
     "id": "0e6ee6c1c406",
     "section_id": "own-tasks",
-    "position": 6,
+    "position": 11,
     "desc": "test QA scripts for Mike",
     "note": "",
     "notes": "",
@@ -233,7 +233,7 @@
   {
     "id": "bcc563c3c540",
     "section_id": "own-tasks",
-    "position": 20,
+    "position": 12,
     "desc": "Local Area Transit Rate - Report from pre-prod.",
     "note": "Hi Alex\r\n\r\nI was wondering if you have a report from the GIS call made in pre-prod with respect to the local area transit rate. We have a number of differences both ways and hoping that a listing might help to understand what resulted from new / changed routes and what might be from measurement differences. Thanks, Alex !! Vicki.",
     "notes": "",
@@ -254,7 +254,7 @@
   {
     "id": "ba5556009735",
     "section_id": "own-tasks",
-    "position": 7,
+    "position": 13,
     "desc": "Create VW based on E_SafeSchoolStreets.",
     "note": "Please create VW based on E_SafeSchoolStreets to be used in Open Data release. The data form can be found here:\nR:\\ICT\\ICT GIS\\GIS Design Authority\\Change Requests\\Safe School Initiative\\Create_VW_Safe_School_Street_260810.xlsx.",
     "notes": "",
@@ -275,7 +275,7 @@
   {
     "id": "bf408ad09012",
     "section_id": "own-tasks",
-    "position": 8,
+    "position": 14,
     "desc": "Check Kirk Emails.",
     "note": "",
     "notes": "",
@@ -296,7 +296,7 @@
   {
     "id": "5355a9b3eeac",
     "section_id": "own-tasks",
-    "position": 9,
+    "position": 15,
     "desc": "Check features for any ID field attribute rule not using sdeadm in the sequence naming.",
     "note": "",
     "notes": "",
@@ -317,7 +317,7 @@
   {
     "id": "7c741f68e9ae",
     "section_id": "own-tasks",
-    "position": 12,
+    "position": 16,
     "desc": "Create View based on event table INT_ROUTEONROUTE for Street Intersections.",
     "note": "Please create a view of the event table INT_ROUTEONROUTE to be use for Open Data Release. Refer to the form at R:\\ICT\\ICT GIS\\GIS Design Authority\\Change Requests\\Street Intersections\\Create_VW_Street_Intersections_260727.xlsx.",
     "notes": "- Remember to add to CMDB",
@@ -338,7 +338,7 @@
   {
     "id": "b9bf69483622",
     "section_id": "own-tasks",
-    "position": 13,
+    "position": 17,
     "desc": "Create event table for \"Safe School Streets\" Initiative.",
     "note": "Please create the event table for \"Safe School Street\" based on the following schema design approved at GIS Authority:\nR:\\ICT\\ICT GIS\\GIS Design Authority\\Change Requests\\LRS_Data\\Safe School Street\\Safe_school_street_New_Event_Request_260721.xlsx\n\nPlease direct any questions about the schema to Justin.",
     "notes": "",
@@ -359,7 +359,7 @@
   {
     "id": "84502fef3a2d",
     "section_id": "own-tasks",
-    "position": 14,
+    "position": 18,
     "desc": "SDEADM.AST_TREE_HWA_INSPECTIONS - Error syncing replica SDEADM.AST_Rosde.",
     "note": "MS-GIS-APP-P27: GDB_Replication.py\r\n\r\nError syncing replica SDEADM.AST_Rosde.\r\n\r\nPYTHON ERRORS:\r\nTraceback Info:\r\n  File \"E:\\HRM\\Scripts\\Python\\GDB_Replication\\Scripts\\GDB_Replication.py\", line 149, in sync_replicas\r\n    arcpy.SynchronizeChanges_management(\r\n\r\nError Info:\r\n    <class 'arcgisscripting.ExecuteError'>: ERROR 003133: Synchronize Changes error: An expected Field was not found or could not be retrieved properly. [ (class name: SDEADM.AST_TREE_HWA_INSPECTIONS, oid: 84)] Failed to execute (SynchronizeChanges).\r\n\r\n\r\n\r\nGP ERRORS:\r\nERROR 003133: Synchronize Changes error: An expected Field was not found or could not be retrieved properly. [ (class name: SDEADM.AST_TREE_HWA_INSPECTIONS, oid: 84)] Failed to execute (SynchronizeChanges).",
     "notes": "",
@@ -380,7 +380,7 @@
   {
     "id": "4d56f46eb37b",
     "section_id": "own-tasks",
-    "position": 15,
+    "position": 19,
     "desc": "Add E_SafeSchoolStreets to CMDB.",
     "note": "",
     "notes": "",
@@ -401,7 +401,7 @@
   {
     "id": "f8833044f82d",
     "section_id": "own-tasks",
-    "position": 16,
+    "position": 20,
     "desc": "Follow up with Sanjeev re TRM/SAP integration testing.",
     "note": "",
     "notes": "",
@@ -424,19 +424,19 @@
     "section_id": "own-tasks",
     "position": 0,
     "desc": "Create new feature class ADM_wildfire_responsibility.",
-    "note": "R:\\ICT\\ICT GIS\\GIS Design Authority\\Change Requests\\Wildfire Responsibility Boundary\\ADM_wildfire_responsibility.xlsx.",
+    "note": "As discussed at the GIS Design Authority, can you please create a new feature class for the Wildfire Responsibility Boundary. See details in the following form.\n\n\"R:\\ICT\\ICT GIS\\GIS Design Authority\\Change Requests\\Wildfire Responsibility Boundary\\ADM_wildfire_responsibility.xlsx\"",
     "notes": "",
-    "status": "open",
+    "status": "in-progress",
     "done": false,
     "created": "2026-08-17T17:34:43Z",
-    "modified": "2026-08-17T17:34:43Z",
+    "modified": "2026-08-24T11:31:59Z",
     "completed": "",
     "priority": "medium",
-    "ticket_number": "",
+    "ticket_number": "TASK0330408",
     "assignment_group": "",
-    "requested_by": "",
-    "due_date": "",
-    "time_estimate": "",
+    "requested_by": "Lisa O'Toole",
+    "due_date": "2026-09-11",
+    "time_estimate": "2",
     "related_files": "",
     "parent_id": ""
   },
