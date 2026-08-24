@@ -2,7 +2,7 @@
   {
     "id": "d7edf9e2da04",
     "section_id": "own-tasks",
-    "position": 0,
+    "position": 1,
     "desc": "Create lookup tables for domain values (Bldg_fsa_occupancy, AAA_yes_no)",
     "note": "Modeled on BLD_USE_CLASS_LUT in ARCGIS.SDEADM.",
     "notes": "",
@@ -10,12 +10,20 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "TASK0329353",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "676272d4ee91",
     "section_id": "own-tasks",
-    "position": 1,
+    "position": 2,
     "desc": "check encampments log table.",
     "note": "should there be a new log table or were changes made to the existing?",
     "notes": "checked and no table updates or new tables were created. didn't see changes to log table detailed in ticket or SDSF.\nCHECK EMAILS FOR MORE INFO",
@@ -23,12 +31,20 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "a6170ab4565b",
     "section_id": "own-tasks",
-    "position": 2,
+    "position": 3,
     "desc": "Create PID overlay staging table from Contributing Heritage Resources for POSSE",
     "note": "For Ken Larade (PLAN and DEV, Transformation and Innovation). Discussed with Tristan Marvin, Somya also to be included. 1) Create new PID overlay staging table using LND_parcel_polygon and LND_heritage_contributing_resources, only records from LND_heritage_contributing_resources where Status = 'Approved'. Proposed table name: PID_HERITAGE_CONTRIB_RESOURCE (unconfirmed). Fields: PID (varchar8), HCR (varchar50, populated for records meeting 'Heritage Contributing Resources' conditions). 2) In POSSE.EXTERNALPARCEL, append values from the new staging table to the HERITAGEPROPERTYDISTRICT field. Example: PID 00093922 -> HERITAGEPROPERTYDISTRICT: 'Schmidtville; Heritage Contributing Resources'. Reach out to Ken & Tristan with questions.",
     "notes": "",
@@ -36,12 +52,20 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "TASK0328952",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "c673e9ff76ba",
     "section_id": "own-tasks",
-    "position": 3,
+    "position": 4,
     "desc": "Restore deleted AssetIDs from 2024-2025 Asset Registry.gdb",
     "note": "Records existed previously and no longer do, deleted. Client wants them restored. Breakdown: AST_parking_pay_station (2), LND_hrm_parcel (2), TRN_sectrav (179), TRN_street (7), TRN_traffic_calming_infra (27), TRN_transit_shelter (1), BLD_EXTERIOR (1), BLD_LIFESAFETY (2), BLD_SPECIALTY (1).",
     "notes": "",
@@ -49,12 +73,20 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "TASK0316399",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "66ff15254b85",
     "section_id": "own-tasks",
-    "position": 4,
+    "position": 5,
     "desc": "Compare Target Hazard Analysis automation results to expected",
     "note": "Automation itself is already built, just needs a results check.",
     "notes": "",
@@ -62,12 +94,20 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "TASK0324829",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "f3fbbbd97f41",
     "section_id": "own-tasks",
-    "position": 5,
+    "position": 6,
     "desc": "Reply to Sanjeev Sharma re: S/4 Hana-GIS Cert issue",
     "note": "Sanjeev is checking whether anyone has a Postman collection of a working call (endpoint, auth token, etc.) to share with Gravity so they can configure the SAP API calls on the DEV side faster. If not available, he says Gravity can still proceed without it.",
     "notes": "",
@@ -75,20 +115,36 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "9a353fe72249",
     "section_id": "own-tasks",
-    "position": 6,
+    "position": 0,
     "desc": "Create new point feature class TRN_school_crossing_guard",
     "note": "Documents and maintains school crossing guards at elementary schools. Complete, ready to hand off to the data analyst for review.",
     "notes": "",
-    "status": "done",
-    "done": true,
+    "status": "open",
+    "done": false,
     "created": "2026-08-06T19:41:31Z",
-    "modified": "2026-08-06T19:41:31Z",
-    "completed": "2026-08-06T19:41:31Z"
+    "modified": "2026-08-24T11:14:18Z",
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "TASK0329016",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "8eb451826828",
@@ -101,7 +157,15 @@
     "done": true,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": "2026-08-06T19:41:31Z"
+    "completed": "2026-08-06T19:41:31Z",
+    "priority": "medium",
+    "ticket_number": "TASK0319535 / TASK0316399",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "3a3527fd56d5",
@@ -114,7 +178,15 @@
     "done": true,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": "2026-08-06T19:41:31Z"
+    "completed": "2026-08-06T19:41:31Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "8303b6dda872",
@@ -127,7 +199,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "0e6ee6c1c406",
@@ -140,7 +220,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "bcc563c3c540",
@@ -153,7 +241,15 @@
     "done": false,
     "created": "2026-08-17T11:54:35Z",
     "modified": "2026-08-17T11:54:35Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "ba5556009735",
@@ -166,7 +262,15 @@
     "done": false,
     "created": "2026-08-12T17:12:57Z",
     "modified": "2026-08-12T17:13:23Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "bf408ad09012",
@@ -179,7 +283,15 @@
     "done": false,
     "created": "2026-08-13T13:47:35Z",
     "modified": "2026-08-13T13:47:35Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "5355a9b3eeac",
@@ -192,7 +304,15 @@
     "done": false,
     "created": "2026-08-13T18:20:31Z",
     "modified": "2026-08-13T18:20:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "7c741f68e9ae",
@@ -205,7 +325,15 @@
     "done": true,
     "created": "2026-08-11T12:10:55Z",
     "modified": "2026-08-12T17:11:17Z",
-    "completed": "2026-08-12T17:11:17Z"
+    "completed": "2026-08-12T17:11:17Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "b9bf69483622",
@@ -218,7 +346,15 @@
     "done": true,
     "created": "2026-08-11T12:12:34Z",
     "modified": "2026-08-11T14:39:22Z",
-    "completed": "2026-08-11T14:39:22Z"
+    "completed": "2026-08-11T14:39:22Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "84502fef3a2d",
@@ -231,7 +367,15 @@
     "done": true,
     "created": "2026-08-07T11:41:27Z",
     "modified": "2026-08-07T12:43:47Z",
-    "completed": "2026-08-07T12:43:47Z"
+    "completed": "2026-08-07T12:43:47Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "4d56f46eb37b",
@@ -244,7 +388,15 @@
     "done": true,
     "created": "2026-08-11T18:35:29Z",
     "modified": "2026-08-13T19:38:54Z",
-    "completed": "2026-08-13T19:38:54Z"
+    "completed": "2026-08-13T19:38:54Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "f8833044f82d",
@@ -257,7 +409,15 @@
     "done": true,
     "created": "2026-08-13T13:38:53Z",
     "modified": "2026-08-14T18:51:45Z",
-    "completed": "2026-08-14T18:51:45Z"
+    "completed": "2026-08-14T18:51:45Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "6b0f948bd6de",
@@ -270,7 +430,15 @@
     "done": false,
     "created": "2026-08-17T17:34:43Z",
     "modified": "2026-08-17T17:34:43Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "06c418a27cff",
@@ -283,7 +451,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "6fcac47d1878",
@@ -296,7 +472,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "6f6d4de7ea70",
@@ -309,7 +493,15 @@
     "done": true,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": "2026-08-06T19:41:31Z"
+    "completed": "2026-08-06T19:41:31Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "1d59a881dec6",
@@ -322,7 +514,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "b596be1078c9",
@@ -335,7 +535,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "347d83f2bcdc",
@@ -348,7 +556,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "ae0c87e8d411",
@@ -361,7 +577,15 @@
     "done": true,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": "2026-08-06T19:41:31Z"
+    "completed": "2026-08-06T19:41:31Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "f8371388d1d5",
@@ -374,7 +598,15 @@
     "done": true,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": "2026-08-06T19:41:31Z"
+    "completed": "2026-08-06T19:41:31Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "dabff5bd5d2d",
@@ -387,7 +619,15 @@
     "done": true,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": "2026-08-06T19:41:31Z"
+    "completed": "2026-08-06T19:41:31Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "cee7bc0d0faf",
@@ -400,7 +640,15 @@
     "done": true,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": "2026-08-06T19:41:31Z"
+    "completed": "2026-08-06T19:41:31Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "4e9727fab173",
@@ -413,7 +661,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "1276f2d1bd88",
@@ -426,7 +682,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "bf3f0325aba6",
@@ -439,7 +703,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "ad4dedf15ea7",
@@ -452,7 +724,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "beda78a67aad",
@@ -465,7 +745,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "5c5b58bb0e77",
@@ -478,7 +766,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "cc1715c07112",
@@ -491,7 +787,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "6d70478cd4cc",
@@ -504,7 +808,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "TASK0328859 / 0328860 / 0328861",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "34cf620266fe",
@@ -517,7 +829,15 @@
     "done": false,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "TASK0329335",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "79afd919a6c5",
@@ -530,7 +850,15 @@
     "done": true,
     "created": "2026-08-06T19:41:31Z",
     "modified": "2026-08-06T19:41:31Z",
-    "completed": "2026-08-06T19:41:31Z"
+    "completed": "2026-08-06T19:41:31Z",
+    "priority": "medium",
+    "ticket_number": "TASK0329474",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "4620f772a25d",
@@ -543,7 +871,15 @@
     "done": false,
     "created": "2026-08-14T15:28:08Z",
     "modified": "2026-08-14T15:28:08Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "bb7a1287994b",
@@ -556,7 +892,15 @@
     "done": false,
     "created": "2026-08-14T19:11:57Z",
     "modified": "2026-08-14T19:11:57Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "85e126299786",
@@ -569,7 +913,15 @@
     "done": false,
     "created": "2026-08-17T11:52:00Z",
     "modified": "2026-08-17T11:52:00Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "8f29e3d9e7c1",
@@ -582,7 +934,15 @@
     "done": true,
     "created": "2026-08-14T12:16:28Z",
     "modified": "2026-08-14T19:11:43Z",
-    "completed": "2026-08-14T19:11:43Z"
+    "completed": "2026-08-14T19:11:43Z",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "2a5f3cbb7f12",
@@ -595,7 +955,15 @@
     "done": false,
     "created": "2026-08-17T14:15:28Z",
     "modified": "2026-08-17T14:15:28Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   },
   {
     "id": "0bbc3a1d1aa6",
@@ -608,6 +976,14 @@
     "done": false,
     "created": "2026-08-17T14:15:42Z",
     "modified": "2026-08-17T14:15:42Z",
-    "completed": ""
+    "completed": "",
+    "priority": "medium",
+    "ticket_number": "",
+    "assignment_group": "",
+    "requested_by": "",
+    "due_date": "",
+    "time_estimate": "",
+    "related_files": "",
+    "parent_id": ""
   }
 ]

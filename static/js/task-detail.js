@@ -17,6 +17,9 @@
   var fieldAssignmentGroup = document.getElementById('field-assignment-group');
   var fieldRequestedBy = document.getElementById('field-requested-by');
   var fieldDueDate = document.getElementById('field-due-date');
+  var fieldTimeEstimate = document.getElementById('field-time-estimate');
+  var fieldRelatedFiles = document.getElementById('field-related-files');
+  var fieldParentId = document.getElementById('field-parent-id');
 
   function getTaskIdFromPath() {
     var match = window.location.pathname.match(/^\/task\/([^/]+)$/);
@@ -55,6 +58,21 @@
     return null;
   }
 
+  function populateParentOptions(data, task) {
+    (data.sections || []).forEach(function (section) {
+      (section.tasks || []).forEach(function (candidate) {
+        if (candidate.id === task.id) {
+          return;
+        }
+        var option = document.createElement('option');
+        option.value = candidate.id;
+        option.textContent = section.label + ': ' + candidate.desc;
+        fieldParentId.appendChild(option);
+      });
+    });
+    fieldParentId.value = task.parent_id || '';
+  }
+
   function populateForm(task, section) {
     fieldDesc.value = task.desc || '';
     fieldNote.value = task.note || '';
@@ -65,6 +83,8 @@
     fieldAssignmentGroup.value = task.assignment_group || '';
     fieldRequestedBy.value = task.requested_by || '';
     fieldDueDate.value = task.due_date || '';
+    fieldTimeEstimate.value = task.time_estimate || '';
+    fieldRelatedFiles.value = task.related_files || '';
 
     var tags = task.tags || [];
     var flagTag = tags.filter(function (t) { return t.flag; })[0];
@@ -118,6 +138,7 @@
           form.style.display = 'none';
           return;
         }
+        populateParentOptions(data, found.task);
         populateForm(found.task, found.section);
       })
       .catch(function (err) {
@@ -144,7 +165,10 @@
           ticket_number: fieldTicketNumber.value,
           assignment_group: fieldAssignmentGroup.value,
           requested_by: fieldRequestedBy.value,
-          due_date: fieldDueDate.value
+          due_date: fieldDueDate.value,
+          time_estimate: fieldTimeEstimate.value,
+          related_files: fieldRelatedFiles.value,
+          parent_id: fieldParentId.value
         }])
       })
         .then(function (response) {

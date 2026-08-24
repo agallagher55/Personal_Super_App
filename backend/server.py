@@ -14,6 +14,15 @@ this app will eventually use in a real database:
 
 GET /tasks.json joins them back into the nested shape the frontend expects,
 the same way a database query/view would.
+
+data/tasks.json's columns mirror a Notion-style tasks database: desc (Task),
+status/done (Status), priority (Priority), due_date (Due Date), completed
+(Completion Date), modified (Last edited time), note/notes (Notes),
+ticket_number (TASK), time_estimate (Time Estimate), related_files (Related
+Files), and parent_id (Parent item - a task's sub-items are just the other
+tasks whose parent_id points back at it). assignment_group and requested_by
+are this app's own additions on top of that shape, for ServiceNow-sourced
+tasks.
 """
 
 import json
@@ -32,7 +41,10 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 SECTIONS_FILE = os.path.join(DATA_DIR, 'sections.json')
 TASKS_FILE = os.path.join(DATA_DIR, 'tasks.json')
 TAGS_FILE = os.path.join(DATA_DIR, 'tags.json')
-STATUSES = ('open', 'in-progress', 'done')
+# Mirrors the Notion "Weekly Tasks" database's Status options (Not started,
+# In progress, Pending, Done, Cancelled), keeping this app's existing
+# open/in-progress/done names for the three states it already had.
+STATUSES = ('open', 'in-progress', 'pending', 'done', 'cancelled')
 PRIORITIES = ('low', 'medium', 'high')
 
 # The ported Personal Health app (see fitness/ARCHITECTURE.md) lives at
@@ -308,6 +320,9 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         assignment_group = fields.get('assignment_group', [''])[0].strip()
         requested_by = fields.get('requested_by', [''])[0].strip()
         due_date = fields.get('due_date', [''])[0].strip()
+        time_estimate = fields.get('time_estimate', [''])[0].strip()
+        related_files = fields.get('related_files', [''])[0].strip()
+        parent_id = fields.get('parent_id', [''])[0].strip()
 
         if not section_id or not desc:
             self.send_error(400, 'Section and description are required')
@@ -321,6 +336,9 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
 
         tasks = load_tasks()
         tags = load_tags()
+
+        if parent_id and not any(t.get('id') == parent_id for t in tasks):
+            parent_id = ''
 
         raw_tags = []
         if flag_tag:
@@ -347,6 +365,9 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             'assignment_group': assignment_group,
             'requested_by': requested_by,
             'due_date': due_date,
+            'time_estimate': time_estimate,
+            'related_files': related_files,
+            'parent_id': parent_id,
             'created': created,
             'modified': created,
             'completed': created if done else ''
@@ -495,12 +516,23 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                     task['priority'] = new_priority
                     changed = True
 
-            for field in ('ticket_number', 'assignment_group', 'requested_by', 'due_date'):
+            for field in ('ticket_number', 'assignment_group', 'requested_by', 'due_date',
+                          'time_estimate', 'related_files'):
                 if field in update:
                     new_value = update[field].strip() if isinstance(update[field], str) else ''
                     if new_value != task.get(field, ''):
                         task[field] = new_value
                         changed = True
+
+            if 'parent_id' in update:
+                new_parent_id = update['parent_id'].strip() if isinstance(update['parent_id'], str) else ''
+                if new_parent_id == task.get('id'):
+                    new_parent_id = ''
+                elif new_parent_id and not any(t.get('id') == new_parent_id for t in tasks):
+                    new_parent_id = ''
+                if new_parent_id != task.get('parent_id', ''):
+                    task['parent_id'] = new_parent_id
+                    changed = True
 
             if changed:
                 task['modified'] = now

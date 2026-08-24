@@ -2,6 +2,7 @@
   'use strict';
 
   var select = document.getElementById('section-select');
+  var parentSelect = document.getElementById('parent-select');
 
   fetch('/tasks.json')
     .then(function (response) {
@@ -26,6 +27,13 @@
         option.value = section.id;
         option.textContent = section.label;
         select.appendChild(option);
+
+        (section.tasks || []).forEach(function (task) {
+          var parentOption = document.createElement('option');
+          parentOption.value = task.id;
+          parentOption.textContent = section.label + ': ' + task.desc;
+          parentSelect.appendChild(parentOption);
+        });
       });
 
       if (preselectId) {

@@ -72,7 +72,9 @@
             <select name="status" id="field-status">
               <option value="open">Open</option>
               <option value="in-progress">In Progress</option>
+              <option value="pending">Pending</option>
               <option value="done">Done</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </label>
 
@@ -97,6 +99,25 @@
             <input type="text" name="tags" id="field-tags">
           </label>
         </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Time estimate (hours)</span>
+            <input type="number" name="time_estimate" id="field-time-estimate" min="0" step="0.5">
+          </label>
+
+          <label class="field">
+            <span class="field-label">Parent task</span>
+            <select name="parent_id" id="field-parent-id">
+              <option value="">None</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Related files</span>
+          <input type="text" name="related_files" id="field-related-files" placeholder="paths or links, comma-separated">
+        </label>
 
         <div class="section-divider">Personal Notes</div>
 
