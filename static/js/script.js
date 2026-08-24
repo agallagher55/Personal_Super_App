@@ -12,6 +12,7 @@
   var sectionListMap = {};    // sectionId -> main <ol> in the left column
   var sectionLabelMap = {};   // sectionId -> section label text
   var completedGroupMap = {}; // sectionId -> <ol> inside the completed panel
+  var taskById = {};          // task id -> task data, for resolving parent_id
 
   var DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   var MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -23,7 +24,13 @@
       ' ' + today.getDate() + ', ' + today.getFullYear();
   }
 
-  var STATUS_LABELS = { open: 'Open', 'in-progress': 'In Progress', done: 'Done' };
+  var STATUS_LABELS = {
+    open: 'Open',
+    'in-progress': 'In Progress',
+    pending: 'Pending',
+    done: 'Done',
+    cancelled: 'Cancelled'
+  };
   var PRIORITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High' };
 
   function formatDate(iso) {
@@ -50,7 +57,10 @@
 
     var li = document.createElement('li');
     li.className = 'task priority-' + priority +
-      (status === 'done' ? ' done' : '') + (status === 'in-progress' ? ' in-progress' : '');
+      (status === 'done' ? ' done' : '') +
+      (status === 'in-progress' ? ' in-progress' : '') +
+      (status === 'pending' ? ' pending' : '') +
+      (status === 'cancelled' ? ' cancelled' : '');
     li.dataset.section = sectionId;
     li.dataset.taskId = taskData.id || '';
     li.dataset.status = status;
@@ -109,12 +119,19 @@
       body.appendChild(note);
     }
 
+    var parentTask = taskData.parent_id ? taskById[taskData.parent_id] : null;
+
     var fieldEntries = [
       { key: 'ticket_number', label: '', className: 'ticket' },
       { key: 'assignment_group', label: '', className: 'group' },
       { key: 'requested_by', label: 'req: ', className: 'requester' },
-      { key: 'due_date', label: 'due ', className: 'due' }
-    ].filter(function (entry) { return taskData[entry.key]; });
+      { key: 'due_date', label: 'due ', className: 'due' },
+      { key: 'time_estimate', label: '~', className: 'estimate', value: taskData.time_estimate ? taskData.time_estimate + 'h' : '' },
+      { key: 'related_files', label: 'files: ', className: 'files' },
+      { key: 'parent_id', label: 'parent: ', className: 'parent', value: parentTask ? parentTask.desc : '' }
+    ].filter(function (entry) {
+      return entry.value !== undefined ? entry.value : taskData[entry.key];
+    });
 
     if (fieldEntries.length > 0) {
       var fields = document.createElement('div');
@@ -122,7 +139,9 @@
       fieldEntries.forEach(function (entry) {
         var pill = document.createElement('span');
         pill.className = 'field-pill field-pill-' + entry.className;
-        pill.textContent = entry.label + (entry.key === 'due_date' ? formatDate(taskData[entry.key] + 'T00:00:00Z') || taskData[entry.key] : taskData[entry.key]);
+        var value = entry.value !== undefined ? entry.value :
+          (entry.key === 'due_date' ? formatDate(taskData[entry.key] + 'T00:00:00Z') || taskData[entry.key] : taskData[entry.key]);
+        pill.textContent = entry.label + value;
         fields.appendChild(pill);
       });
       body.appendChild(fields);
@@ -210,6 +229,8 @@
 
       li.dataset.status = newStatus;
       li.classList.toggle('in-progress', newStatus === 'in-progress');
+      li.classList.toggle('pending', newStatus === 'pending');
+      li.classList.toggle('cancelled', newStatus === 'cancelled');
 
       if (newStatus === 'done') {
         moveToCompleted(li, sectionId);
@@ -540,6 +561,15 @@
   }
 
   function render(data) {
+    taskById = {};
+    data.sections.forEach(function (sectionData) {
+      (sectionData.tasks || []).forEach(function (taskData) {
+        if (taskData.id) {
+          taskById[taskData.id] = taskData;
+        }
+      });
+    });
+
     var filterSlug = getFilterSlugFromPath();
     var sectionsToRender = data.sections;
     var matchedSection = null;

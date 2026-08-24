@@ -1,29 +1,22 @@
 [
   {
-    "id": "125101dd765f",
-    "task_id": "d7edf9e2da04",
-    "position": 0,
-    "text": "TASK0329353",
-    "flag": false
-  },
-  {
     "id": "a3e263fce101",
     "task_id": "d7edf9e2da04",
-    "position": 1,
+    "position": 0,
     "text": "top priority",
     "flag": true
   },
   {
     "id": "496bc4303645",
     "task_id": "d7edf9e2da04",
-    "position": 2,
+    "position": 1,
     "text": "Lisa O'Toole",
     "flag": false
   },
   {
     "id": "592b5f81561c",
     "task_id": "d7edf9e2da04",
-    "position": 3,
+    "position": 2,
     "text": "due Aug 7",
     "flag": false
   },
@@ -35,58 +28,37 @@
     "flag": true
   },
   {
-    "id": "71df16e5aa9b",
-    "task_id": "a6170ab4565b",
-    "position": 0,
-    "text": "TASK0328952",
-    "flag": false
-  },
-  {
     "id": "41123bafb733",
     "task_id": "a6170ab4565b",
-    "position": 1,
+    "position": 0,
     "text": "Ken Larade",
     "flag": false
   },
   {
     "id": "be5bb93b1a84",
     "task_id": "a6170ab4565b",
-    "position": 2,
+    "position": 1,
     "text": "Data Services Support",
-    "flag": false
-  },
-  {
-    "id": "72f438a9a7ba",
-    "task_id": "c673e9ff76ba",
-    "position": 0,
-    "text": "TASK0316399",
     "flag": false
   },
   {
     "id": "489a7cc8e6d2",
     "task_id": "c673e9ff76ba",
-    "position": 1,
+    "position": 0,
     "text": "restore requested",
     "flag": true
   },
   {
-    "id": "180a2199413d",
-    "task_id": "66ff15254b85",
-    "position": 0,
-    "text": "TASK0324829",
-    "flag": false
-  },
-  {
     "id": "68bd3f946998",
     "task_id": "66ff15254b85",
-    "position": 1,
+    "position": 0,
     "text": "Lisa O'Toole",
     "flag": false
   },
   {
     "id": "8304d4646a0c",
     "task_id": "66ff15254b85",
-    "position": 2,
+    "position": 1,
     "text": "no firm deadline",
     "flag": false
   },
@@ -112,51 +84,37 @@
     "flag": false
   },
   {
-    "id": "36c43bb792bf",
-    "task_id": "9a353fe72249",
-    "position": 0,
-    "text": "TASK0329016",
-    "flag": false
-  },
-  {
     "id": "cda3975f6e2d",
     "task_id": "9a353fe72249",
-    "position": 1,
+    "position": 0,
     "text": "ready for review",
     "flag": false
   },
   {
     "id": "c57d1fb6cf87",
     "task_id": "9a353fe72249",
-    "position": 2,
+    "position": 1,
     "text": "Tristan Marvin",
     "flag": false
   },
   {
     "id": "260516d19bdf",
     "task_id": "9a353fe72249",
-    "position": 3,
+    "position": 2,
     "text": "due Sep 10",
-    "flag": false
-  },
-  {
-    "id": "17fba1053f45",
-    "task_id": "8eb451826828",
-    "position": 0,
-    "text": "TASK0319535 / TASK0316399",
     "flag": false
   },
   {
     "id": "17105e09ad32",
     "task_id": "8eb451826828",
-    "position": 1,
+    "position": 0,
     "text": "kirk emailed",
     "flag": false
   },
   {
     "id": "d2357e34daf8",
     "task_id": "8eb451826828",
-    "position": 2,
+    "position": 1,
     "text": "Jillian Landry",
     "flag": false
   },
@@ -238,58 +196,37 @@
     "flag": true
   },
   {
-    "id": "56fe68de679b",
-    "task_id": "6d70478cd4cc",
-    "position": 0,
-    "text": "TASK0328859 / 0328860 / 0328861",
-    "flag": false
-  },
-  {
     "id": "4a2666c2ed80",
     "task_id": "6d70478cd4cc",
-    "position": 1,
+    "position": 0,
     "text": "overdue",
     "flag": true
   },
   {
     "id": "e051f2cce338",
     "task_id": "6d70478cd4cc",
-    "position": 2,
+    "position": 1,
     "text": "Mapping Services Support",
-    "flag": false
-  },
-  {
-    "id": "c7b768b8aca7",
-    "task_id": "34cf620266fe",
-    "position": 0,
-    "text": "TASK0329335",
     "flag": false
   },
   {
     "id": "f9d1f21e690a",
     "task_id": "34cf620266fe",
-    "position": 1,
+    "position": 0,
     "text": "check urgency",
     "flag": true
   },
   {
     "id": "5493bc03faa0",
     "task_id": "34cf620266fe",
-    "position": 2,
+    "position": 1,
     "text": "Tim Burns",
-    "flag": false
-  },
-  {
-    "id": "4fb447800f4c",
-    "task_id": "79afd919a6c5",
-    "position": 0,
-    "text": "TASK0329474",
     "flag": false
   },
   {
     "id": "4b465c57e66a",
     "task_id": "79afd919a6c5",
-    "position": 1,
+    "position": 0,
     "text": "Mike coverage",
     "flag": false
   }
