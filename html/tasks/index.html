@@ -6,6 +6,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/styles/styles.css">
+<link rel="stylesheet" href="/static/styles/nav.css">
 <script>
   (function () {
     var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -14,14 +15,14 @@
 </script>
 </head>
 <body>
+  <div id="site-nav"></div>
+  <script src="/static/js/nav.js"></script>
   <div class="page page-tasks">
     <div class="sheet tasks-sheet">
       <nav class="site-nav">
-        <span class="current">Tasks</span>
+        <span class="current">All Tasks</span>
         <a href="/tasks">Categories</a>
         <a href="/tasks/new">+ New Task</a>
-        <a href="/fitness">Fitness</a>
-        <a href="/finance">Finance</a>
       </nav>
 
       <header>
