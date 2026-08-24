@@ -35,6 +35,7 @@
     cancelled: 'Cancelled'
   };
   var PRIORITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High' };
+  var WORK_TYPE_LABELS = { 'new-feature': 'New Feature', 'schema-change': 'Schema Change' };
 
   function formatDate(iso) {
     if (!iso) {
@@ -181,21 +182,13 @@
     body.appendChild(quickFields);
 
     var isWorkTask = sectionId === WORK_SECTION_ID;
-    if (isWorkTask && (taskData.new_feature || taskData.schema_change)) {
+    if (isWorkTask && taskData.work_type && WORK_TYPE_LABELS[taskData.work_type]) {
       var workTypeTags = document.createElement('div');
       workTypeTags.className = 'task-fields';
-      if (taskData.new_feature) {
-        var newFeaturePill = document.createElement('span');
-        newFeaturePill.className = 'field-pill field-pill-worktype';
-        newFeaturePill.textContent = 'New Feature';
-        workTypeTags.appendChild(newFeaturePill);
-      }
-      if (taskData.schema_change) {
-        var schemaChangePill = document.createElement('span');
-        schemaChangePill.className = 'field-pill field-pill-worktype';
-        schemaChangePill.textContent = 'Schema Change';
-        workTypeTags.appendChild(schemaChangePill);
-      }
+      var workTypePill = document.createElement('span');
+      workTypePill.className = 'field-pill field-pill-worktype';
+      workTypePill.textContent = WORK_TYPE_LABELS[taskData.work_type];
+      workTypeTags.appendChild(workTypePill);
       body.appendChild(workTypeTags);
 
       var envFields = document.createElement('div');
@@ -215,7 +208,7 @@
         envFields.appendChild(envField);
       });
 
-      if (taskData.new_feature) {
+      if (taskData.work_type === 'new-feature') {
         var cmdbField = document.createElement('label');
         cmdbField.className = 'env-field';
         var cmdbInput = document.createElement('input');

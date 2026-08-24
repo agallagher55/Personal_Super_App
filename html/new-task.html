@@ -112,12 +112,17 @@
 
         <div class="field-row" id="work-type-fields" style="display: none;">
           <label class="field field-inline">
-            <input type="checkbox" name="new_feature" value="1">
+            <input type="radio" name="work_type" value="" checked>
+            <span class="field-label">None</span>
+          </label>
+
+          <label class="field field-inline">
+            <input type="radio" name="work_type" value="new-feature">
             <span class="field-label">New feature</span>
           </label>
 
           <label class="field field-inline">
-            <input type="checkbox" name="schema_change" value="1">
+            <input type="radio" name="work_type" value="schema-change">
             <span class="field-label">Schema change</span>
           </label>
         </div>
