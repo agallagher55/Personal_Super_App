@@ -125,8 +125,6 @@
       { key: 'ticket_number', label: '', className: 'ticket' },
       { key: 'assignment_group', label: '', className: 'group' },
       { key: 'requested_by', label: 'req: ', className: 'requester' },
-      { key: 'due_date', label: 'due ', className: 'due' },
-      { key: 'time_estimate', label: '~', className: 'estimate', value: taskData.time_estimate ? taskData.time_estimate + 'h' : '' },
       { key: 'related_files', label: 'files: ', className: 'files' },
       { key: 'parent_id', label: 'parent: ', className: 'parent', value: parentTask ? parentTask.desc : '' }
     ].filter(function (entry) {
@@ -139,13 +137,45 @@
       fieldEntries.forEach(function (entry) {
         var pill = document.createElement('span');
         pill.className = 'field-pill field-pill-' + entry.className;
-        var value = entry.value !== undefined ? entry.value :
-          (entry.key === 'due_date' ? formatDate(taskData[entry.key] + 'T00:00:00Z') || taskData[entry.key] : taskData[entry.key]);
+        var value = entry.value !== undefined ? entry.value : taskData[entry.key];
         pill.textContent = entry.label + value;
         fields.appendChild(pill);
       });
       body.appendChild(fields);
     }
+
+    var quickFields = document.createElement('div');
+    quickFields.className = 'task-quick-fields';
+
+    var dueField = document.createElement('label');
+    dueField.className = 'quick-field';
+    var dueFieldLabel = document.createElement('span');
+    dueFieldLabel.className = 'quick-field-label';
+    dueFieldLabel.textContent = 'Due';
+    var dueInput = document.createElement('input');
+    dueInput.type = 'date';
+    dueInput.className = 'due-date-input';
+    dueInput.value = taskData.due_date || '';
+    dueField.appendChild(dueFieldLabel);
+    dueField.appendChild(dueInput);
+
+    var estimateField = document.createElement('label');
+    estimateField.className = 'quick-field';
+    var estimateFieldLabel = document.createElement('span');
+    estimateFieldLabel.className = 'quick-field-label';
+    estimateFieldLabel.textContent = 'Est. hrs';
+    var estimateInput = document.createElement('input');
+    estimateInput.type = 'number';
+    estimateInput.className = 'time-estimate-input';
+    estimateInput.min = '0';
+    estimateInput.step = '0.5';
+    estimateInput.value = taskData.time_estimate || '';
+    estimateField.appendChild(estimateFieldLabel);
+    estimateField.appendChild(estimateInput);
+
+    quickFields.appendChild(dueField);
+    quickFields.appendChild(estimateField);
+    body.appendChild(quickFields);
 
     if (taskData.tags && taskData.tags.length > 0) {
       var tags = document.createElement('div');
@@ -737,11 +767,15 @@
         return;
       }
       var textarea = li.querySelector('.notes-input');
+      var dueInput = li.querySelector('.due-date-input');
+      var estimateInput = li.querySelector('.time-estimate-input');
       updates.push({
         id: taskId,
         notes: textarea ? textarea.value : '',
         status: li.dataset.status || 'open',
-        priority: li.dataset.priority || 'medium'
+        priority: li.dataset.priority || 'medium',
+        due_date: dueInput ? dueInput.value : '',
+        time_estimate: estimateInput ? estimateInput.value : ''
       });
     });
     return updates;
