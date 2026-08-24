@@ -2,10 +2,10 @@
 
 Files:
 
-- `html/index.html`, the page shell for the main task list (also reused for
+- `html/tasks/index.html`, the page shell for the main task list (also reused for
   single-category views, see below)
-- `html/new-task.html`, the "add a task" form page, served at `/tasks/new`
-- `html/tasks-index.html` / `static/js/tasks-index.js`, the category table of
+- `html/tasks/new-task.html`, the "add a task" form page, served at `/tasks/new`
+- `html/tasks/tasks-index.html` / `static/js/tasks-index.js`, the category table of
   contents page, served at `/tasks`
 - `static/styles/styles.css`, all styling
 - `static/js/script.js`, plain JavaScript for the main page, no modules, no build step
@@ -21,7 +21,7 @@ Files:
 ## Running it
 
 Browsers block `fetch()` of local files opened via `file://` for
-security reasons, so double-clicking `html/index.html` won't load the tasks.
+security reasons, so double-clicking `html/tasks/index.html` won't load the tasks.
 This also has to be Python's server rather than a generic static
 server, since the new-task form needs somewhere to POST to.
 

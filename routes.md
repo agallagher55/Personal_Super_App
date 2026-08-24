@@ -10,19 +10,20 @@ mutated only through the POST routes below.
 
 | Route | Serves | Frontend JS | Notes |
 |---|---|---|---|
-| `/` | `html/index.html` | `static/js/script.js` | All sections, unfiltered. |
-| `/tasks` | `html/tasks-index.html` | `static/js/tasks-index.js` | Category (section) list with open/closed counts. |
-| `/tasks/new` | `html/new-task.html` | `static/js/new-task.js` | New task form. `?section=<id>` preselects a section. |
-| `/tasks/new-category` | `html/new-category.html` | — | New category (section) form. |
-| `/tasks/<slug>` | `html/index.html` | `static/js/script.js` | Same page as `/`, but `script.js` reads the slug from the URL and renders only the matching section. 404 if `<slug>` doesn't match any section's `slug`. |
-| `/task/<id>` | `html/task-detail.html` | `static/js/task-detail.js` | Edit/delete a single task by id. 404 if `<id>` doesn't exist. |
+| `/` | `html/tasks/index.html` | `static/js/script.js` | All sections, unfiltered. |
+| `/tasks` | `html/tasks/tasks-index.html` | `static/js/tasks-index.js` | Category (section) list with open/closed counts. |
+| `/tasks/new` | `html/tasks/new-task.html` | `static/js/new-task.js` | New task form. `?section=<id>` preselects a section. |
+| `/tasks/new-category` | `html/tasks/new-category.html` | — | New category (section) form. |
+| `/tasks/<slug>` | `html/tasks/index.html` | `static/js/script.js` | Same page as `/`, but `script.js` reads the slug from the URL and renders only the matching section. 404 if `<slug>` doesn't match any section's `slug`. |
+| `/task/<id>` | `html/tasks/task-detail.html` | `static/js/task-detail.js` | Edit/delete a single task by id. 404 if `<id>` doesn't exist. |
 | `/fitness` | `html/fitness/index.html` | `static/fitness/js/dashboard.js` | Personal Health dashboard — see `fitness/README.md`. |
 | `/fitness/<page>` | `html/fitness/pages/<page>.html` | `static/fitness/js/pages/<page>.js` | Per-metric detail view. `<page>` is one of `steps`, `heart-rate`, `sleep`, `activity`, `spo2`, `hrv`, `breathing-rate`, `temperature`, `weight` (`FITNESS_PAGES` in `backend/server.py`). 404 otherwise. |
 | `/fitness/api/health` | JSON | — | Liveness check; see `fitness/API-CONTRACT.md`. |
 | `/fitness/api/metrics` | JSON | — | Dashboard summary across all metrics, `?from=&to=` (default last 7 days). |
 | `/fitness/api/metrics/<metric>` | JSON | — | Single-metric detail, `?from=&to=` (default last 30 days). 404 if `<metric>` isn't in `KNOWN_METRICS`. |
 | `/fitness/api/metrics/<metric>/samples` | JSON | — | Raw intraday readings in `[from, to]` (full ISO 8601 instants). Only `heart_rate` today. |
-| `/finance` | `html/finance.html` | — | Placeholder page for personal finance tracking. |
+| `/finance` | `html/finance.html` | `static/finance/js/ticker.js` | Placeholder page for personal finance tracking, plus a sidebar watchlist (Bitcoin, gold, WTI crude, S&P 500). |
+| `/finance/api/prices` | JSON | — | Watchlist quotes, proxied server-side from Stooq's free CSV endpoint (`backend/finance_prices.py`) to avoid browser CORS issues. `change_pct` is today's close-vs-open %, not vs. previous close. 502 if Stooq is unreachable. |
 | `/new` | — | — | 302 redirect to `/tasks/new`. |
 | `/tasks.json` | `sections.json` + `tasks.json` + `tags.json`, joined | — | `no-store` cache headers. Every task-tracker page above fetches this client-side to render. |
 
