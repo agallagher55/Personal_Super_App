@@ -529,7 +529,7 @@
     "status": "in-progress",
     "done": false,
     "created": "2026-08-17T17:34:43Z",
-    "modified": "2026-08-24T12:37:48Z",
+    "modified": "2026-08-24T12:53:43Z",
     "completed": "",
     "priority": "medium",
     "ticket_number": "TASK0330408",
@@ -540,9 +540,9 @@
     "related_files": "",
     "parent_id": "",
     "work_type": "new-feature",
-    "env_dev": false,
-    "env_qa": false,
-    "env_prod": false,
+    "env_dev": true,
+    "env_qa": true,
+    "env_prod": true,
     "cmdb_updated": false
   },
   {
