@@ -6,7 +6,10 @@
 // whatever /finance/api/prices returns, in that order.
 const PRICES_URL = "/finance/api/prices";
 
-function formatPrice(value) {
+function formatPrice(value, unit) {
+  if (unit === "percent") {
+    return `${value.toFixed(2)}%`;
+  }
   return value.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
@@ -70,7 +73,7 @@ function renderPrices(bar, prices) {
 
     item.innerHTML = `
       <div class="ticker-label">${quote.label}</div>
-      <div class="ticker-price">${formatPrice(quote.price)}</div>
+      <div class="ticker-price">${formatPrice(quote.price, quote.unit)}</div>
       <div class="ticker-change ${direction}">${arrow} ${formatChange(change)}</div>
     `;
     bar.appendChild(item);
