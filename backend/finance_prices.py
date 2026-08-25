@@ -22,18 +22,22 @@ import urllib.request
 
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d"
 
+# Bank of Canada's Valet API - free, keyless, official. Used for the Canada
+# 5Y yield instead of Yahoo: Yahoo has no working symbol for it (Reuters RIC
+# style tickers like "CA5YT=RR" 404 against Yahoo's chart endpoint - that
+# naming convention only round-trips for a handful of markets Yahoo covers).
+BOC_URL = "https://www.bankofcanada.ca/valet/observations/{series}/json?recent=2"
+
 WATCHLIST = (
     {"symbol": "BTC-USD", "label": "Bitcoin USD"},
     {"symbol": "GC=F", "label": "Gold"},
     {"symbol": "CL=F", "label": "WTI Crude Oil"},
     {"symbol": "^GSPC", "label": "S&P 500"},
-    # Yahoo/Reuters bond-yield quotes. CBOE's ^TNX/^TYX (and ^FVX/^IRX) are
-    # reported at 10x the actual yield - e.g. a quote of 42.80 means 4.28% -
-    # so those need `scale: 10` to display the real percentage. Reuters RIC
-    # yields like CA5YT=RR already report the true percentage (scale 1).
-    {"symbol": "CA5YT=RR", "label": "Canada 5Y Yield", "unit": "percent", "scale": 1},
-    {"symbol": "^TNX", "label": "US 10Y Yield", "unit": "percent", "scale": 10},
-    {"symbol": "^TYX", "label": "US 30Y Yield", "unit": "percent", "scale": 10},
+    # ^TNX/^TYX's regularMarketPrice is already the actual yield percentage
+    # (e.g. 4.65 means 4.65%), not scaled - no adjustment needed.
+    {"symbol": "^TNX", "label": "US 10Y Yield", "unit": "percent"},
+    {"symbol": "^TYX", "label": "US 30Y Yield", "unit": "percent"},
+    {"symbol": "BD.CDN.5YR.DQ.YLD", "label": "Canada 5Y Yield", "unit": "percent", "source": "boc"},
 )
 
 
@@ -47,17 +51,35 @@ def _empty_quote(ticker):
     }
 
 
-def _fetch_one(ticker):
+def _fetch_yahoo(ticker):
     url = CHART_URL.format(symbol=urllib.parse.quote(ticker["symbol"], safe=""))
     request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(request, timeout=8) as response:
+        data = json.load(response)
+    meta = data["chart"]["result"][0]["meta"]
+    price = meta["regularMarketPrice"]
+    previous_close = meta.get("chartPreviousClose") or meta.get("previousClose")
+    return price, previous_close
+
+
+def _fetch_boc(ticker):
+    url = BOC_URL.format(series=urllib.parse.quote(ticker["symbol"], safe=""))
+    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(request, timeout=8) as response:
+        data = json.load(response)
+    observations = data["observations"]
+    values = [float(obs[ticker["symbol"]]["v"]) for obs in observations]
+    price = values[-1]
+    previous_close = values[-2] if len(values) > 1 else None
+    return price, previous_close
+
+
+def _fetch_one(ticker):
     try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            data = json.load(response)
-        meta = data["chart"]["result"][0]["meta"]
-        scale = ticker.get("scale", 1)
-        price = meta["regularMarketPrice"] / scale
-        previous_close = meta.get("chartPreviousClose") or meta.get("previousClose")
-        previous_close = previous_close / scale if previous_close else None
+        if ticker.get("source") == "boc":
+            price, previous_close = _fetch_boc(ticker)
+        else:
+            price, previous_close = _fetch_yahoo(ticker)
         change_pct = ((price - previous_close) / previous_close * 100) if previous_close else 0.0
         return {
             "symbol": ticker["symbol"],
