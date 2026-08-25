@@ -27,11 +27,24 @@ WATCHLIST = (
     {"symbol": "GC=F", "label": "Gold"},
     {"symbol": "CL=F", "label": "WTI Crude Oil"},
     {"symbol": "^GSPC", "label": "S&P 500"},
+    # Yahoo/Reuters bond-yield quotes. CBOE's ^TNX/^TYX (and ^FVX/^IRX) are
+    # reported at 10x the actual yield - e.g. a quote of 42.80 means 4.28% -
+    # so those need `scale: 10` to display the real percentage. Reuters RIC
+    # yields like CA5YT=RR already report the true percentage (scale 1).
+    {"symbol": "CA5YT=RR", "label": "Canada 5Y Yield", "unit": "percent", "scale": 1},
+    {"symbol": "^TNX", "label": "US 10Y Yield", "unit": "percent", "scale": 10},
+    {"symbol": "^TYX", "label": "US 30Y Yield", "unit": "percent", "scale": 10},
 )
 
 
 def _empty_quote(ticker):
-    return {"symbol": ticker["symbol"], "label": ticker["label"], "price": None, "change_pct": None}
+    return {
+        "symbol": ticker["symbol"],
+        "label": ticker["label"],
+        "price": None,
+        "change_pct": None,
+        "unit": ticker.get("unit", "usd"),
+    }
 
 
 def _fetch_one(ticker):
@@ -41,10 +54,18 @@ def _fetch_one(ticker):
         with urllib.request.urlopen(request, timeout=8) as response:
             data = json.load(response)
         meta = data["chart"]["result"][0]["meta"]
-        price = meta["regularMarketPrice"]
+        scale = ticker.get("scale", 1)
+        price = meta["regularMarketPrice"] / scale
         previous_close = meta.get("chartPreviousClose") or meta.get("previousClose")
+        previous_close = previous_close / scale if previous_close else None
         change_pct = ((price - previous_close) / previous_close * 100) if previous_close else 0.0
-        return {"symbol": ticker["symbol"], "label": ticker["label"], "price": price, "change_pct": change_pct}
+        return {
+            "symbol": ticker["symbol"],
+            "label": ticker["label"],
+            "price": price,
+            "change_pct": change_pct,
+            "unit": ticker.get("unit", "usd"),
+        }
     except Exception:
         # Logged server-side (stderr) rather than exposed to the client -
         # print so it shows up in the terminal running backend/server.py,
