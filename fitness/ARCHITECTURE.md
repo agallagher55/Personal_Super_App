@@ -32,8 +32,8 @@ flowchart LR
         end
     end
 
-    subgraph Disk [data/ - git-ignored, Render persistent disk]
-        CFGFILE[(backend/fitness/config.json<br/>OAuth creds + tokens)]
+    subgraph Disk [data/fitness/ - git-ignored, Render persistent disk]
+        CFGFILE[(data/fitness/config.json<br/>OAuth creds + tokens)]
         DATAFILE[(data/fitness/health_data.json<br/>raw data points)]
     end
 
@@ -100,13 +100,20 @@ resolved location changed (see §3).
 
 ## 3. Storage
 
-Two files, both git-ignored (see root `.gitignore`), both now under this
-app's existing `data/`/`backend/` conventions instead of `personal_health`'s
-own top-level `backend/`:
+Two files, both git-ignored (see root `.gitignore`), both under
+`data/fitness/` so both are covered by `render.yaml`'s persistent disk mount
+over `data/` — anything living outside that mount (e.g. `backend/fitness/`,
+where the code sits) is on the app's ephemeral filesystem and is wiped on
+every redeploy or free-tier idle spin-down:
 
-- **`backend/fitness/config.json`** — OAuth client id/secret, access/refresh
+- **`data/fitness/config.json`** — OAuth client id/secret, access/refresh
   tokens. Whole-file read/write via `config.py`, no schema validation, never
-  committed (see `google_health.md`).
+  committed (see `google_health.md`). This one *used* to sit at
+  `backend/fitness/config.json`, outside the disk mount — losing the refresh
+  token on every restart, which surfaced as `POST /fitness/api/sync`
+  reliably 502ing (auth failing before sync.sync_all()'s per-metric error
+  handling even runs) while GET endpoints kept serving the still-persisted
+  `health_data.json` below. Moved under `data/fitness/` to fix that.
 - **`data/fitness/health_data.json`** — raw Google Health API points, grouped
   by metric name, plus `last_synced` per metric. Alongside this app's other
   `data/*.json` files (`sections.json`, `tasks.json`, `tags.json`) and
@@ -187,7 +194,7 @@ here, since none of the logic moved changed behavior:
 - No automated tests, no rate-limit/backoff handling against the Google
   Health API, no logging/observability beyond what's already silent in the
   original.
-- Secrets (`backend/fitness/config.json`) stored in plaintext, git-ignored
+- Secrets (`data/fitness/config.json`) stored in plaintext, git-ignored
   — acceptable for a single local user/personal Render deployment, same
   caveat as `finance/ARCHITECTURE.md` §6 raises for Plaid credentials.
 

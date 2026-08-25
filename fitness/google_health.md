@@ -80,7 +80,7 @@ starting point and follow the console's own prompts.
    sanity-check the setup via step 6 first.
 5. Once created, **download the credentials JSON** (or copy the **Client
    ID** and **Client Secret** shown). You'll paste these into
-   `backend/fitness/config.json` — **this file must never be committed**;
+   `data/fitness/config.json` — **this file must never be committed**;
    see step 7.
 
 ## 5. Pick the scopes we need
@@ -126,7 +126,7 @@ auth flow:
 the Playground succeeds but `python cli.py auth` (from
 `backend/fitness/`) gets blocked with `Error 400: invalid_request` /
 "doesn't comply with Google's OAuth 2.0 policy for keeping apps secure,"
-even after confirming `redirect_uri` in `backend/fitness/config.json`
+even after confirming `redirect_uri` in `data/fitness/config.json`
 matches an Authorized redirect URI in the Cloud Console
 character-for-character, check the *type* of that value, not just its
 text. It must be a plain JSON **string**:
@@ -150,16 +150,21 @@ browser and decode the `redirect_uri=` value — if it starts with `%5B%27`
 ## 7. Store credentials safely (local, git-ignored)
 
 - Save the OAuth Client ID/Secret (and later, the refresh token) in
-  `backend/fitness/config.json` — **not** in any committed doc/source file.
+  `data/fitness/config.json` — **not** in any committed doc/source file.
+  This lives under `data/` (not next to the code in `backend/fitness/`)
+  because that's the directory `render.yaml` mounts as a persistent disk —
+  put it anywhere else and a Render free-tier redeploy or idle spin-down
+  wipes the refresh token, breaking `Sync now` until you re-run
+  `cli.py auth`.
 - Already covered by the root `.gitignore`:
   ```
-  backend/fitness/config.json
+  data/fitness/config.json
   data/fitness/health_data.json
   ```
 - Keep `backend/fitness/config.json.example` as its own separate,
   always-placeholder file. Don't rename/move it into `config.json` when
   setting up real credentials — copy it instead
-  (`cp backend/fitness/config.json.example backend/fitness/config.json`)
+  (`mkdir -p data/fitness && cp backend/fitness/config.json.example data/fitness/config.json`)
   and edit the copy.
 - Never paste the Client Secret or a token into a chat, issue, commit
   message, or any doc.
@@ -175,7 +180,7 @@ browser and decode the `redirect_uri=` value — if it starts with `%5B%27`
 - [ ] Needed scopes chosen and added to the consent screen (step 5).
 - [ ] First token pulled successfully via the OAuth Playground codelab
       (step 6) — confirms everything above is correct.
-- [ ] Client ID/Secret saved to `backend/fitness/config.json` — never
+- [ ] Client ID/Secret saved to `data/fitness/config.json` — never
       committed.
 - [ ] `cd backend/fitness && python cli.py auth` completed successfully.
 

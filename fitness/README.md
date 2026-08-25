@@ -21,11 +21,14 @@ Google Cloud/OAuth setup required before syncing any real data.
 
 1. Follow [`google_health.md`](google_health.md) to create a Google Cloud
    project, OAuth client, and pick scopes.
-2. `cp backend/fitness/config.json.example backend/fitness/config.json` and
-   fill in `client_id`/`client_secret` from step 1. This file is
-   git-ignored — never commit it.
+2. `mkdir -p data/fitness && cp backend/fitness/config.json.example data/fitness/config.json`
+   and fill in `client_id`/`client_secret` from step 1. This file is
+   git-ignored — never commit it. It lives under `data/fitness/` rather
+   than next to the code so it's covered by the Render persistent disk
+   mount (see `ARCHITECTURE.md` §3) — outside it, a free-tier redeploy or
+   idle spin-down wipes the refresh token and silently breaks sync.
 3. From `backend/fitness/`, run `python cli.py auth` to run the OAuth flow
-   once and save tokens into `backend/fitness/config.json`. (This briefly
+   once and save tokens into `data/fitness/config.json`. (This briefly
    binds port 8000 for the OAuth redirect — don't run it while the main app
    server is also bound to that port.)
 4. Start the main app as usual (`python3 backend/server.py` from the repo
@@ -47,7 +50,7 @@ page/script are unchanged:
 | Backend entry point | `backend/cli.py serve` (its own `ThreadingHTTPServer`) | `backend/server.py` (this app's existing `TaskHandler`, extended) |
 | Backend modules | `backend/*.py`, flat imports | `backend/fitness/*.py`, same flat imports, own directory |
 | Query API base path | `/api/*` | `/fitness/api/*` |
-| Config | `backend/config.json` | `backend/fitness/config.json` |
+| Config | `backend/config.json` | `data/fitness/config.json` |
 | Data store | `backend/data/health_data.json` | `data/fitness/health_data.json` |
 | Frontend pages | `frontend/index.html`, `frontend/pages/*.html` | `html/fitness/index.html`, `html/fitness/pages/*.html` |
 | Frontend assets | `frontend/css/`, `frontend/js/` | `static/fitness/css/`, `static/fitness/js/` |

@@ -2,14 +2,15 @@
 
 Usage (run from backend/fitness/):
     python cli.py auth     Run the Google OAuth flow once and save tokens
-                            to config.json (see ../../fitness/google_health.md).
+                            to ../../data/fitness/config.json (see
+                            ../../fitness/google_health.md).
     python cli.py sync     Pull new data from the Google Health API into
                             data/fitness/health_data.json.
 
 Day-to-day serving happens through the main app (`python backend/server.py`
 from the repo root, or `python3 backend/server.py` per render.yaml) - this
 CLI only covers the one-time auth flow and manual/scheduled syncs. Note the
-default redirect_uri in config.json (http://localhost:8000/oauth/callback)
+default redirect_uri in data/fitness/config.json (http://localhost:8000/oauth/callback)
 binds port 8000 for the auth flow's one-off callback listener - don't run
 `cli.py auth` while the main app server is also bound to that port.
 """
