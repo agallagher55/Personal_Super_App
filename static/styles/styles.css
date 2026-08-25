@@ -706,12 +706,47 @@ a.num:hover {
   padding-right: 4px;
 }
 
+.task .desc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.task-toggle-arrow {
+  flex: 0 0 auto;
+  font-size: 9px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  transition: transform 0.15s ease;
+}
+
+.task.task-collapsed .task-toggle-arrow {
+  transform: rotate(-90deg);
+}
+
 .task .desc {
   font-family: var(--sans);
   font-weight: 600;
   font-size: 15.5px;
   line-height: 1.35;
   margin: 2px 0 6px;
+}
+
+.task-details {
+  overflow: hidden;
+}
+
+.task.task-collapsed .task-details {
+  display: none;
+}
+
+.task.task-collapsed .desc {
+  margin-bottom: 2px;
+}
+
+.task.task-collapsed .priority-select {
+  display: none;
 }
 
 .task .note {

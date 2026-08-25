@@ -65,6 +65,7 @@
       (status === 'in-progress' ? ' in-progress' : '') +
       (status === 'pending' ? ' pending' : '') +
       (status === 'cancelled' ? ' cancelled' : '');
+    li.className += ' task-collapsed';
     li.dataset.section = sectionId;
     li.dataset.taskId = taskData.id || '';
     li.dataset.status = status;
@@ -111,16 +112,34 @@
     var body = document.createElement('div');
     body.className = 'body';
 
+    var descRow = document.createElement('div');
+    descRow.className = 'desc-row';
+
+    var toggleArrow = document.createElement('span');
+    toggleArrow.className = 'task-toggle-arrow';
+    toggleArrow.innerHTML = '&#9660;';
+    toggleArrow.setAttribute('aria-hidden', 'true');
+
     var desc = document.createElement('div');
     desc.className = 'desc';
     desc.textContent = taskData.desc;
-    body.appendChild(desc);
+
+    descRow.appendChild(toggleArrow);
+    descRow.appendChild(desc);
+    descRow.addEventListener('click', function () {
+      li.classList.toggle('task-collapsed');
+    });
+    body.appendChild(descRow);
+
+    var details = document.createElement('div');
+    details.className = 'task-details';
+    body.appendChild(details);
 
     if (taskData.note) {
       var note = document.createElement('div');
       note.className = 'note';
       note.textContent = taskData.note;
-      body.appendChild(note);
+      details.appendChild(note);
     }
 
     var parentTask = taskData.parent_id ? taskById[taskData.parent_id] : null;
@@ -145,7 +164,7 @@
         pill.textContent = entry.label + value;
         fields.appendChild(pill);
       });
-      body.appendChild(fields);
+      details.appendChild(fields);
     }
 
     var quickFields = document.createElement('div');
@@ -179,7 +198,7 @@
 
     quickFields.appendChild(dueField);
     quickFields.appendChild(estimateField);
-    body.appendChild(quickFields);
+    details.appendChild(quickFields);
 
     var isWorkTask = sectionId === WORK_SECTION_ID;
     if (isWorkTask && taskData.work_type && WORK_TYPE_LABELS[taskData.work_type]) {
@@ -189,7 +208,7 @@
       workTypePill.className = 'field-pill field-pill-worktype';
       workTypePill.textContent = WORK_TYPE_LABELS[taskData.work_type];
       workTypeTags.appendChild(workTypePill);
-      body.appendChild(workTypeTags);
+      details.appendChild(workTypeTags);
 
       var envFields = document.createElement('div');
       envFields.className = 'task-env-fields';
@@ -223,7 +242,7 @@
         envFields.appendChild(cmdbField);
       }
 
-      body.appendChild(envFields);
+      details.appendChild(envFields);
     }
 
     if (taskData.tags && taskData.tags.length > 0) {
@@ -232,7 +251,7 @@
       taskData.tags.forEach(function (tag) {
         tags.appendChild(buildTag(tag));
       });
-      body.appendChild(tags);
+      details.appendChild(tags);
     }
 
     var meta = document.createElement('div');
@@ -247,19 +266,19 @@
       meta.textContent = metaText;
     }
     if (meta.textContent) {
-      body.appendChild(meta);
+      details.appendChild(meta);
     }
 
     var notesLabel = document.createElement('div');
     notesLabel.className = 'notes-label';
     notesLabel.textContent = 'Notes';
-    body.appendChild(notesLabel);
+    details.appendChild(notesLabel);
 
     var textarea = document.createElement('textarea');
     textarea.placeholder = 'Add notes...';
     textarea.value = taskData.notes || '';
     textarea.className = 'notes-input';
-    body.appendChild(textarea);
+    details.appendChild(textarea);
 
     var deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
