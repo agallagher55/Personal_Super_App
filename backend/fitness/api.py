@@ -12,6 +12,7 @@ Ported from the standalone personal_health app's backend/server.py; the
 reshaping logic itself is unchanged, only the HTTP glue was extracted out.
 """
 
+import functools
 from datetime import date, datetime, timedelta
 
 import store
@@ -116,18 +117,34 @@ def _parse_duration_seconds(value):
 # Per-metric reshaping: raw store points -> API-CONTRACT.md shapes
 # ---------------------------------------------------------------------------
 
+def _point_date_steps(p):
+    return _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(p.get("civilEndTime"))
+
+
 def _reshape_steps(points):
     """dailyRollUp points are flat: civilStartTime/civilEndTime are
     {"date": {year, month, day}, "time": {}} and the count lives at
     steps.countSum."""
     totals = {}
     for p in points:
-        d = _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(p.get("civilEndTime"))
+        d = _point_date_steps(p)
         count = _to_number((p.get("steps") or {}).get("countSum"))
         if d is None or count is None:
             continue
         totals[d] = totals.get(d, 0) + count
     return [{"date": d, "value": v} for d, v in sorted(totals.items())]
+
+
+def _point_date_heart_rate(p):
+    heart_rate = p.get("heartRate")
+    if not isinstance(heart_rate, dict):
+        return None
+    sample_time = heart_rate.get("sampleTime")
+    if not isinstance(sample_time, dict):
+        return None
+    return _civil_value_to_date(sample_time.get("civilTime")) or _local_date_from_utc(
+        sample_time.get("physicalTime"), sample_time.get("utcOffset")
+    )
 
 
 def _reshape_heart_rate(points):
@@ -142,17 +159,24 @@ def _reshape_heart_rate(points):
         heart_rate = p.get("heartRate")
         if not isinstance(heart_rate, dict):
             continue
-        sample_time = heart_rate.get("sampleTime")
-        if not isinstance(sample_time, dict):
-            continue
-        d = _civil_value_to_date(sample_time.get("civilTime")) or _local_date_from_utc(
-            sample_time.get("physicalTime"), sample_time.get("utcOffset")
-        )
+        d = _point_date_heart_rate(p)
         bpm = _to_number(heart_rate.get("beatsPerMinute"))
         if d is None or bpm is None:
             continue
         by_date.setdefault(d, []).append(bpm)
     return [{"date": d, "resting": min(values)} for d, values in sorted(by_date.items())]
+
+
+def _point_date_sleep(p):
+    sleep = p.get("sleep")
+    if not isinstance(sleep, dict):
+        return None
+    interval = sleep.get("interval")
+    if not isinstance(interval, dict):
+        return None
+    return _local_date_from_utc(interval.get("endTime"), interval.get("endUtcOffset")) or _local_date_from_utc(
+        interval.get("startTime"), interval.get("startUtcOffset")
+    )
 
 
 def _reshape_sleep(points):
@@ -168,12 +192,7 @@ def _reshape_sleep(points):
         sleep = p.get("sleep")
         if not isinstance(sleep, dict):
             continue
-        interval = sleep.get("interval")
-        if not isinstance(interval, dict):
-            continue
-        d = _local_date_from_utc(interval.get("endTime"), interval.get("endUtcOffset")) or _local_date_from_utc(
-            interval.get("startTime"), interval.get("startUtcOffset")
-        )
+        d = _point_date_sleep(p)
         if d is None:
             continue
         summary = sleep.get("summary") or {}
@@ -219,6 +238,18 @@ def _fill_missing_endpoint(start_time, end_time, duration_seconds):
     return start_time, end_time
 
 
+def _point_date_activity(p):
+    exercise = p.get("exercise")
+    if not isinstance(exercise, dict):
+        return None
+    interval = exercise.get("interval")
+    if not isinstance(interval, dict):
+        return None
+    return _local_date_from_utc(interval.get("startTime"), interval.get("startUtcOffset")) or _local_date_from_utc(
+        interval.get("endTime"), interval.get("endUtcOffset")
+    )
+
+
 def _reshape_activity(points):
     """Fields live under exercise.interval (paired with
     exercise.interval.startUtcOffset/endUtcOffset - see
@@ -239,9 +270,7 @@ def _reshape_activity(points):
         interval = exercise.get("interval")
         if not isinstance(interval, dict):
             continue
-        d = _local_date_from_utc(interval.get("startTime"), interval.get("startUtcOffset")) or _local_date_from_utc(
-            interval.get("endTime"), interval.get("endUtcOffset")
-        )
+        d = _point_date_activity(p)
         if d is None:
             continue
         metrics_summary = exercise.get("metricsSummary") or {}
@@ -274,6 +303,18 @@ def _reshape_activity(points):
     return [{"date": d, "exercises": ex} for d, ex in sorted(by_date.items())]
 
 
+def _point_date_sample(nested_key, p):
+    payload = p.get(nested_key)
+    if not isinstance(payload, dict):
+        return None
+    sample_time = payload.get("sampleTime")
+    if not isinstance(sample_time, dict):
+        return None
+    return _civil_value_to_date(sample_time.get("civilTime")) or _local_date_from_utc(
+        sample_time.get("physicalTime"), sample_time.get("utcOffset")
+    )
+
+
 def _reshape_sample_series(points, nested_key, value_keys):
     """Shared extraction for sample-based metrics whose payload nests under
     `nested_key` with a `sampleTime` (civilTime preferred, else physicalTime
@@ -286,12 +327,7 @@ def _reshape_sample_series(points, nested_key, value_keys):
         payload = p.get(nested_key)
         if not isinstance(payload, dict):
             continue
-        sample_time = payload.get("sampleTime")
-        if not isinstance(sample_time, dict):
-            continue
-        d = _civil_value_to_date(sample_time.get("civilTime")) or _local_date_from_utc(
-            sample_time.get("physicalTime"), sample_time.get("utcOffset")
-        )
+        d = _point_date_sample(nested_key, p)
         value = None
         for key in value_keys:
             if key in payload:
@@ -317,6 +353,13 @@ def _reshape_hrv(points):
     return [{"date": d, "value": round(sum(v) / len(v), 1)} for d, v in sorted(by_date.items())]
 
 
+def _point_date_temperature(p):
+    payload = p.get("dailySleepTemperatureDerivations")
+    if not isinstance(payload, dict):
+        return None
+    return _civil_value_to_date(payload)
+
+
 def _reshape_temperature(points):
     """The night's absolute reading (nightlyTemperatureCelsius) and the
     personal baseline it's compared against (baselineTemperatureCelsius) are
@@ -329,7 +372,7 @@ def _reshape_temperature(points):
             continue
         nightly = _to_number(payload.get("nightlyTemperatureCelsius"))
         baseline = _to_number(payload.get("baselineTemperatureCelsius"))
-        d = _civil_value_to_date(payload)
+        d = _point_date_temperature(p)
         if d is None or nightly is None or baseline is None:
             continue
         by_date.setdefault(d, []).append(nightly - baseline)
@@ -348,26 +391,33 @@ def _reshape_weight(points):
     return [{"date": d, "value": to_kg(v[-1])} for d, v in sorted(by_date.items())]
 
 
+def _point_date_breathing_rate(p):
+    payload = p.get("dailyRespiratoryRate")
+    d = None
+    if isinstance(payload, dict):
+        d = _civil_value_to_date(payload)
+        if d is None:
+            sample_time = payload.get("sampleTime")
+            if isinstance(sample_time, dict):
+                d = _civil_value_to_date(sample_time.get("civilTime")) or _local_date_from_utc(
+                    sample_time.get("physicalTime"), sample_time.get("utcOffset")
+                )
+    if d is None:
+        d = _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(p.get("civilEndTime"))
+    return d
+
+
 def _reshape_breathing_rate(points):
     by_date = {}
     for p in points:
         payload = p.get("dailyRespiratoryRate")
         value = None
-        d = None
         if isinstance(payload, dict):
             for key in ("breathsPerMinute", "value", "rate"):
                 if key in payload:
                     value = _to_number(payload[key])
                     break
-            d = _civil_value_to_date(payload)
-            if d is None:
-                sample_time = payload.get("sampleTime")
-                if isinstance(sample_time, dict):
-                    d = _civil_value_to_date(sample_time.get("civilTime")) or _local_date_from_utc(
-                        sample_time.get("physicalTime"), sample_time.get("utcOffset")
-                    )
-        if d is None:
-            d = _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(p.get("civilEndTime"))
+        d = _point_date_breathing_rate(p)
         if d is None or value is None:
             continue
         by_date.setdefault(d, []).append(value)
@@ -405,9 +455,34 @@ _RESHAPERS = {
     "weight": _reshape_weight,
 }
 
+# Per-point date extractors, one per metric, each reusing the exact same
+# field-lookup logic as that metric's reshaper (see the _point_date_*
+# functions above, called from within their reshapers too - not a
+# reimplementation). Used by _metric_records() to discard out-of-range raw
+# points before they hit the reshapers below, instead of after: sample-based
+# metrics (heart_rate above all - see sync.py/store.py, points accumulate
+# forever and are never pruned) can carry years of samples in the store, and
+# reshaping every one of them on every request just to throw most away at
+# the end made the dashboard's default 7-day view scale with total lifetime
+# history instead of the requested range.
+_POINT_DATE_EXTRACTORS = {
+    "steps": _point_date_steps,
+    "heart_rate": _point_date_heart_rate,
+    "sleep": _point_date_sleep,
+    "activity": _point_date_activity,
+    "spo2": functools.partial(_point_date_sample, "oxygenSaturation"),
+    "hrv": functools.partial(_point_date_sample, "heartRateVariability"),
+    "breathing_rate": _point_date_breathing_rate,
+    "temperature": _point_date_temperature,
+    "weight": functools.partial(_point_date_sample, "weight"),
+}
+
 
 def _metric_records(data_store, metric, from_d, to_d):
     raw_points = data_store.get("metrics", {}).get(metric, [])
+    date_of = _POINT_DATE_EXTRACTORS.get(metric)
+    if date_of is not None:
+        raw_points = [p for p in raw_points if _in_range(date_of(p), from_d, to_d)]
     try:
         records = _RESHAPERS[metric](raw_points)
     except Exception:
