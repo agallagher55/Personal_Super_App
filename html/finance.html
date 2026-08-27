@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/static/styles/styles.css">
 <link rel="stylesheet" href="/static/styles/nav.css">
 <link rel="stylesheet" href="/static/finance/css/ticker.css">
+<link rel="stylesheet" href="/static/finance/css/dashboard.css">
 <script>
   (function () {
     var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -19,12 +20,93 @@
   <div id="site-nav"></div>
   <script src="/static/js/nav.js"></script>
   <div class="page page-finance">
-    <div class="sheet toc-sheet">
+    <div class="sheet finance-sheet">
       <header>
         <div class="title">Finance</div>
+        <div class="meta">Net worth dashboard</div>
       </header>
 
-      <p class="coming-soon">Finance tracking is coming soon.</p>
+      <p class="fin-banner" id="fin-sample-note"></p>
+
+      <div class="fin-stat-row">
+        <div class="fin-stat">
+          <div class="fin-stat-label">Net Worth</div>
+          <div class="fin-stat-value" id="fin-stat-net-worth">&middot;&middot;&middot;</div>
+        </div>
+        <div class="fin-stat">
+          <div class="fin-stat-label">Total Assets</div>
+          <div class="fin-stat-value" id="fin-stat-assets">&middot;&middot;&middot;</div>
+        </div>
+        <div class="fin-stat">
+          <div class="fin-stat-label">Total Debt</div>
+          <div class="fin-stat-value" id="fin-stat-debt">&middot;&middot;&middot;</div>
+        </div>
+      </div>
+
+      <div class="fin-overview">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Asset Allocation</div>
+          <div class="donut-card-body">
+            <div class="donut-wrap">
+              <div id="fin-donut"></div>
+              <div class="donut-center">
+                <span class="donut-center-label">Assets</span>
+                <span class="donut-center-value" id="fin-donut-center-value">&middot;&middot;&middot;</span>
+              </div>
+            </div>
+            <div class="fin-legend" id="fin-allocation-legend"></div>
+          </div>
+        </div>
+
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Net Worth Over Time</div>
+          <div class="fin-chart-wrap">
+            <canvas class="fin-networth-canvas" id="fin-networth-canvas"></canvas>
+            <div class="fin-tooltip" id="fin-networth-tooltip"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Cash</span>
+          <span class="fin-section-total" id="fin-cash-total">&middot;&middot;&middot;</span>
+        </div>
+        <div class="fin-rows" id="fin-cash-rows"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Investments</span>
+          <span class="fin-section-total" id="fin-investments-total">&middot;&middot;&middot;</span>
+        </div>
+        <div id="fin-investment-accounts"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Bitcoin</span>
+          <span class="section-count" id="fin-bitcoin-btc-total"></span>
+          <span class="fin-section-total" id="fin-bitcoin-total">&middot;&middot;&middot;</span>
+        </div>
+        <div class="fin-rows" id="fin-bitcoin-rows"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Debt</span>
+          <span class="fin-section-total" id="fin-debt-total">&middot;&middot;&middot;</span>
+        </div>
+        <div class="fin-rows" id="fin-debt-rows"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Lines of Credit Available</span>
+          <span class="fin-section-total" id="fin-loc-limit-total">&middot;&middot;&middot;</span>
+        </div>
+        <div id="fin-loc-rows"></div>
+      </div>
     </div>
 
     <aside class="ticker-panel">
@@ -42,7 +124,9 @@
   <script src="/static/js/theme.js"></script>
   <script type="module">
     import { initTickerBar } from "/static/finance/js/ticker.js";
+    import { initFinanceDashboard } from "/static/finance/js/dashboard.js";
     initTickerBar();
+    initFinanceDashboard();
   </script>
 </body>
 </html>
