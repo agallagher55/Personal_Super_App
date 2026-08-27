@@ -12,29 +12,29 @@
       "accountType": "TFSA",
       "institution": "Wealthsimple",
       "holdings": [
-        { "symbol": "VEQT", "name": "Vanguard All-Equity ETF", "value": 4944.0 },
-        { "symbol": "AAPL", "name": "Apple Inc.", "value": 2275.0 }
+        { "symbol": "VEQT", "name": "Vanguard All-Equity ETF", "shares": 120, "price": 41.2 },
+        { "symbol": "AAPL", "name": "Apple Inc.", "shares": 10, "price": 227.5 }
       ]
     },
     {
       "accountType": "RRSP",
       "institution": "Wealthsimple",
       "holdings": [
-        { "symbol": "VFV", "name": "Vanguard S&P 500 ETF", "value": 8718.0 },
-        { "symbol": "XGRO", "name": "iShares Core Growth ETF", "value": 1405.0 }
+        { "symbol": "VFV", "name": "Vanguard S&P 500 ETF", "shares": 60, "price": 145.3 },
+        { "symbol": "XGRO", "name": "iShares Core Growth ETF", "shares": 50, "price": 28.1 }
       ]
     },
     {
       "accountType": "FHSA",
       "institution": "Wealthsimple",
-      "holdings": [{ "symbol": "VEQT", "name": "Vanguard All-Equity ETF", "value": 1236.0 }]
+      "holdings": [{ "symbol": "VEQT", "name": "Vanguard All-Equity ETF", "shares": 30, "price": 41.2 }]
     },
     {
       "accountType": "Non-Registered",
       "institution": "Wealthsimple",
       "holdings": [
-        { "symbol": "SHOP", "name": "Shopify Inc.", "value": 1653.75 },
-        { "symbol": "TD", "name": "TD Bank", "value": 1682.0 }
+        { "symbol": "SHOP", "name": "Shopify Inc.", "shares": 15, "price": 110.25 },
+        { "symbol": "TD", "name": "TD Bank", "shares": 20, "price": 84.1 }
       ]
     }
   ],

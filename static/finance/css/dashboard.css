@@ -6,6 +6,16 @@
   --invest-2: oklch(60% 0.14 145);
   --invest-3: oklch(46% 0.13 145);
   --invest-4: oklch(34% 0.1 145);
+
+  /* Per-symbol identity colors for individual stocks/ETFs - a fixed,
+     unrelated hue family so a ticker's color is never mistaken for an
+     asset class (--status-blue etc.) or account type (--invest-*). */
+  --stock-1: oklch(58% 0.14 300);
+  --stock-2: oklch(58% 0.14 200);
+  --stock-3: oklch(58% 0.16 340);
+  --stock-4: oklch(58% 0.13 115);
+  --stock-5: oklch(62% 0.15 60);
+  --stock-6: oklch(58% 0.15 5);
 }
 
 :root[data-theme="dark"] {
@@ -13,6 +23,13 @@
   --invest-2: oklch(70% 0.14 145);
   --invest-3: oklch(56% 0.13 145);
   --invest-4: oklch(44% 0.11 145);
+
+  --stock-1: oklch(70% 0.12 300);
+  --stock-2: oklch(70% 0.12 200);
+  --stock-3: oklch(70% 0.14 340);
+  --stock-4: oklch(70% 0.12 115);
+  --stock-5: oklch(74% 0.14 60);
+  --stock-6: oklch(70% 0.14 5);
 }
 
 /* The finance page fills the full page width (fixed-width watchlist aside
@@ -83,14 +100,17 @@
   }
 }
 
-/* --- Overview: allocation donut, investment-breakdown donut, net-worth line --- */
+/* --- Overview: 3 donuts in one row, net-worth trend line below --- */
 
-.fin-overview {
+.fin-donut-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.4fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
+  margin-bottom: 16px;
+}
+
+.fin-chart-row {
   margin-bottom: 8px;
-  align-items: stretch;
 }
 
 .fin-overview-card {
@@ -110,23 +130,15 @@
   margin-bottom: 14px;
 }
 
-@media (max-width: 1000px) {
-  .fin-overview {
+@media (max-width: 900px) {
+  .fin-donut-row {
     grid-template-columns: 1fr 1fr;
-  }
-
-  .fin-overview-card-wide {
-    grid-column: 1 / -1;
   }
 }
 
-@media (max-width: 640px) {
-  .fin-overview {
+@media (max-width: 560px) {
+  .fin-donut-row {
     grid-template-columns: 1fr;
-  }
-
-  .fin-overview-card-wide {
-    grid-column: auto;
   }
 }
 
@@ -224,6 +236,44 @@
   color: var(--ink);
   min-width: 44px;
   text-align: right;
+}
+
+.fin-legend-row-compact {
+  font-size: 11.5px;
+}
+
+.fin-legend-row-compact .fin-legend-pct {
+  min-width: 36px;
+}
+
+/* --- Per-account holdings donut (inside each investment account card) --- */
+
+.fin-account-donut-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.fin-mini-donut-wrap {
+  flex: 0 0 64px;
+  width: 64px;
+  height: 64px;
+}
+
+.fin-mini-donut-wrap .donut-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.fin-mini-legend {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .fin-chart-wrap {

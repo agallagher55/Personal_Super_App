@@ -6,6 +6,7 @@
 import { drawNetWorthChart, drawDonut } from "./charts.js";
 
 const DASHBOARD_DATA_URL = "/data/finance-dashboard.json";
+const STOCK_COLOR_SLOTS = 6; // matches --stock-1..--stock-6 in dashboard.css
 
 function sum(items, get) {
   return items.reduce((total, item) => total + get(item), 0);
@@ -31,10 +32,22 @@ function el(tag, className, html) {
   return node;
 }
 
+// A stable symbol -> color mapping (alphabetical, not by current value) so
+// a given stock/ETF keeps the same identity color everywhere on the page -
+// in its account's mini donut, the aggregate "by stock" donut, and its own
+// row's bar - and doesn't get repainted if holdings values shift the sort
+// order later (see dataviz skill: "color follows the entity, never rank").
+function buildSymbolColors(investmentAccounts) {
+  const symbols = [...new Set(investmentAccounts.flatMap((acc) => acc.holdings.map((h) => h.symbol)))].sort();
+  const colors = new Map();
+  symbols.forEach((symbol, i) => colors.set(symbol, `--stock-${(i % STOCK_COLOR_SLOTS) + 1}`));
+  return colors;
+}
+
 // One row: label, dollar amount, and a bar showing what % of `total` this
 // row makes up. Shared by every section - cash accounts, holdings, debt
 // lines, and lines of credit all render through this.
-function renderRow(container, { label, sublabel, value, total, colorVar }) {
+function renderRow(container, { label, sublabel, value, total, colorVar, meta }) {
   const row = el("div", "fin-row");
   const percent = pct(value, total);
   row.innerHTML = `
@@ -45,7 +58,7 @@ function renderRow(container, { label, sublabel, value, total, colorVar }) {
     <div class="fin-row-bar-track">
       <div class="fin-row-bar-fill" style="width:${percent.toFixed(1)}%; background:var(${colorVar})"></div>
     </div>
-    <div class="fin-row-pct">${total > 0 ? percent.toFixed(1) : "0.0"}% of section total</div>
+    <div class="fin-row-pct">${total > 0 ? percent.toFixed(1) : "0.0"}% of section total${meta ? ` &middot; ${meta}` : ""}</div>
   `;
   container.appendChild(row);
 }
@@ -70,10 +83,22 @@ function renderCash(cashAccounts, cashTotal) {
   renderSectionTotal("fin-cash-total", cashTotal);
 }
 
-function renderInvestments(investmentAccountTotals, investmentsTotal) {
+// Renders one investment account's holdings breakdown - a small donut (only
+// when there's more than one holding; a single-holding "distribution" is
+// trivially 100%, no chart needed) plus a compact legend, both sharing the
+// same fixed per-symbol colors as the row bars below and the aggregate
+// "Portfolio by Stock/ETF" donut.
+function renderAccountDonut(account, accIndex, symbolColors) {
+  if (account.holdings.length <= 1) return;
+  const slices = account.holdings.map((h) => ({ label: h.symbol, value: h.value, colorVar: symbolColors.get(h.symbol) }));
+  drawDonut(document.getElementById(`fin-account-donut-${accIndex}`), slices);
+  renderLegend(`fin-account-legend-${accIndex}`, slices, account.total, { compact: true });
+}
+
+function renderInvestments(investmentAccountTotals, investmentsTotal, symbolColors) {
   const container = document.getElementById("fin-investment-accounts");
   container.innerHTML = "";
-  for (const account of investmentAccountTotals) {
+  investmentAccountTotals.forEach((account, accIndex) => {
     const card = el(
       "div",
       "fin-account-card",
@@ -86,6 +111,18 @@ function renderInvestments(investmentAccountTotals, investmentsTotal) {
       </div>
     `
     );
+
+    if (account.holdings.length > 1) {
+      const donutRow = el("div", "fin-account-donut-row");
+      const donutWrap = el("div", "fin-mini-donut-wrap");
+      donutWrap.id = `fin-account-donut-${accIndex}`;
+      const legend = el("div", "fin-mini-legend");
+      legend.id = `fin-account-legend-${accIndex}`;
+      donutRow.appendChild(donutWrap);
+      donutRow.appendChild(legend);
+      card.appendChild(donutRow);
+    }
+
     const holdingsList = el("div", "fin-rows");
     for (const holding of account.holdings) {
       renderRow(holdingsList, {
@@ -93,12 +130,15 @@ function renderInvestments(investmentAccountTotals, investmentsTotal) {
         sublabel: holding.name,
         value: holding.value,
         total: account.total,
-        colorVar: "--status-green",
+        colorVar: symbolColors.get(holding.symbol),
+        meta: `${holding.shares.toLocaleString()} sh @ ${cad(holding.price)}`,
       });
     }
     card.appendChild(holdingsList);
     container.appendChild(card);
-  }
+
+    renderAccountDonut(account, accIndex, symbolColors);
+  });
   renderSectionTotal("fin-investments-total", investmentsTotal);
 }
 
@@ -180,18 +220,20 @@ function renderLinesOfCredit(linesOfCredit) {
   renderSectionTotal("fin-loc-limit-total", limitTotal);
 }
 
-function renderLegend(containerId, slices, total) {
+function renderLegend(containerId, slices, total, { compact = false } = {}) {
   const container = document.getElementById(containerId);
+  if (!container) return;
   container.innerHTML = "";
   for (const slice of slices) {
     if (!(slice.value > 0)) continue;
+    const valueHtml = compact ? "" : `<span class="fin-legend-value">${cad(slice.value, { cents: false })}</span>`;
     const row = el(
       "div",
-      "fin-legend-row",
+      compact ? "fin-legend-row fin-legend-row-compact" : "fin-legend-row",
       `
       <span class="fin-legend-swatch" style="background:var(${slice.colorVar})"></span>
       <span class="fin-legend-label">${slice.label}</span>
-      <span class="fin-legend-value">${cad(slice.value, { cents: false })}</span>
+      ${valueHtml}
       <span class="fin-legend-pct">${pct(slice.value, total).toFixed(1)}%</span>
     `
     );
@@ -230,6 +272,21 @@ async function loadDashboardData() {
   return res.json();
 }
 
+// Merges same-symbol holdings across every account (e.g. VEQT held in both
+// a TFSA and an FHSA) into one total per symbol, for the "what % of the
+// overall investment amount does each stock/ETF make up" donut.
+function buildStockAggregate(investmentAccountTotals) {
+  const totals = new Map();
+  for (const account of investmentAccountTotals) {
+    for (const holding of account.holdings) {
+      const existing = totals.get(holding.symbol);
+      if (existing) existing.value += holding.value;
+      else totals.set(holding.symbol, { symbol: holding.symbol, name: holding.name, value: holding.value });
+    }
+  }
+  return [...totals.values()].sort((a, b) => b.value - a.value);
+}
+
 export async function initFinanceDashboard() {
   const noteEl = document.getElementById("fin-sample-note");
   makeSectionsCollapsible();
@@ -250,11 +307,16 @@ export async function initFinanceDashboard() {
   if (noteEl) noteEl.textContent = data.note || "";
 
   const cashTotal = sum(cashAccounts, (a) => a.balance);
-  const investmentAccountTotals = investmentAccounts.map((acc) => ({
-    ...acc,
-    total: sum(acc.holdings, (h) => h.value),
-  }));
+
+  const symbolColors = buildSymbolColors(investmentAccounts);
+  const investmentAccountTotals = investmentAccounts.map((acc) => {
+    const holdings = acc.holdings
+      .map((h) => ({ ...h, value: h.shares * h.price }))
+      .sort((a, b) => b.value - a.value); // largest holding first, within each account
+    return { ...acc, holdings, total: sum(holdings, (h) => h.value) };
+  });
   const investmentsTotal = sum(investmentAccountTotals, (acc) => acc.total);
+
   const bitcoinTotal = sum(bitcoinHoldings, (b) => b.valueCad);
   const totalBtc = sum(bitcoinHoldings, (b) => b.btc);
 
@@ -290,10 +352,19 @@ export async function initFinanceDashboard() {
   const investDonutCenter = document.getElementById("fin-investment-donut-center-value");
   if (investDonutCenter) investDonutCenter.textContent = cad(investmentsTotal, { cents: false });
 
+  // Aggregate, cross-account view: what % of the whole portfolio does each
+  // individual stock/ETF make up (merging e.g. VEQT held in two accounts).
+  const stockTotals = buildStockAggregate(investmentAccountTotals);
+  const stockSlices = stockTotals.map((s) => ({ label: s.symbol, value: s.value, colorVar: symbolColors.get(s.symbol) }));
+  drawDonut(document.getElementById("fin-stock-donut"), stockSlices);
+  renderLegend("fin-stock-legend", stockSlices, investmentsTotal);
+  const stockDonutCenter = document.getElementById("fin-stock-donut-center-value");
+  if (stockDonutCenter) stockDonutCenter.textContent = String(stockTotals.length);
+
   drawNetWorthChart(document.getElementById("fin-networth-canvas"), document.getElementById("fin-networth-tooltip"), netWorthHistory);
 
   renderCash(cashAccounts, cashTotal);
-  renderInvestments(investmentAccountTotals, investmentsTotal);
+  renderInvestments(investmentAccountTotals, investmentsTotal, symbolColors);
   renderBitcoin(bitcoinHoldings, bitcoinTotal, totalBtc);
   renderDebt(debt, linesOfCredit, debtTotal);
   renderLinesOfCredit(linesOfCredit);
