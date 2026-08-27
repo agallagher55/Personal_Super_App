@@ -92,7 +92,7 @@ function renderCash(cashAccounts, cashTotal) {
 function renderAccountDonut(account, accIndex, symbolColors) {
   if (account.holdings.length <= 1) return;
   const slices = account.holdings.map((h) => ({ label: h.symbol, value: h.value, colorVar: symbolColors.get(h.symbol) }));
-  drawDonut(document.getElementById(`fin-account-donut-${accIndex}`), slices);
+  drawDonut(document.getElementById(`fin-account-donut-${accIndex}`), slices, { label: `${account.accountType} holdings` });
   renderLegend(`fin-account-legend-${accIndex}`, slices, account.total, { compact: true });
 }
 
@@ -404,7 +404,7 @@ export async function initFinanceDashboard() {
     { label: "Investments", value: investmentsTotal, colorVar: "--status-green" },
     { label: "Bitcoin", value: bitcoinTotal, colorVar: "--flag" },
   ];
-  drawDonut(document.getElementById("fin-donut"), allocationSlices);
+  drawDonut(document.getElementById("fin-donut"), allocationSlices, { label: "Asset allocation" });
   renderLegend("fin-allocation-legend", allocationSlices, totalAssets);
 
   // A breakdown of the "Investments" slice above, one shade per account
@@ -415,7 +415,7 @@ export async function initFinanceDashboard() {
     value: acc.total,
     colorVar: `--invest-${i + 1}`,
   }));
-  drawDonut(document.getElementById("fin-investment-donut"), investmentSlices);
+  drawDonut(document.getElementById("fin-investment-donut"), investmentSlices, { label: "Investment breakdown" });
   renderLegend("fin-investment-legend", investmentSlices, investmentsTotal);
   const investDonutCenter = document.getElementById("fin-investment-donut-center-value");
   if (investDonutCenter) investDonutCenter.textContent = cad(investmentsTotal, { cents: false });
@@ -424,7 +424,7 @@ export async function initFinanceDashboard() {
   // individual stock/ETF make up (merging e.g. VEQT held in two accounts).
   const stockTotals = buildStockAggregate(investmentAccountTotals);
   const stockSlices = stockTotals.map((s) => ({ label: s.symbol, value: s.value, colorVar: symbolColors.get(s.symbol) }));
-  drawDonut(document.getElementById("fin-stock-donut"), stockSlices);
+  drawDonut(document.getElementById("fin-stock-donut"), stockSlices, { label: "Portfolio by stock/ETF" });
   renderLegend("fin-stock-legend", stockSlices, investmentsTotal);
   const stockDonutCenter = document.getElementById("fin-stock-donut-center-value");
   if (stockDonutCenter) stockDonutCenter.textContent = String(stockTotals.length);

@@ -180,10 +180,14 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
  * a native SVG <title> as its hover tooltip - segments are marks, per the
  * dataviz skill every mark needs one, and this needs no extra JS wiring.
  * Zero-value slices are skipped (a hairline dasharray gap would otherwise
- * render as a visible sliver). Generic across both dashboard donuts (asset
- * allocation, investment breakdown) - only the slices passed in differ.
+ * render as a visible sliver). Generic across all six dashboard donuts
+ * (asset allocation, investment breakdown, portfolio by stock/ETF, and the
+ * per-account holdings donuts) - only the slices and `label` differ.
+ * `label` is this chart's accessible name (aria-label) - every call site
+ * must pass one distinct to that chart, since screen readers otherwise
+ * can't tell the donuts apart.
  */
-export function drawDonut(container, slices) {
+export function drawDonut(container, slices, { label }) {
   const total = slices.reduce((s, x) => s + x.value, 0);
   const radius = 54;
   const thickness = 22;
@@ -194,7 +198,7 @@ export function drawDonut(container, slices) {
   svg.setAttribute("viewBox", "0 0 140 140");
   svg.setAttribute("class", "donut-svg");
   svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", "Asset allocation");
+  svg.setAttribute("aria-label", label);
 
   const track = document.createElementNS(svgNS, "circle");
   track.setAttribute("cx", "70");
