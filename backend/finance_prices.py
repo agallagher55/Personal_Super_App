@@ -15,10 +15,13 @@ to proxy Plaid.
 
 import json
 import sys
+import threading
+import time
 import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d"
 
@@ -98,11 +101,35 @@ def _fetch_one(ticker):
         return _empty_quote(ticker)
 
 
+# The watchlist response is identical for every caller, so a short TTL
+# cache turns repeat requests within the window into a memory read instead
+# of another round trip to Yahoo/BoC, and caps how often those upstreams
+# get hit. Guarded by a lock since the server handles requests on threads.
+_PRICES_CACHE_TTL_SECONDS = 45
+_prices_cache_lock = threading.Lock()
+_prices_cache = {"body": None, "expires_at": 0.0}
+
+
 def fetch_prices():
     """Returns (status, body). body is always {"prices": [...]}; a ticker
     whose fetch failed comes back with price/change_pct set to None rather
     than failing the whole response."""
-    return 200, {"prices": [_fetch_one(ticker) for ticker in WATCHLIST]}
+    now = time.monotonic()
+    with _prices_cache_lock:
+        if _prices_cache["body"] is not None and now < _prices_cache["expires_at"]:
+            return 200, _prices_cache["body"]
+
+    # Fetch every ticker in parallel rather than looping serially, so total
+    # latency is one round trip instead of len(WATCHLIST) of them.
+    with ThreadPoolExecutor(max_workers=len(WATCHLIST)) as pool:
+        quotes = list(pool.map(_fetch_one, WATCHLIST))
+    body = {"prices": quotes}
+
+    with _prices_cache_lock:
+        _prices_cache["body"] = body
+        _prices_cache["expires_at"] = time.monotonic() + _PRICES_CACHE_TTL_SECONDS
+
+    return 200, body
 
 
 def _fetch_quote(symbol):
@@ -129,4 +156,6 @@ def fetch_holding_quotes(symbols):
     independently and reports back."""
     if not symbols:
         return 400, {"error": "missing symbols"}
-    return 200, {"quotes": {symbol: _fetch_quote(symbol) for symbol in symbols}}
+    with ThreadPoolExecutor(max_workers=len(symbols)) as pool:
+        quotes = pool.map(_fetch_quote, symbols)
+        return 200, {"quotes": dict(zip(symbols, quotes))}
