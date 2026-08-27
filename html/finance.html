@@ -59,6 +59,20 @@
         </div>
 
         <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Investment Breakdown</div>
+          <div class="donut-card-body">
+            <div class="donut-wrap">
+              <div id="fin-investment-donut"></div>
+              <div class="donut-center">
+                <span class="donut-center-label">Invested</span>
+                <span class="donut-center-value" id="fin-investment-donut-center-value">&middot;&middot;&middot;</span>
+              </div>
+            </div>
+            <div class="fin-legend" id="fin-investment-legend"></div>
+          </div>
+        </div>
+
+        <div class="fin-overview-card fin-overview-card-wide">
           <div class="fin-overview-card-title">Net Worth Over Time</div>
           <div class="fin-chart-wrap">
             <canvas class="fin-networth-canvas" id="fin-networth-canvas"></canvas>
@@ -72,7 +86,7 @@
           <span class="section-label">Cash</span>
           <span class="fin-section-total" id="fin-cash-total">&middot;&middot;&middot;</span>
         </div>
-        <div class="fin-rows" id="fin-cash-rows"></div>
+        <div class="fin-rows fin-section-body" id="fin-cash-rows"></div>
       </div>
 
       <div class="section">
@@ -80,7 +94,7 @@
           <span class="section-label">Investments</span>
           <span class="fin-section-total" id="fin-investments-total">&middot;&middot;&middot;</span>
         </div>
-        <div id="fin-investment-accounts"></div>
+        <div class="fin-account-grid fin-section-body" id="fin-investment-accounts"></div>
       </div>
 
       <div class="section">
@@ -89,7 +103,7 @@
           <span class="section-count" id="fin-bitcoin-btc-total"></span>
           <span class="fin-section-total" id="fin-bitcoin-total">&middot;&middot;&middot;</span>
         </div>
-        <div class="fin-rows" id="fin-bitcoin-rows"></div>
+        <div class="fin-rows fin-section-body" id="fin-bitcoin-rows"></div>
       </div>
 
       <div class="section">
@@ -97,7 +111,7 @@
           <span class="section-label">Debt</span>
           <span class="fin-section-total" id="fin-debt-total">&middot;&middot;&middot;</span>
         </div>
-        <div class="fin-rows" id="fin-debt-rows"></div>
+        <div class="fin-rows fin-section-body" id="fin-debt-rows"></div>
       </div>
 
       <div class="section">
@@ -105,7 +119,7 @@
           <span class="section-label">Lines of Credit Available</span>
           <span class="fin-section-total" id="fin-loc-limit-total">&middot;&middot;&middot;</span>
         </div>
-        <div id="fin-loc-rows"></div>
+        <div class="fin-loc-grid fin-section-body" id="fin-loc-rows"></div>
       </div>
     </div>
 
