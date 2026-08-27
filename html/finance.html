@@ -43,7 +43,7 @@
         </div>
       </div>
 
-      <div class="fin-overview">
+      <div class="fin-donut-row">
         <div class="fin-overview-card">
           <div class="fin-overview-card-title">Asset Allocation</div>
           <div class="donut-card-body">
@@ -72,7 +72,23 @@
           </div>
         </div>
 
-        <div class="fin-overview-card fin-overview-card-wide">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Portfolio by Stock/ETF</div>
+          <div class="donut-card-body">
+            <div class="donut-wrap">
+              <div id="fin-stock-donut"></div>
+              <div class="donut-center">
+                <span class="donut-center-label">Holdings</span>
+                <span class="donut-center-value" id="fin-stock-donut-center-value">&middot;&middot;&middot;</span>
+              </div>
+            </div>
+            <div class="fin-legend" id="fin-stock-legend"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fin-chart-row">
+        <div class="fin-overview-card">
           <div class="fin-overview-card-title">Net Worth Over Time</div>
           <div class="fin-chart-wrap">
             <canvas class="fin-networth-canvas" id="fin-networth-canvas"></canvas>
