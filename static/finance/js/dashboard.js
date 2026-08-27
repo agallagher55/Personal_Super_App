@@ -33,6 +33,22 @@ function el(tag, className, html) {
   return node;
 }
 
+// Every row/legend/card builder below interpolates data straight into an
+// innerHTML template string. Today that data all comes from the static
+// data/finance-dashboard.json, but finance/ARCHITECTURE.md's Plaid sync
+// will populate the same fields (institution/account/holding names) from
+// Plaid's merchant_name/name/official_name/institution_name - strings that
+// originate outside the app. Escaping here now means that data source swap
+// doesn't need a matching audit of every template string.
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // A stable symbol -> color mapping (alphabetical, not by current value) so
 // a given stock/ETF keeps the same identity color everywhere on the page -
 // in its account's mini donut, the aggregate "by stock" donut, and its own
@@ -53,13 +69,13 @@ function renderRow(container, { label, sublabel, value, total, colorVar, meta })
   const percent = pct(value, total);
   row.innerHTML = `
     <div class="fin-row-top">
-      <span class="fin-row-label">${label}${sublabel ? `<span class="fin-row-sublabel">${sublabel}</span>` : ""}</span>
+      <span class="fin-row-label">${escapeHtml(label)}${sublabel ? `<span class="fin-row-sublabel">${escapeHtml(sublabel)}</span>` : ""}</span>
       <span class="fin-row-value">${cad(value)}</span>
     </div>
     <div class="fin-row-bar-track">
       <div class="fin-row-bar-fill" style="width:${percent.toFixed(1)}%; background:var(${colorVar})"></div>
     </div>
-    <div class="fin-row-pct">${total > 0 ? percent.toFixed(1) : "0.0"}% of section total${meta ? ` &middot; ${meta}` : ""}</div>
+    <div class="fin-row-pct">${total > 0 ? percent.toFixed(1) : "0.0"}% of section total${meta ? ` &middot; ${escapeHtml(meta)}` : ""}</div>
   `;
   container.appendChild(row);
 }
@@ -105,8 +121,8 @@ function renderInvestments(investmentAccountTotals, investmentsTotal, symbolColo
       "fin-account-card",
       `
       <div class="fin-account-card-header">
-        <span class="fin-account-type">${account.accountType}</span>
-        <span class="fin-account-institution">${account.institution}</span>
+        <span class="fin-account-type">${escapeHtml(account.accountType)}</span>
+        <span class="fin-account-institution">${escapeHtml(account.institution)}</span>
         <span class="fin-account-total">${cad(account.total)}</span>
         <span class="fin-account-pct">${pct(account.total, investmentsTotal).toFixed(1)}% of investments</span>
       </div>
@@ -208,7 +224,7 @@ function renderLinesOfCredit(linesOfCredit) {
       "fin-loc-row",
       `
       <div class="fin-row-top">
-        <span class="fin-row-label">${loc.institution}<span class="fin-row-sublabel">${loc.interestRate.toFixed(2)}% interest</span></span>
+        <span class="fin-row-label">${escapeHtml(loc.institution)}<span class="fin-row-sublabel">${loc.interestRate.toFixed(2)}% interest</span></span>
         <span class="fin-row-value">${cad(loc.balance)} <span class="fin-row-sublabel">drawn</span></span>
       </div>
       <div class="fin-row-bar-track">
@@ -237,7 +253,7 @@ function renderLegend(containerId, slices, total, { compact = false } = {}) {
       compact ? "fin-legend-row fin-legend-row-compact" : "fin-legend-row",
       `
       <span class="fin-legend-swatch" style="background:var(${slice.colorVar})"></span>
-      <span class="fin-legend-label">${slice.label}</span>
+      <span class="fin-legend-label">${escapeHtml(slice.label)}</span>
       ${valueHtml}
       <span class="fin-legend-pct">${pct(slice.value, total).toFixed(1)}%</span>
     `
