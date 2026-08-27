@@ -7,7 +7,7 @@ import { drawNetWorthChart, drawDonut } from "./charts.js";
 
 const DASHBOARD_DATA_URL = "/data/finance-dashboard.json";
 const HOLDING_PRICES_URL = "/finance/api/holding-prices";
-const STOCK_COLOR_SLOTS = 6; // matches --stock-1..--stock-6 in dashboard.css
+const STOCK_COLOR_SLOTS = 12; // matches --stock-1..--stock-12 in dashboard.css
 
 function sum(items, get) {
   return items.reduce((total, item) => total + get(item), 0);
@@ -40,6 +40,15 @@ function el(tag, className, html) {
 // order later (see dataviz skill: "color follows the entity, never rank").
 function buildSymbolColors(investmentAccounts) {
   const symbols = [...new Set(investmentAccounts.flatMap((acc) => acc.holdings.map((h) => h.symbol)))].sort();
+  if (symbols.length > STOCK_COLOR_SLOTS) {
+    // The modulo below wraps silently otherwise, handing a 13th+ symbol the
+    // same identity color as an earlier one in every donut and row bar at
+    // once - loud beats silent for a collision the color scheme exists to
+    // prevent.
+    console.warn(
+      `finance dashboard: ${symbols.length} distinct symbols exceeds the ${STOCK_COLOR_SLOTS} --stock-* color slots - some symbols will share an identity color.`
+    );
+  }
   const colors = new Map();
   symbols.forEach((symbol, i) => colors.set(symbol, `--stock-${(i % STOCK_COLOR_SLOTS) + 1}`));
   return colors;
