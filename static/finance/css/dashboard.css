@@ -136,7 +136,7 @@
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 750px) {
   .fin-donut-row {
     grid-template-columns: 1fr;
   }
@@ -150,9 +150,9 @@
 
 .donut-wrap {
   position: relative;
-  flex: 0 0 140px;
-  width: 140px;
-  height: 140px;
+  flex: 0 1 140px;
+  aspect-ratio: 1;
+  min-width: 80px;
 }
 
 .donut-svg {
@@ -207,6 +207,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-family: var(--sans);
   font-size: 13px;
 }
@@ -220,6 +221,10 @@
 
 .fin-legend-label {
   flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--ink);
 }
 
