@@ -1,5 +1,31 @@
+/* Investment-breakdown donut: 4 lightness steps of the Investments slice's
+   own green (--status-green, hue 145) rather than a second unrelated hue
+   family - it reads as "this is what's inside the green slice." */
+:root {
+  --invest-1: oklch(74% 0.12 145);
+  --invest-2: oklch(60% 0.14 145);
+  --invest-3: oklch(46% 0.13 145);
+  --invest-4: oklch(34% 0.1 145);
+}
+
+:root[data-theme="dark"] {
+  --invest-1: oklch(80% 0.1 145);
+  --invest-2: oklch(70% 0.14 145);
+  --invest-3: oklch(56% 0.13 145);
+  --invest-4: oklch(44% 0.11 145);
+}
+
+/* The finance page fills the full page width (fixed-width watchlist aside
+   excepted) instead of the ~800px .sheet default - there's a lot more
+   content here than the other single-column pages. */
+.page-finance {
+  max-width: none;
+  width: 100%;
+}
+
 .finance-sheet {
-  max-width: 900px;
+  max-width: none;
+  flex: 1 1 auto;
 }
 
 .fin-banner {
@@ -12,6 +38,12 @@
   border-radius: 6px;
   padding: 10px 14px;
   margin-bottom: 24px;
+}
+
+.fin-banner.fin-banner-error {
+  color: var(--status-red);
+  background: transparent;
+  border-color: var(--status-red);
 }
 
 /* --- Summary strip: net worth / assets / debt stat tiles --- */
@@ -51,17 +83,17 @@
   }
 }
 
-/* --- Overview: allocation donut + net-worth trend line --- */
+/* --- Overview: allocation donut, investment-breakdown donut, net-worth line --- */
 
 .fin-overview {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr;
   gap: 16px;
   margin-bottom: 8px;
   align-items: stretch;
 }
 
 .fin-overview-card {
-  flex: 1 1 0;
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -78,9 +110,23 @@
   margin-bottom: 14px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1000px) {
   .fin-overview {
-    flex-direction: column;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fin-overview-card-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .fin-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .fin-overview-card-wide {
+    grid-column: auto;
   }
 }
 
@@ -211,6 +257,26 @@
   opacity: 1;
 }
 
+/* --- Collapsible sections --- */
+
+/* The shared .section-header (styles.css) uses a grab cursor for Tasks'
+   drag-to-reorder; finance sections aren't draggable, just collapsible. */
+.page-finance .section-header {
+  cursor: pointer;
+}
+
+.fin-section-body {
+  overflow: hidden;
+  max-height: 6000px;
+  opacity: 1;
+  transition: max-height 0.25s ease, opacity 0.15s ease;
+}
+
+.fin-section-body.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
 /* --- Account sections --- */
 
 .fin-section-total {
@@ -223,9 +289,14 @@
 }
 
 .fin-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px 28px;
+  align-content: start;
+}
+
+.fin-group-heading {
+  grid-column: 1 / -1;
 }
 
 .fin-row {
@@ -282,15 +353,17 @@
   margin-top: 4px;
 }
 
+.fin-account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  align-content: start;
+}
+
 .fin-account-card {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px 16px 16px;
-  margin-bottom: 14px;
-}
-
-.fin-account-card:last-child {
-  margin-bottom: 0;
 }
 
 .fin-account-card-header {
@@ -346,15 +419,17 @@
   margin-top: 0;
 }
 
+.fin-loc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  align-content: start;
+}
+
 .fin-loc-row {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px 16px;
-  margin-bottom: 12px;
-}
-
-.fin-loc-row:last-child {
-  margin-bottom: 0;
 }
 
 .fin-loc-meta {
@@ -365,10 +440,4 @@
   font-size: 11px;
   color: var(--ink-soft);
   margin-top: 6px;
-}
-
-@media (max-width: 880px) {
-  .finance-sheet {
-    max-width: none;
-  }
 }

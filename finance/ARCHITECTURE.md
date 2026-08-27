@@ -7,11 +7,11 @@ expenses, and investments.
 
 This is a planning document, not implemented code yet. None of the sync
 layer below is built — `html/finance.html` is currently a static dashboard
-*template* (sample data baked into `static/finance/js/dashboard-data.js`,
-no backend route behind it) scaffolded to match the shape this document
-describes, not the placeholder stub described in `architecture_Review.md`
-§1 anymore. See "Open questions / assumptions" at the bottom before
-starting Phase 1.
+*template*, fetching sample data client-side from `data/finance-dashboard.json`
+(a plain static file, no backend route behind it) scaffolded to match the
+shape this document describes, not the placeholder stub described in
+`architecture_Review.md` §1 anymore. See "Open questions / assumptions" at
+the bottom before starting Phase 1.
 
 ## 1. Decisions already made
 

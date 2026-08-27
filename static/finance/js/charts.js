@@ -180,9 +180,10 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
  * a native SVG <title> as its hover tooltip - segments are marks, per the
  * dataviz skill every mark needs one, and this needs no extra JS wiring.
  * Zero-value slices are skipped (a hairline dasharray gap would otherwise
- * render as a visible sliver).
+ * render as a visible sliver). Generic across both dashboard donuts (asset
+ * allocation, investment breakdown) - only the slices passed in differ.
  */
-export function drawAllocationDonut(container, slices) {
+export function drawDonut(container, slices) {
   const total = slices.reduce((s, x) => s + x.value, 0);
   const radius = 54;
   const thickness = 22;
