@@ -36,10 +36,14 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const lineColor = themeColor("--ink");
-  const gridColor = themeColor("--line");
-  const mutedColor = themeColor("--ink-soft");
-  const surfaceColor = themeColor("--paper-raised");
+  let lineColor, gridColor, mutedColor, surfaceColor;
+  function readThemeColors() {
+    lineColor = themeColor("--ink");
+    gridColor = themeColor("--line");
+    mutedColor = themeColor("--ink-soft");
+    surfaceColor = themeColor("--paper-raised");
+  }
+  readThemeColors();
 
   const padding = { top: 14, right: 10, bottom: 22, left: 60 };
   const innerW = cssWidth - padding.left - padding.right;
@@ -144,6 +148,16 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
   }
 
   drawFrame(null);
+
+  // The colors above are read once and baked into the canvas bitmap, so a
+  // light/dark toggle (data-theme flips on <html>, see static/js/theme.js)
+  // needs an explicit redraw - nothing else invalidates the canvas.
+  const themeObserver = new MutationObserver(() => {
+    readThemeColors();
+    drawFrame(null);
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
   if (!tooltipEl) return;
 
   canvas.addEventListener("mousemove", (e) => {
