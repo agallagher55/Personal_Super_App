@@ -345,10 +345,6 @@
   align-content: start;
 }
 
-.fin-group-heading {
-  grid-column: 1 / -1;
-}
-
 .fin-row {
   padding: 2px 0;
 }
@@ -456,6 +452,7 @@
 }
 
 .fin-group-heading {
+  grid-column: 1 / -1;
   font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 700;

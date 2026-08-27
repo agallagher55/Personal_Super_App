@@ -20,6 +20,39 @@ function formatMonth(monthStr) {
   return d.toLocaleDateString(undefined, { month: "short" });
 }
 
+// Rounds `value` to a "nice" 1/2/5 x 10^n number (Heckbert's well-known
+// "nice numbers for graph labels" algorithm) - `round` picks the nearest
+// such number, while !round rounds up, which is what a nice *step size*
+// needs so it never undershoots the requested tick count.
+function niceNumber(value, round) {
+  const exponent = Math.floor(Math.log10(value));
+  const fraction = value / 10 ** exponent;
+  let niceFraction;
+  if (round) {
+    if (fraction < 1.5) niceFraction = 1;
+    else if (fraction < 3) niceFraction = 2;
+    else if (fraction < 7) niceFraction = 5;
+    else niceFraction = 10;
+  } else {
+    if (fraction <= 1) niceFraction = 1;
+    else if (fraction <= 2) niceFraction = 2;
+    else if (fraction <= 5) niceFraction = 5;
+    else niceFraction = 10;
+  }
+  return niceFraction * 10 ** exponent;
+}
+
+// Rounds the [min, max] axis domain outward to nice round tick values
+// (e.g. $32,207-$46,015 -> $32,000-$48,000 in steps of $4,000) instead of
+// evenly dividing the raw range, which produces an arbitrary-looking tick
+// on every gridline. targetSteps is a target, not a guarantee - the actual
+// tick count comes out close to it but can vary by one either way.
+function niceAxis(min, max, targetSteps) {
+  const rawStep = (max - min) / targetSteps;
+  const step = niceNumber(rawStep, true);
+  return { min: Math.floor(min / step) * step, max: Math.ceil(max / step) * step, step };
+}
+
 /**
  * Draws a net-worth-over-time line chart on `canvas` and wires up a hover
  * crosshair + tooltip (per the dataviz skill: line/area charts ship hover by
@@ -49,9 +82,10 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || Math.max(max, 1) * 0.1;
-  const yMin = min - range * 0.15;
-  const yMax = max + range * 0.15;
+  const steps = 4;
+  const { min: yMin, max: yMax, step: tickStep } = niceAxis(min - range * 0.15, max + range * 0.15, steps);
   const yRange = yMax - yMin || 1;
+  const tickCount = Math.round(yRange / tickStep);
 
   const xFor = (i) => padding.left + (points.length <= 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
   const yFor = (v) => padding.top + innerH - ((v - yMin) / yRange) * innerH;
@@ -60,13 +94,15 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
     ctx.clearRect(0, 0, cssWidth, cssHeight);
 
     // Gridlines - hairline, one-step-off-surface, with $ tick labels.
-    const steps = 4;
+    // Nice round values (niceAxis above) rather than an even division of
+    // the raw range, so ticks read like $32,000/$36,000/... instead of an
+    // arbitrary-looking $32,207/$35,659/....
     ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
     ctx.fillStyle = mutedColor;
     ctx.font = "10px 'JetBrains Mono', monospace";
-    for (let s = 0; s <= steps; s++) {
-      const v = yMin + (yRange * s) / steps;
+    for (let s = 0; s <= tickCount; s++) {
+      const v = yMin + s * tickStep;
       const y = yFor(v);
       ctx.beginPath();
       ctx.moveTo(padding.left, y);
