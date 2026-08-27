@@ -1,11 +1,19 @@
 # Finance
 
-Plan for connecting real financial accounts (Wealthsimple first, any
-Plaid-supported bank/investment institution after that) via
-[Plaid](https://plaid.com), so `/finance` shows a live-ish view of income,
-expenses, and investments instead of the current "coming soon" stub.
+`/finance` is a working dashboard today — stat tiles (net worth, total
+assets, debt), three donuts (asset allocation, investment breakdown,
+portfolio by stock/ETF), a net-worth trend chart, five collapsible
+sections (cash, investments, bitcoin, debt, lines of credit), and a
+7-ticker watchlist sidebar proxied server-side (`backend/finance_prices.py`).
+It's backed by a static seed JSON file scaffolded to the shape
+[`ARCHITECTURE.md`](ARCHITECTURE.md) describes, not by real connected
+accounts yet.
 
-Nothing in this folder is implemented yet — see
+This folder's actual content is the plan for that next step: connecting
+real financial accounts (Wealthsimple first, any Plaid-supported
+bank/investment institution after that) via [Plaid](https://plaid.com),
+so the dashboard reflects live synced data instead of that static seed
+file. Nothing in that sync layer is implemented yet — see
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full plan (data model, sync
 flow, security requirements, phased build order) and
 [`schema.sql`](schema.sql) for the concrete SQLite DDL it describes.
