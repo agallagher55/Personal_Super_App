@@ -293,6 +293,13 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(payload)))
+        # Without this, browsers may heuristically cache these GET responses
+        # (no Cache-Control/Expires is sent otherwise) - most visibly
+        # /fitness/api/health, whose URL never changes, so a stale
+        # "last synced" and stale metrics could keep being served after a
+        # real sync (issue #72). These are always live data, never static.
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+        self.send_header('Pragma', 'no-cache')
         self.end_headers()
         self.wfile.write(payload)
 
