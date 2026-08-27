@@ -12,7 +12,7 @@
       "accountType": "TFSA",
       "institution": "Wealthsimple",
       "holdings": [
-        { "symbol": "VEQT", "name": "Vanguard All-Equity ETF", "shares": 120, "price": 41.2 },
+        { "symbol": "VEQT", "yahooSymbol": "VEQT.TO", "name": "Vanguard All-Equity ETF", "shares": 120, "price": 41.2 },
         { "symbol": "AAPL", "name": "Apple Inc.", "shares": 10, "price": 227.5 }
       ]
     },
@@ -20,14 +20,14 @@
       "accountType": "RRSP",
       "institution": "Wealthsimple",
       "holdings": [
-        { "symbol": "VFV", "name": "Vanguard S&P 500 ETF", "shares": 60, "price": 145.3 },
-        { "symbol": "XGRO", "name": "iShares Core Growth ETF", "shares": 50, "price": 28.1 }
+        { "symbol": "VFV", "yahooSymbol": "VFV.TO", "name": "Vanguard S&P 500 ETF", "shares": 60, "price": 145.3 },
+        { "symbol": "XGRO", "yahooSymbol": "XGRO.TO", "name": "iShares Core Growth ETF", "shares": 50, "price": 28.1 }
       ]
     },
     {
       "accountType": "FHSA",
       "institution": "Wealthsimple",
-      "holdings": [{ "symbol": "VEQT", "name": "Vanguard All-Equity ETF", "shares": 30, "price": 41.2 }]
+      "holdings": [{ "symbol": "VEQT", "yahooSymbol": "VEQT.TO", "name": "Vanguard All-Equity ETF", "shares": 30, "price": 41.2 }]
     },
     {
       "accountType": "Non-Registered",

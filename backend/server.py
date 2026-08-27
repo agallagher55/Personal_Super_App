@@ -245,6 +245,12 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             status, body = finance_prices.fetch_prices()
             self.send_json(status, body)
             return
+        if path == '/finance/api/holding-prices':
+            symbols_param = parse_qs(parsed.query).get('symbols', [''])[0]
+            symbols = [s.strip() for s in symbols_param.split(',') if s.strip()]
+            status, body = finance_prices.fetch_holding_quotes(symbols)
+            self.send_json(status, body)
+            return
         if path.startswith('/tasks/'):
             slug = path[len('/tasks/'):]
             if self.section_slug_exists(slug):

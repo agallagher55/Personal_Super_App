@@ -103,3 +103,30 @@ def fetch_prices():
     whose fetch failed comes back with price/change_pct set to None rather
     than failing the whole response."""
     return 200, {"prices": [_fetch_one(ticker) for ticker in WATCHLIST]}
+
+
+def _fetch_quote(symbol):
+    try:
+        price, previous_close = _fetch_yahoo({"symbol": symbol})
+        change_pct = ((price - previous_close) / previous_close * 100) if previous_close else 0.0
+        return {"price": price, "change_pct": change_pct}
+    except Exception:
+        # Same reasoning as _fetch_one: log server-side, degrade this one
+        # symbol to null rather than failing the whole holdings batch - a
+        # delisted/renamed/TSX-suffix-missing symbol shouldn't blank the
+        # rest of a portfolio's live prices.
+        print(f"finance_prices: fetch failed for {symbol}:", file=sys.stderr)
+        traceback.print_exc()
+        return None
+
+
+def fetch_holding_quotes(symbols):
+    """Fetches live quotes for arbitrary (portfolio holding) symbols, keyed
+    by the symbol as passed in. Returns (status, body) where body is
+    {"quotes": {symbol: {"price", "change_pct"} | None}}. Unlike the fixed
+    WATCHLIST above, callers pass whatever Yahoo-resolvable symbol they
+    have (e.g. "VEQT.TO" for a TSX-only ETF) - this just fetches each one
+    independently and reports back."""
+    if not symbols:
+        return 400, {"error": "missing symbols"}
+    return 200, {"quotes": {symbol: _fetch_quote(symbol) for symbol in symbols}}
