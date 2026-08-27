@@ -6,6 +6,7 @@
 import { drawNetWorthChart, drawDonut } from "./charts.js";
 
 const DASHBOARD_DATA_URL = "/data/finance-dashboard.json";
+const HOLDING_PRICES_URL = "/finance/api/holding-prices";
 const STOCK_COLOR_SLOTS = 6; // matches --stock-1..--stock-6 in dashboard.css
 
 function sum(items, get) {
@@ -125,13 +126,17 @@ function renderInvestments(investmentAccountTotals, investmentsTotal, symbolColo
 
     const holdingsList = el("div", "fin-rows");
     for (const holding of account.holdings) {
+      const changeMeta =
+        holding.isLivePrice && typeof holding.changePct === "number"
+          ? ` &middot; ${holding.changePct > 0 ? "+" : ""}${holding.changePct.toFixed(2)}% today`
+          : "";
       renderRow(holdingsList, {
         label: holding.symbol,
         sublabel: holding.name,
         value: holding.value,
         total: account.total,
         colorVar: symbolColors.get(holding.symbol),
-        meta: `${holding.shares.toLocaleString()} sh @ ${cad(holding.price)}`,
+        meta: `${holding.shares.toLocaleString()} sh @ ${cad(holding.price)}${changeMeta}`,
       });
     }
     card.appendChild(holdingsList);
@@ -272,6 +277,55 @@ async function loadDashboardData() {
   return res.json();
 }
 
+// The symbol to look up a live quote under. Most holdings' display symbol
+// is directly Yahoo-resolvable, but a handful (TSX-only ETFs like VEQT)
+// need an exchange suffix Yahoo requires but the UI shouldn't show - those
+// carry an explicit "yahooSymbol" override in finance-dashboard.json.
+function holdingLookupSymbol(holding) {
+  return holding.yahooSymbol || holding.symbol;
+}
+
+// Fetches live prices for every distinct symbol across all holdings via
+// backend/finance_prices.py's Yahoo proxy (see ticker.js for the same
+// pattern applied to the watchlist sidebar). Failure here - network down,
+// Yahoo blocked - degrades to an empty quote map so the dashboard still
+// renders with the static prices already in finance-dashboard.json rather
+// than breaking the page.
+async function loadLivePrices(investmentAccounts) {
+  const symbols = [...new Set(investmentAccounts.flatMap((acc) => acc.holdings.map(holdingLookupSymbol)))];
+  if (symbols.length === 0) return {};
+  try {
+    const res = await fetch(`${HOLDING_PRICES_URL}?symbols=${encodeURIComponent(symbols.join(","))}`);
+    const data = await res.json();
+    if (!res.ok || typeof data.quotes !== "object") throw new Error(data.error || `HTTP ${res.status}`);
+    return data.quotes;
+  } catch (err) {
+    console.warn("finance dashboard: live prices unavailable, using last-known prices from finance-dashboard.json", err);
+    return {};
+  }
+}
+
+// Overlays live quotes onto each holding's static price. A symbol with no
+// quote (fetch failed, delisted, missing yahooSymbol suffix) keeps its
+// static price from finance-dashboard.json rather than showing nothing.
+function applyLivePrices(investmentAccounts, quotes) {
+  let liveCount = 0;
+  let totalCount = 0;
+  const withLivePrices = investmentAccounts.map((acc) => ({
+    ...acc,
+    holdings: acc.holdings.map((holding) => {
+      totalCount++;
+      const quote = quotes[holdingLookupSymbol(holding)];
+      if (quote && typeof quote.price === "number") {
+        liveCount++;
+        return { ...holding, price: quote.price, changePct: quote.change_pct, isLivePrice: true };
+      }
+      return holding;
+    }),
+  }));
+  return { investmentAccounts: withLivePrices, liveCount, totalCount };
+}
+
 // Merges same-symbol holdings across every account (e.g. VEQT held in both
 // a TFSA and an FHSA) into one total per symbol, for the "what % of the
 // overall investment amount does each stock/ETF make up" donut.
@@ -302,9 +356,23 @@ export async function initFinanceDashboard() {
     return;
   }
 
-  const { cashAccounts, investmentAccounts, bitcoinHoldings, linesOfCredit, debt, netWorthHistory } = data;
+  const { cashAccounts, bitcoinHoldings, linesOfCredit, debt, netWorthHistory } = data;
 
   if (noteEl) noteEl.textContent = data.note || "";
+
+  const quotes = await loadLivePrices(data.investmentAccounts);
+  const { investmentAccounts, liveCount, totalCount } = applyLivePrices(data.investmentAccounts, quotes);
+
+  const pricesUpdatedEl = document.getElementById("fin-prices-updated");
+  if (pricesUpdatedEl) {
+    if (liveCount === 0) {
+      pricesUpdatedEl.textContent = "using last-known prices";
+    } else if (liveCount < totalCount) {
+      pricesUpdatedEl.textContent = `live prices for ${liveCount}/${totalCount} as of ${new Date().toLocaleTimeString()}`;
+    } else {
+      pricesUpdatedEl.textContent = `live prices as of ${new Date().toLocaleTimeString()}`;
+    }
+  }
 
   const cashTotal = sum(cashAccounts, (a) => a.balance);
 
