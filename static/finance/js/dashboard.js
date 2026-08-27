@@ -429,7 +429,15 @@ export async function initFinanceDashboard() {
   const stockDonutCenter = document.getElementById("fin-stock-donut-center-value");
   if (stockDonutCenter) stockDonutCenter.textContent = String(stockTotals.length);
 
-  drawNetWorthChart(document.getElementById("fin-networth-canvas"), document.getElementById("fin-networth-tooltip"), netWorthHistory);
+  // The chart's end-dot is drawn as "today," so its value has to match the
+  // live-priced net worth in the tile above rather than the static seed
+  // value netWorthHistory's last month was scaffolded with - otherwise the
+  // two "current net worth" figures disagree as soon as live quotes load.
+  const liveNetWorthHistory = netWorthHistory.length
+    ? [...netWorthHistory.slice(0, -1), { ...netWorthHistory[netWorthHistory.length - 1], value: netWorth }]
+    : netWorthHistory;
+
+  drawNetWorthChart(document.getElementById("fin-networth-canvas"), document.getElementById("fin-networth-tooltip"), liveNetWorthHistory);
 
   renderCash(cashAccounts, cashTotal);
   renderInvestments(investmentAccountTotals, investmentsTotal, symbolColors);
