@@ -36,7 +36,6 @@ import re
 import sys
 import uuid
 import http.server
-import socketserver
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlparse
 
@@ -677,8 +676,9 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(response_body)
 
 
-class TaskServer(socketserver.TCPServer):
-    allow_reuse_address = True
+class TaskServer(http.server.ThreadingHTTPServer):
+    """Threaded so a slow upstream request (e.g. a finance quote fetch)
+    can't stall every other request the server is handling."""
 
 
 def main():
