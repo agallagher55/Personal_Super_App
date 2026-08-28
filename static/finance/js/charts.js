@@ -28,13 +28,7 @@ function formatMonth(monthStr) {
  * offsetParent as the canvas; pass null to skip hover wiring entirely.
  */
 export function drawNetWorthChart(canvas, tooltipEl, points) {
-  const dpr = window.devicePixelRatio || 1;
-  const cssWidth = canvas.clientWidth || canvas.width;
-  const cssHeight = canvas.clientHeight || canvas.height;
-  canvas.width = cssWidth * dpr;
-  canvas.height = cssHeight * dpr;
   const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   let lineColor, gridColor, mutedColor, surfaceColor;
   function readThemeColors() {
@@ -46,8 +40,6 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
   readThemeColors();
 
   const padding = { top: 14, right: 10, bottom: 22, left: 60 };
-  const innerW = cssWidth - padding.left - padding.right;
-  const innerH = cssHeight - padding.top - padding.bottom;
 
   const values = points.map((p) => p.value);
   const min = Math.min(...values);
@@ -57,8 +49,25 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
   const yMax = max + range * 0.15;
   const yRange = yMax - yMin || 1;
 
-  const xFor = (i) => padding.left + (points.length <= 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
-  const yFor = (v) => padding.top + innerH - ((v - yMin) / yRange) * innerH;
+  // Rebuilt by measure() on every render - initial draw, a theme toggle,
+  // and a resize (#81/#82) - so the backing store and the xFor/yFor scale
+  // (and therefore the hover mapping) always match the canvas's current
+  // on-screen size rather than whatever size it had at first draw.
+  let cssWidth, cssHeight, innerH, xFor, yFor;
+
+  function measure() {
+    const dpr = window.devicePixelRatio || 1;
+    cssWidth = canvas.clientWidth || canvas.width;
+    cssHeight = canvas.clientHeight || canvas.height;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const innerW = cssWidth - padding.left - padding.right;
+    innerH = cssHeight - padding.top - padding.bottom;
+    xFor = (i) => padding.left + (points.length <= 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
+    yFor = (v) => padding.top + innerH - ((v - yMin) / yRange) * innerH;
+  }
 
   function drawFrame(hoverIndex) {
     ctx.clearRect(0, 0, cssWidth, cssHeight);
@@ -147,16 +156,33 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
     }
   }
 
-  drawFrame(null);
+  function render() {
+    measure();
+    drawFrame(null);
+  }
+
+  render();
 
   // The colors above are read once and baked into the canvas bitmap, so a
   // light/dark toggle (data-theme flips on <html>, see static/js/theme.js)
   // needs an explicit redraw - nothing else invalidates the canvas.
   const themeObserver = new MutationObserver(() => {
     readThemeColors();
-    drawFrame(null);
+    render();
   });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  // The canvas's CSS size tracks its container (.fin-networth-canvas is
+  // width: 100%) but the backing store and the xFor/yFor scale above were
+  // only ever computed once - without this, a viewport resize squeezes the
+  // stale bitmap (distorting the line/text) and leaves the hover crosshair
+  // resolving against the old width. Debounced since resize fires rapidly.
+  let resizeTimer = null;
+  const resizeObserver = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 100);
+  });
+  resizeObserver.observe(canvas);
 
   if (!tooltipEl) return;
 
