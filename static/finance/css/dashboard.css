@@ -9,13 +9,22 @@
 
   /* Per-symbol identity colors for individual stocks/ETFs - a fixed,
      unrelated hue family so a ticker's color is never mistaken for an
-     asset class (--status-blue etc.) or account type (--invest-*). */
+     asset class (--status-blue etc.) or account type (--invest-*).
+     12 slots (STOCK_COLOR_SLOTS in dashboard.js) - 1-6 are the original
+     hues, 7-12 fill the gaps between them so a 7th+ distinct symbol gets
+     its own color instead of silently wrapping onto an earlier one's. */
   --stock-1: oklch(58% 0.14 300);
   --stock-2: oklch(58% 0.14 200);
   --stock-3: oklch(58% 0.16 340);
   --stock-4: oklch(58% 0.13 115);
   --stock-5: oklch(62% 0.15 60);
   --stock-6: oklch(58% 0.15 5);
+  --stock-7: oklch(58% 0.14 30);
+  --stock-8: oklch(58% 0.14 90);
+  --stock-9: oklch(58% 0.14 160);
+  --stock-10: oklch(58% 0.14 250);
+  --stock-11: oklch(58% 0.14 320);
+  --stock-12: oklch(58% 0.14 350);
 }
 
 :root[data-theme="dark"] {
@@ -30,6 +39,12 @@
   --stock-4: oklch(70% 0.12 115);
   --stock-5: oklch(74% 0.14 60);
   --stock-6: oklch(70% 0.14 5);
+  --stock-7: oklch(70% 0.12 30);
+  --stock-8: oklch(70% 0.12 90);
+  --stock-9: oklch(70% 0.12 160);
+  --stock-10: oklch(70% 0.12 250);
+  --stock-11: oklch(70% 0.12 320);
+  --stock-12: oklch(70% 0.12 350);
 }
 
 /* The finance page fills the full page width (fixed-width watchlist aside
