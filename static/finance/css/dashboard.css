@@ -340,7 +340,12 @@
   font-weight: 600;
   color: var(--ink);
   flex: 0 0 auto;
-  margin-left: auto;
+  /* margin-left: auto never worked here - the shared .section-header::after
+     rule (styles.css) is flex: 1 1 auto and always last in flex order, so
+     it absorbs all the free space before an auto margin on an earlier
+     sibling gets a chance at it. order: 1 moves the total after that rule
+     instead, which is what actually pushes it to the header's right edge. */
+  order: 1;
 }
 
 .fin-rows {
