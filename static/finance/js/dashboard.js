@@ -1,13 +1,13 @@
-// Renders the /finance dashboard template from data/finance-dashboard.json
+// Renders the /finance dashboard template from static/finance/finance-dashboard.json
 // (a plain static file for now - fetched client-side, no backend route
 // behind it). finance/ARCHITECTURE.md's Plaid sync (Phases 1-4) is what
 // eventually replaces that file with a real `/finance/api/*` endpoint;
 // this module only touches DASHBOARD_DATA_URL when that happens.
 import { drawNetWorthChart, drawDonut } from "./charts.js";
 
-const DASHBOARD_DATA_URL = "/data/finance-dashboard.json";
+const DASHBOARD_DATA_URL = "/static/finance/finance-dashboard.json";
 const HOLDING_PRICES_URL = "/finance/api/holding-prices";
-const STOCK_COLOR_SLOTS = 6; // matches --stock-1..--stock-6 in dashboard.css
+const STOCK_COLOR_SLOTS = 12; // matches --stock-1..--stock-12 in dashboard.css
 
 function sum(items, get) {
   return items.reduce((total, item) => total + get(item), 0);
@@ -33,6 +33,22 @@ function el(tag, className, html) {
   return node;
 }
 
+// Every row/legend/card builder below interpolates data straight into an
+// innerHTML template string. Today that data all comes from the static
+// data/finance-dashboard.json, but finance/ARCHITECTURE.md's Plaid sync
+// will populate the same fields (institution/account/holding names) from
+// Plaid's merchant_name/name/official_name/institution_name - strings that
+// originate outside the app. Escaping here now means that data source swap
+// doesn't need a matching audit of every template string.
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // A stable symbol -> color mapping (alphabetical, not by current value) so
 // a given stock/ETF keeps the same identity color everywhere on the page -
 // in its account's mini donut, the aggregate "by stock" donut, and its own
@@ -40,6 +56,15 @@ function el(tag, className, html) {
 // order later (see dataviz skill: "color follows the entity, never rank").
 function buildSymbolColors(investmentAccounts) {
   const symbols = [...new Set(investmentAccounts.flatMap((acc) => acc.holdings.map((h) => h.symbol)))].sort();
+  if (symbols.length > STOCK_COLOR_SLOTS) {
+    // The modulo below wraps silently otherwise, handing a 13th+ symbol the
+    // same identity color as an earlier one in every donut and row bar at
+    // once - loud beats silent for a collision the color scheme exists to
+    // prevent.
+    console.warn(
+      `finance dashboard: ${symbols.length} distinct symbols exceeds the ${STOCK_COLOR_SLOTS} --stock-* color slots - some symbols will share an identity color.`
+    );
+  }
   const colors = new Map();
   symbols.forEach((symbol, i) => colors.set(symbol, `--stock-${(i % STOCK_COLOR_SLOTS) + 1}`));
   return colors;
@@ -53,13 +78,13 @@ function renderRow(container, { label, sublabel, value, total, colorVar, meta })
   const percent = pct(value, total);
   row.innerHTML = `
     <div class="fin-row-top">
-      <span class="fin-row-label">${label}${sublabel ? `<span class="fin-row-sublabel">${sublabel}</span>` : ""}</span>
+      <span class="fin-row-label">${escapeHtml(label)}${sublabel ? `<span class="fin-row-sublabel">${escapeHtml(sublabel)}</span>` : ""}</span>
       <span class="fin-row-value">${cad(value)}</span>
     </div>
     <div class="fin-row-bar-track">
       <div class="fin-row-bar-fill" style="width:${percent.toFixed(1)}%; background:var(${colorVar})"></div>
     </div>
-    <div class="fin-row-pct">${total > 0 ? percent.toFixed(1) : "0.0"}% of section total${meta ? ` &middot; ${meta}` : ""}</div>
+    <div class="fin-row-pct">${total > 0 ? percent.toFixed(1) : "0.0"}% of section total${meta ? ` &middot; ${escapeHtml(meta)}` : ""}</div>
   `;
   container.appendChild(row);
 }
@@ -92,7 +117,7 @@ function renderCash(cashAccounts, cashTotal) {
 function renderAccountDonut(account, accIndex, symbolColors) {
   if (account.holdings.length <= 1) return;
   const slices = account.holdings.map((h) => ({ label: h.symbol, value: h.value, colorVar: symbolColors.get(h.symbol) }));
-  drawDonut(document.getElementById(`fin-account-donut-${accIndex}`), slices);
+  drawDonut(document.getElementById(`fin-account-donut-${accIndex}`), slices, { label: `${account.accountType} holdings` });
   renderLegend(`fin-account-legend-${accIndex}`, slices, account.total, { compact: true });
 }
 
@@ -105,8 +130,8 @@ function renderInvestments(investmentAccountTotals, investmentsTotal, symbolColo
       "fin-account-card",
       `
       <div class="fin-account-card-header">
-        <span class="fin-account-type">${account.accountType}</span>
-        <span class="fin-account-institution">${account.institution}</span>
+        <span class="fin-account-type">${escapeHtml(account.accountType)}</span>
+        <span class="fin-account-institution">${escapeHtml(account.institution)}</span>
         <span class="fin-account-total">${cad(account.total)}</span>
         <span class="fin-account-pct">${pct(account.total, investmentsTotal).toFixed(1)}% of investments</span>
       </div>
@@ -208,7 +233,7 @@ function renderLinesOfCredit(linesOfCredit) {
       "fin-loc-row",
       `
       <div class="fin-row-top">
-        <span class="fin-row-label">${loc.institution}<span class="fin-row-sublabel">${loc.interestRate.toFixed(2)}% interest</span></span>
+        <span class="fin-row-label">${escapeHtml(loc.institution)}<span class="fin-row-sublabel">${loc.interestRate.toFixed(2)}% interest</span></span>
         <span class="fin-row-value">${cad(loc.balance)} <span class="fin-row-sublabel">drawn</span></span>
       </div>
       <div class="fin-row-bar-track">
@@ -237,7 +262,7 @@ function renderLegend(containerId, slices, total, { compact = false } = {}) {
       compact ? "fin-legend-row fin-legend-row-compact" : "fin-legend-row",
       `
       <span class="fin-legend-swatch" style="background:var(${slice.colorVar})"></span>
-      <span class="fin-legend-label">${slice.label}</span>
+      <span class="fin-legend-label">${escapeHtml(slice.label)}</span>
       ${valueHtml}
       <span class="fin-legend-pct">${pct(slice.value, total).toFixed(1)}%</span>
     `
@@ -404,7 +429,7 @@ export async function initFinanceDashboard() {
     { label: "Investments", value: investmentsTotal, colorVar: "--status-green" },
     { label: "Bitcoin", value: bitcoinTotal, colorVar: "--flag" },
   ];
-  drawDonut(document.getElementById("fin-donut"), allocationSlices);
+  drawDonut(document.getElementById("fin-donut"), allocationSlices, { label: "Asset allocation" });
   renderLegend("fin-allocation-legend", allocationSlices, totalAssets);
 
   // A breakdown of the "Investments" slice above, one shade per account
@@ -415,7 +440,7 @@ export async function initFinanceDashboard() {
     value: acc.total,
     colorVar: `--invest-${i + 1}`,
   }));
-  drawDonut(document.getElementById("fin-investment-donut"), investmentSlices);
+  drawDonut(document.getElementById("fin-investment-donut"), investmentSlices, { label: "Investment breakdown" });
   renderLegend("fin-investment-legend", investmentSlices, investmentsTotal);
   const investDonutCenter = document.getElementById("fin-investment-donut-center-value");
   if (investDonutCenter) investDonutCenter.textContent = cad(investmentsTotal, { cents: false });
@@ -424,12 +449,20 @@ export async function initFinanceDashboard() {
   // individual stock/ETF make up (merging e.g. VEQT held in two accounts).
   const stockTotals = buildStockAggregate(investmentAccountTotals);
   const stockSlices = stockTotals.map((s) => ({ label: s.symbol, value: s.value, colorVar: symbolColors.get(s.symbol) }));
-  drawDonut(document.getElementById("fin-stock-donut"), stockSlices);
+  drawDonut(document.getElementById("fin-stock-donut"), stockSlices, { label: "Portfolio by stock/ETF" });
   renderLegend("fin-stock-legend", stockSlices, investmentsTotal);
   const stockDonutCenter = document.getElementById("fin-stock-donut-center-value");
   if (stockDonutCenter) stockDonutCenter.textContent = String(stockTotals.length);
 
-  drawNetWorthChart(document.getElementById("fin-networth-canvas"), document.getElementById("fin-networth-tooltip"), netWorthHistory);
+  // The chart's end-dot is drawn as "today," so its value has to match the
+  // live-priced net worth in the tile above rather than the static seed
+  // value netWorthHistory's last month was scaffolded with - otherwise the
+  // two "current net worth" figures disagree as soon as live quotes load.
+  const liveNetWorthHistory = netWorthHistory.length
+    ? [...netWorthHistory.slice(0, -1), { ...netWorthHistory[netWorthHistory.length - 1], value: netWorth }]
+    : netWorthHistory;
+
+  drawNetWorthChart(document.getElementById("fin-networth-canvas"), document.getElementById("fin-networth-tooltip"), liveNetWorthHistory);
 
   renderCash(cashAccounts, cashTotal);
   renderInvestments(investmentAccountTotals, investmentsTotal, symbolColors);

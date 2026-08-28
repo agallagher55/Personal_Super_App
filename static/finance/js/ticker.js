@@ -67,14 +67,21 @@ function renderPrices(bar, prices) {
       continue;
     }
 
-    const change = quote.change_pct ?? 0;
-    const direction = change > 0 ? "is-up" : change < 0 ? "is-down" : "is-flat";
-    const arrow = change > 0 ? "▲" : change < 0 ? "▼" : "—";
+    // change_pct is null when the upstream gave us a price but no previous
+    // close to compare it to (most often the BoC yield series) - omit the
+    // change line entirely rather than coercing it into a false "0.00%".
+    let changeHtml = "";
+    if (typeof quote.change_pct === "number") {
+      const change = quote.change_pct;
+      const direction = change > 0 ? "is-up" : change < 0 ? "is-down" : "is-flat";
+      const arrow = change > 0 ? "▲" : change < 0 ? "▼" : "—";
+      changeHtml = `<div class="ticker-change ${direction}">${arrow} ${formatChange(change)}</div>`;
+    }
 
     item.innerHTML = `
       <div class="ticker-label">${quote.label}</div>
       <div class="ticker-price">${formatPrice(quote.price, quote.unit)}</div>
-      <div class="ticker-change ${direction}">${arrow} ${formatChange(change)}</div>
+      ${changeHtml}
     `;
     bar.appendChild(item);
   }

@@ -83,7 +83,7 @@ def _fetch_one(ticker):
             price, previous_close = _fetch_boc(ticker)
         else:
             price, previous_close = _fetch_yahoo(ticker)
-        change_pct = ((price - previous_close) / previous_close * 100) if previous_close else 0.0
+        change_pct = ((price - previous_close) / previous_close * 100) if previous_close else None
         return {
             "symbol": ticker["symbol"],
             "label": ticker["label"],
@@ -103,8 +103,11 @@ def _fetch_one(ticker):
 
 # The watchlist response is identical for every caller, so a short TTL
 # cache turns repeat requests within the window into a memory read instead
-# of another round trip to Yahoo/BoC, and caps how often those upstreams
-# get hit. Guarded by a lock since the server handles requests on threads.
+# of another round trip to Yahoo/BoC. The lock is held for the whole fetch
+# (not just the cache check), so callers that arrive while a fetch is
+# already in flight - e.g. nav.js's BTC poll and ticker.js's watchlist
+# fetch, which fire ~1ms apart on every /finance page load - block on it
+# and then get the same result instead of each starting their own fetch.
 _PRICES_CACHE_TTL_SECONDS = 45
 _prices_cache_lock = threading.Lock()
 _prices_cache = {"body": None, "expires_at": 0.0}
@@ -114,28 +117,27 @@ def fetch_prices():
     """Returns (status, body). body is always {"prices": [...]}; a ticker
     whose fetch failed comes back with price/change_pct set to None rather
     than failing the whole response."""
-    now = time.monotonic()
     with _prices_cache_lock:
+        now = time.monotonic()
         if _prices_cache["body"] is not None and now < _prices_cache["expires_at"]:
             return 200, _prices_cache["body"]
 
-    # Fetch every ticker in parallel rather than looping serially, so total
-    # latency is one round trip instead of len(WATCHLIST) of them.
-    with ThreadPoolExecutor(max_workers=len(WATCHLIST)) as pool:
-        quotes = list(pool.map(_fetch_one, WATCHLIST))
-    body = {"prices": quotes}
+        # Fetch every ticker in parallel rather than looping serially, so
+        # total latency is one round trip instead of len(WATCHLIST) of them.
+        with ThreadPoolExecutor(max_workers=len(WATCHLIST)) as pool:
+            quotes = list(pool.map(_fetch_one, WATCHLIST))
+        body = {"prices": quotes}
 
-    with _prices_cache_lock:
         _prices_cache["body"] = body
         _prices_cache["expires_at"] = time.monotonic() + _PRICES_CACHE_TTL_SECONDS
 
-    return 200, body
+        return 200, body
 
 
 def _fetch_quote(symbol):
     try:
         price, previous_close = _fetch_yahoo({"symbol": symbol})
-        change_pct = ((price - previous_close) / previous_close * 100) if previous_close else 0.0
+        change_pct = ((price - previous_close) / previous_close * 100) if previous_close else None
         return {"price": price, "change_pct": change_pct}
     except Exception:
         # Same reasoning as _fetch_one: log server-side, degrade this one
