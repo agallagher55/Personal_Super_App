@@ -167,7 +167,7 @@ Design notes:
 **Linking a new institution** (first-time connect, or reconnecting after
 `login_required`):
 
-1. Frontend (`static/js/finance.js`) calls `POST /finance/link-token`.
+1. Frontend (`static/finance/js/dashboard.js`) calls `POST /finance/link-token`.
 2. Backend calls Plaid `/link/token/create`, returns the `link_token`.
 3. Frontend opens Plaid Link (Plaid's own hosted JS widget, loaded from
    `cdn.plaid.com` — the one intentional exception to this app having no
@@ -228,10 +228,14 @@ under `/finance/` (beyond the existing static `/finance` page route) into
 its own inline handlers — one process, one server, no new deployable, so
 `render.yaml` doesn't need to change.
 
-Frontend: `html/finance.html` becomes a real dashboard page, with a new
-`static/js/finance.js` following the existing per-page-script convention
-(`script.js`, `task-detail.js`, etc.) — no shared frontend framework
-introduced.
+Frontend: `html/finance.html` is already a real dashboard page (see
+`static/finance/js/{dashboard,charts,ticker}.js` and
+`static/finance/css/{dashboard,ticker}.css`) — a per-section directory
+under `static/finance/`, matching `static/fitness/`'s layout rather than
+the flat `static/js/` convention (`script.js`, `task-detail.js`, etc.)
+this section originally proposed. The Plaid sync's own frontend calls
+(link-token, item exchange, refresh) extend `dashboard.js` rather than
+introducing a new file, still with no shared frontend framework.
 
 ## 6. Security
 
