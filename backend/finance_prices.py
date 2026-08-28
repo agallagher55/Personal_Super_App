@@ -83,7 +83,7 @@ def _fetch_one(ticker):
             price, previous_close = _fetch_boc(ticker)
         else:
             price, previous_close = _fetch_yahoo(ticker)
-        change_pct = ((price - previous_close) / previous_close * 100) if previous_close else 0.0
+        change_pct = ((price - previous_close) / previous_close * 100) if previous_close else None
         return {
             "symbol": ticker["symbol"],
             "label": ticker["label"],
@@ -137,7 +137,7 @@ def fetch_prices():
 def _fetch_quote(symbol):
     try:
         price, previous_close = _fetch_yahoo({"symbol": symbol})
-        change_pct = ((price - previous_close) / previous_close * 100) if previous_close else 0.0
+        change_pct = ((price - previous_close) / previous_close * 100) if previous_close else None
         return {"price": price, "change_pct": change_pct}
     except Exception:
         # Same reasoning as _fetch_one: log server-side, degrade this one
