@@ -1,11 +1,11 @@
-// Renders the /finance dashboard template from data/finance-dashboard.json
+// Renders the /finance dashboard template from static/finance/finance-dashboard.json
 // (a plain static file for now - fetched client-side, no backend route
 // behind it). finance/ARCHITECTURE.md's Plaid sync (Phases 1-4) is what
 // eventually replaces that file with a real `/finance/api/*` endpoint;
 // this module only touches DASHBOARD_DATA_URL when that happens.
 import { drawNetWorthChart, drawDonut } from "./charts.js";
 
-const DASHBOARD_DATA_URL = "/data/finance-dashboard.json";
+const DASHBOARD_DATA_URL = "/static/finance/finance-dashboard.json";
 const HOLDING_PRICES_URL = "/finance/api/holding-prices";
 const STOCK_COLOR_SLOTS = 6; // matches --stock-1..--stock-6 in dashboard.css
 
