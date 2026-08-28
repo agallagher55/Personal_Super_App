@@ -20,6 +20,39 @@ function formatMonth(monthStr) {
   return d.toLocaleDateString(undefined, { month: "short" });
 }
 
+// Rounds `value` to a "nice" 1/2/5 x 10^n number (Heckbert's well-known
+// "nice numbers for graph labels" algorithm) - `round` picks the nearest
+// such number, while !round rounds up, which is what a nice *step size*
+// needs so it never undershoots the requested tick count.
+function niceNumber(value, round) {
+  const exponent = Math.floor(Math.log10(value));
+  const fraction = value / 10 ** exponent;
+  let niceFraction;
+  if (round) {
+    if (fraction < 1.5) niceFraction = 1;
+    else if (fraction < 3) niceFraction = 2;
+    else if (fraction < 7) niceFraction = 5;
+    else niceFraction = 10;
+  } else {
+    if (fraction <= 1) niceFraction = 1;
+    else if (fraction <= 2) niceFraction = 2;
+    else if (fraction <= 5) niceFraction = 5;
+    else niceFraction = 10;
+  }
+  return niceFraction * 10 ** exponent;
+}
+
+// Rounds the [min, max] axis domain outward to nice round tick values
+// (e.g. $32,207-$46,015 -> $32,000-$48,000 in steps of $4,000) instead of
+// evenly dividing the raw range, which produces an arbitrary-looking tick
+// on every gridline. targetSteps is a target, not a guarantee - the actual
+// tick count comes out close to it but can vary by one either way.
+function niceAxis(min, max, targetSteps) {
+  const rawStep = (max - min) / targetSteps;
+  const step = niceNumber(rawStep, true);
+  return { min: Math.floor(min / step) * step, max: Math.ceil(max / step) * step, step };
+}
+
 /**
  * Draws a net-worth-over-time line chart on `canvas` and wires up a hover
  * crosshair + tooltip (per the dataviz skill: line/area charts ship hover by
@@ -28,45 +61,61 @@ function formatMonth(monthStr) {
  * offsetParent as the canvas; pass null to skip hover wiring entirely.
  */
 export function drawNetWorthChart(canvas, tooltipEl, points) {
-  const dpr = window.devicePixelRatio || 1;
-  const cssWidth = canvas.clientWidth || canvas.width;
-  const cssHeight = canvas.clientHeight || canvas.height;
-  canvas.width = cssWidth * dpr;
-  canvas.height = cssHeight * dpr;
   const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const lineColor = themeColor("--ink");
-  const gridColor = themeColor("--line");
-  const mutedColor = themeColor("--ink-soft");
-  const surfaceColor = themeColor("--paper-raised");
+  let lineColor, gridColor, mutedColor, surfaceColor;
+  function readThemeColors() {
+    lineColor = themeColor("--ink");
+    gridColor = themeColor("--line");
+    mutedColor = themeColor("--ink-soft");
+    surfaceColor = themeColor("--paper-raised");
+  }
+  readThemeColors();
 
   const padding = { top: 14, right: 10, bottom: 22, left: 60 };
-  const innerW = cssWidth - padding.left - padding.right;
-  const innerH = cssHeight - padding.top - padding.bottom;
 
   const values = points.map((p) => p.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || Math.max(max, 1) * 0.1;
-  const yMin = min - range * 0.15;
-  const yMax = max + range * 0.15;
+  const steps = 4;
+  const { min: yMin, max: yMax, step: tickStep } = niceAxis(min - range * 0.15, max + range * 0.15, steps);
   const yRange = yMax - yMin || 1;
+  const tickCount = Math.round(yRange / tickStep);
 
-  const xFor = (i) => padding.left + (points.length <= 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
-  const yFor = (v) => padding.top + innerH - ((v - yMin) / yRange) * innerH;
+  // Rebuilt by measure() on every render - initial draw, a theme toggle,
+  // and a resize (#81/#82) - so the backing store and the xFor/yFor scale
+  // (and therefore the hover mapping) always match the canvas's current
+  // on-screen size rather than whatever size it had at first draw.
+  let cssWidth, cssHeight, innerH, xFor, yFor;
+
+  function measure() {
+    const dpr = window.devicePixelRatio || 1;
+    cssWidth = canvas.clientWidth || canvas.width;
+    cssHeight = canvas.clientHeight || canvas.height;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const innerW = cssWidth - padding.left - padding.right;
+    innerH = cssHeight - padding.top - padding.bottom;
+    xFor = (i) => padding.left + (points.length <= 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
+    yFor = (v) => padding.top + innerH - ((v - yMin) / yRange) * innerH;
+  }
 
   function drawFrame(hoverIndex) {
     ctx.clearRect(0, 0, cssWidth, cssHeight);
 
     // Gridlines - hairline, one-step-off-surface, with $ tick labels.
-    const steps = 4;
+    // Nice round values (niceAxis above) rather than an even division of
+    // the raw range, so ticks read like $32,000/$36,000/... instead of an
+    // arbitrary-looking $32,207/$35,659/....
     ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
     ctx.fillStyle = mutedColor;
     ctx.font = "10px 'JetBrains Mono', monospace";
-    for (let s = 0; s <= steps; s++) {
-      const v = yMin + (yRange * s) / steps;
+    for (let s = 0; s <= tickCount; s++) {
+      const v = yMin + s * tickStep;
       const y = yFor(v);
       ctx.beginPath();
       ctx.moveTo(padding.left, y);
@@ -143,7 +192,34 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
     }
   }
 
-  drawFrame(null);
+  function render() {
+    measure();
+    drawFrame(null);
+  }
+
+  render();
+
+  // The colors above are read once and baked into the canvas bitmap, so a
+  // light/dark toggle (data-theme flips on <html>, see static/js/theme.js)
+  // needs an explicit redraw - nothing else invalidates the canvas.
+  const themeObserver = new MutationObserver(() => {
+    readThemeColors();
+    render();
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  // The canvas's CSS size tracks its container (.fin-networth-canvas is
+  // width: 100%) but the backing store and the xFor/yFor scale above were
+  // only ever computed once - without this, a viewport resize squeezes the
+  // stale bitmap (distorting the line/text) and leaves the hover crosshair
+  // resolving against the old width. Debounced since resize fires rapidly.
+  let resizeTimer = null;
+  const resizeObserver = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 100);
+  });
+  resizeObserver.observe(canvas);
+
   if (!tooltipEl) return;
 
   canvas.addEventListener("mousemove", (e) => {
@@ -180,10 +256,14 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
  * a native SVG <title> as its hover tooltip - segments are marks, per the
  * dataviz skill every mark needs one, and this needs no extra JS wiring.
  * Zero-value slices are skipped (a hairline dasharray gap would otherwise
- * render as a visible sliver). Generic across both dashboard donuts (asset
- * allocation, investment breakdown) - only the slices passed in differ.
+ * render as a visible sliver). Generic across all six dashboard donuts
+ * (asset allocation, investment breakdown, portfolio by stock/ETF, and the
+ * per-account holdings donuts) - only the slices and `label` differ.
+ * `label` is this chart's accessible name (aria-label) - every call site
+ * must pass one distinct to that chart, since screen readers otherwise
+ * can't tell the donuts apart.
  */
-export function drawDonut(container, slices) {
+export function drawDonut(container, slices, { label }) {
   const total = slices.reduce((s, x) => s + x.value, 0);
   const radius = 54;
   const thickness = 22;
@@ -194,7 +274,7 @@ export function drawDonut(container, slices) {
   svg.setAttribute("viewBox", "0 0 140 140");
   svg.setAttribute("class", "donut-svg");
   svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", "Asset allocation");
+  svg.setAttribute("aria-label", label);
 
   const track = document.createElementNS(svgNS, "circle");
   track.setAttribute("cx", "70");

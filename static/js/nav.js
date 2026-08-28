@@ -98,11 +98,19 @@
         wrap.classList.remove("is-error");
         priceEl.textContent = formatPrice(quote.price);
 
-        var change = quote.change_pct || 0;
-        var direction = change > 0 ? "is-up" : change < 0 ? "is-down" : "is-flat";
-        var arrow = change > 0 ? "▲" : change < 0 ? "▼" : "—";
-        changeEl.className = "global-nav-btc-change " + direction;
-        changeEl.textContent = arrow + " " + formatChange(change);
+        // change_pct is null when the upstream gave us a price but no
+        // previous close to compare it to - omit the change line entirely
+        // rather than coercing it into a false "0.00%".
+        if (typeof quote.change_pct === "number") {
+          var change = quote.change_pct;
+          var direction = change > 0 ? "is-up" : change < 0 ? "is-down" : "is-flat";
+          var arrow = change > 0 ? "▲" : change < 0 ? "▼" : "—";
+          changeEl.className = "global-nav-btc-change " + direction;
+          changeEl.textContent = arrow + " " + formatChange(change);
+        } else {
+          changeEl.className = "global-nav-btc-change";
+          changeEl.textContent = "";
+        }
       })
       .catch(function () {
         wrap.classList.add("is-error");
