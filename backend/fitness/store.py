@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -22,6 +23,12 @@ from pathlib import Path
 # (sections.json, tasks.json, tags.json) and covered by the same persistent
 # disk mount in render.yaml.
 DATA_PATH = Path(__file__).parent.parent.parent / "data" / "fitness" / "health_data.json"
+
+# (mtime_ns, size) -> the store parsed from DATA_PATH at that state, or None
+# before the first load_store_cached() call. Guarded by _cache_lock; see
+# load_store_cached().
+_cache = None
+_cache_lock = threading.Lock()
 
 
 def load_store():
@@ -67,6 +74,39 @@ def load_store():
             file=sys.stderr,
         )
         return {"metrics": {}, "last_synced": {}}
+
+
+def load_store_cached():
+    """Same data as load_store(), but skips the read+JSON-parse of DATA_PATH
+    entirely when the file hasn't changed since the last call - only an
+    os.stat() (cheap) runs on a cache hit. `backend/fitness/api.py`'s
+    read-only endpoints (dashboard summary, metric detail, samples) call
+    this instead of load_store(): every one of them used to re-parse the
+    whole file from scratch on every single request, and that file only
+    grows over time (heart_rate samples in particular accumulate forever -
+    see api.py's _POINT_DATE_EXTRACTORS comment), which is what made even
+    just viewing the dashboard slow.
+
+    Callers MUST treat the returned dict as read-only - it's the same
+    object handed to every caller until the file changes, not a fresh copy
+    per call. `sync.py` mutates its store in place over the course of
+    several Google API calls before saving, so it deliberately uses the
+    always-fresh, never-shared load_store() above instead - sharing this
+    cache with it would let a concurrent read see a sync that's only
+    half-applied.
+    """
+    global _cache
+    if not DATA_PATH.exists():
+        return {"metrics": {}, "last_synced": {}}
+    stat = DATA_PATH.stat()
+    cache_key = (stat.st_mtime_ns, stat.st_size)
+    with _cache_lock:
+        if _cache is not None and _cache[0] == cache_key:
+            return _cache[1]
+    data = load_store()
+    with _cache_lock:
+        _cache = (cache_key, data)
+    return data
 
 
 def save_store(store):

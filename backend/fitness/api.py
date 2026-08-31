@@ -508,7 +508,7 @@ def health():
 
 def metrics_summary(query):
     from_d, to_d = _parse_range(query, DEFAULT_SUMMARY_RANGE_DAYS)
-    data_store = store.load_store()
+    data_store = store.load_store_cached()
     metrics = {m: _metric_records(data_store, m, from_d, to_d) for m in KNOWN_METRICS}
     return 200, {"from": from_d.isoformat(), "to": to_d.isoformat(), "metrics": metrics}
 
@@ -517,7 +517,7 @@ def metric_detail(metric, query):
     if metric not in KNOWN_METRICS:
         return 404, {"error": f"unknown metric: {metric}"}
     from_d, to_d = _parse_range(query, DEFAULT_DETAIL_RANGE_DAYS)
-    data_store = store.load_store()
+    data_store = store.load_store_cached()
     records = _metric_records(data_store, metric, from_d, to_d)
     return 200, {
         "metric": metric,
@@ -543,7 +543,7 @@ def metric_samples(metric, query):
     if from_dt is None or to_dt is None:
         return 400, {"error": "from and to must both be ISO 8601 datetimes"}
     nested_key, value_key = SAMPLE_METRICS[metric]
-    data_store = store.load_store()
+    data_store = store.load_store_cached()
     samples = []
     for p in data_store.get("metrics", {}).get(metric, []):
         payload = p.get(nested_key)

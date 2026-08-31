@@ -113,10 +113,20 @@ own top-level `backend/`:
   covered by the same `render.yaml` persistent disk mount over `data/`, so
   no deployment config changed to add this.
 
-Every read (`store.load_store()`) parses the whole file; every write
-(`store.save_store()`) serializes and overwrites the whole file — no
-indexing, no locking, same characteristics (and same caveats) as this app's
-existing `tasks.json` store described in `architecture_Review.md` §2.
+Every write (`store.save_store()`) serializes and overwrites the whole file
+(atomically, via a temp file + `os.replace()`) — no indexing, no locking,
+same characteristics (and same caveats) as this app's existing `tasks.json`
+store described in `architecture_Review.md` §2. Reads have one exception to
+"no indexing, no caching": `store.load_store_cached()` (used by every
+`fitness_api.*` read endpoint, not `sync.py` — see §4) keeps the last
+successfully-parsed store in memory for the life of the process and only
+re-parses when `data/fitness/health_data.json`'s mtime/size changes, since
+re-parsing that file (which only grows — see §6) on every single request
+was making even just viewing the dashboard slow. `store.load_store()`
+itself is still an uncached, full parse every call, used by `sync.py`,
+which mutates its store in place across several Google API calls before
+saving — sharing the read cache with it would let a concurrent request see
+a sync that's only half-applied.
 
 ## 4. Data flow
 
@@ -133,10 +143,12 @@ so one failing metric doesn't drop every other metric's results — see
 
 **Query (read path):** browser → `GET /fitness/api/metrics` (or
 `/metrics/{metric}`, `/metrics/{metric}/samples`) → `TaskHandler` →
-`fitness_api.*` loads the **entire** JSON file via `store.load_store()`,
-reshapes the relevant metric's raw points into the `API-CONTRACT.md` shape,
-filters by date range, and returns the body for `TaskHandler` to send as
-JSON. Nothing is cached or pre-aggregated — same on every request.
+`fitness_api.*` loads the **entire** JSON file via `store.load_store_cached()`
+(a fresh parse on the first call, or after the file changes; the cached
+in-memory store otherwise), reshapes the relevant metric's raw points into
+the `API-CONTRACT.md` shape, filters by date range, and returns the body for
+`TaskHandler` to send as JSON. Nothing is pre-aggregated — the reshape/filter
+work still runs every request, only the disk read + JSON parse is cached.
 
 ## 5. Frontend
 
