@@ -27,27 +27,46 @@ DATA_PATH = Path(__file__).parent.parent.parent / "data" / "fitness" / "health_d
 def load_store():
     if not DATA_PATH.exists():
         return {"metrics": {}, "last_synced": {}}
+    # Read fully and close the handle (exiting the `with` block) before any
+    # possible os.replace() below - on Windows, unlike POSIX, a file can't be
+    # renamed while this process still holds it open, which would otherwise
+    # turn a JSONDecodeError into an unrelated PermissionError/WinError 32.
     with open(DATA_PATH, "r", encoding="utf-8") as f:
+        content = f.read()
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        # A partial/non-atomic save_store() write (process killed, crashed,
+        # or disk-full mid-write) can leave this file truncated - parsing it
+        # then fails deep into the file rather than cleanly at byte 0.
+        # Crashing every sync forever on a file sync itself produced is
+        # worse than losing this run: rename the unreadable file aside (for
+        # manual inspection/recovery) and start fresh, same as a first-ever
+        # sync.
+        corrupt_path = DATA_PATH.with_name(
+            f"{DATA_PATH.name}.corrupt-{int(time.time())}"
+        )
         try:
-            return json.load(f)
-        except json.JSONDecodeError as exc:
-            # A partial/non-atomic save_store() write (process killed,
-            # crashed, or disk-full mid-write) can leave this file
-            # truncated - json.load() then fails deep into the file rather
-            # than cleanly at byte 0. Crashing every sync forever on a file
-            # sync itself produced is worse than losing this run: rename the
-            # unreadable file aside (for manual inspection/recovery) and
-            # start fresh, same as a first-ever sync.
-            corrupt_path = DATA_PATH.with_name(
-                f"{DATA_PATH.name}.corrupt-{int(time.time())}"
-            )
             os.replace(DATA_PATH, corrupt_path)
+        except OSError as rename_exc:
+            # Some other process (antivirus, OneDrive/cloud sync, an editor)
+            # briefly holding the file can still make the rename itself
+            # fail. Don't let that turn into a crash either - fall through
+            # to the fresh store below; save_store() will overwrite the
+            # still-corrupt file on the next successful sync regardless.
             print(
-                f"warning: {DATA_PATH} was not valid JSON ({exc}); "
-                f"moved it to {corrupt_path} and starting from an empty store",
+                f"warning: {DATA_PATH} was not valid JSON ({exc}); could not "
+                f"move it aside either ({rename_exc}) - starting from an "
+                "empty store",
                 file=sys.stderr,
             )
             return {"metrics": {}, "last_synced": {}}
+        print(
+            f"warning: {DATA_PATH} was not valid JSON ({exc}); "
+            f"moved it to {corrupt_path} and starting from an empty store",
+            file=sys.stderr,
+        )
+        return {"metrics": {}, "last_synced": {}}
 
 
 def save_store(store):
