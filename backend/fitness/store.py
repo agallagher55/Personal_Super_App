@@ -12,6 +12,9 @@ here.
 
 import hashlib
 import json
+import os
+import sys
+import time
 from pathlib import Path
 
 # backend/fitness/store.py -> backend/fitness -> backend -> repo root, then
@@ -25,13 +28,41 @@ def load_store():
     if not DATA_PATH.exists():
         return {"metrics": {}, "last_synced": {}}
     with open(DATA_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        try:
+            return json.load(f)
+        except json.JSONDecodeError as exc:
+            # A partial/non-atomic save_store() write (process killed,
+            # crashed, or disk-full mid-write) can leave this file
+            # truncated - json.load() then fails deep into the file rather
+            # than cleanly at byte 0. Crashing every sync forever on a file
+            # sync itself produced is worse than losing this run: rename the
+            # unreadable file aside (for manual inspection/recovery) and
+            # start fresh, same as a first-ever sync.
+            corrupt_path = DATA_PATH.with_name(
+                f"{DATA_PATH.name}.corrupt-{int(time.time())}"
+            )
+            os.replace(DATA_PATH, corrupt_path)
+            print(
+                f"warning: {DATA_PATH} was not valid JSON ({exc}); "
+                f"moved it to {corrupt_path} and starting from an empty store",
+                file=sys.stderr,
+            )
+            return {"metrics": {}, "last_synced": {}}
 
 
 def save_store(store):
     DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(DATA_PATH, "w", encoding="utf-8") as f:
+    # Write to a temp file and swap it into place with os.replace() (atomic
+    # on both POSIX and Windows) rather than writing DATA_PATH directly -
+    # otherwise a process kill, crash, or full disk partway through
+    # json.dump() leaves a truncated, unparseable file in place of the last
+    # known-good store (see load_store()'s JSONDecodeError handling above).
+    tmp_path = DATA_PATH.with_name(f"{DATA_PATH.name}.tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(store, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, DATA_PATH)
 
 
 def add_data_points(store, metric, data_points):
