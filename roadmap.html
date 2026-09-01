@@ -213,10 +213,17 @@
       </div>
       <div class="status-item">
         <div class="label-row">
-          <span class="name">Fitness / Google login</span>
+          <span class="name">Fitness / Google data pull</span>
           <span class="pill pill-done">Done</span>
         </div>
-        <div class="desc">OAuth against the Google Health API is fully implemented and confirmed live (steps, HRV, SpO2, sleep, weight). This <em>is</em> the Fitbit connection now &mdash; Fitbit's own Web API is being retired Sept 2026, Google Health is its replacement.</div>
+        <div class="desc">The app pulling <em>one</em> person's Google Health data (steps, HRV, SpO2, sleep, weight) via OAuth is fully working &mdash; this is the Fitbit replacement, since Fitbit's own Web API is being retired Sept 2026.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Fitness / visitor Google login</span>
+          <span class="pill pill-next">Not built</span>
+        </div>
+        <div class="desc">A different thing: letting <em>someone else</em> visit <code>/fitness</code> and sign in with their own Google account to see their own data. Today's OAuth flow is a one-time CLI step for the app owner only &mdash; there's no browser-based sign-in, no sessions, and storage is a single shared file, not per-user.</div>
       </div>
       <div class="status-item">
         <div class="label-row">
@@ -237,9 +244,9 @@
 
   <section class="card">
     <h2>Recommendation</h2>
-    <p>Of the three things on the table &mdash; fitness/Google login, Plaid for finance, and standing up a database &mdash; the first is already shipped, and the other two turn out to be <strong>the same next step</strong>: Phase&nbsp;1 of the finance plan is exactly "create <code>data/finance.db</code> from <code>schema.sql</code>." There's no separate database decision left to make.</p>
+    <p>Two of the three original items turn out to be the same step &mdash; Phase&nbsp;1 of the finance plan is literally "create <code>data/finance.db</code> from <code>schema.sql</code>," so there's no separate database decision to make. And the fitness item turned out to mean something not yet built: real per-visitor Google sign-in, not the already-working owner-side data pull.</p>
     <div class="rec-box">
-      <p><strong>Start Finance Phase 0&ndash;1:</strong> Plaid sandbox account, add <code>requirements.txt</code> (<code>plaid-python</code>, <code>cryptography</code>), stand up <code>data/finance.db</code>, and get the Link flow working end-to-end against Plaid Sandbox data. This is the biggest real gap in the app, it's already scoped in detail, and everything else in finance (transactions, investments, categorization) builds on it.</p>
+      <p><strong>Start with fitness visitor sign-in.</strong> Smaller and lower-stakes than the Plaid build (no money movement, no encryption-at-rest requirement of that caliber), and it's the one someone's actually asking to use. One real constraint: the Google OAuth client is currently unverified and capped at a manually-added "Test users" list (100 max) &mdash; fine for family/friends scale, but going fully public later needs Google's separate app-verification process.</p>
     </div>
   </section>
 
@@ -248,6 +255,20 @@
 
     <div class="phase">
       <div class="phase-marker"><span class="pill pill-next">Up next</span></div>
+      <div class="phase-body">
+        <h3>Fitness: per-visitor Google sign-in</h3>
+        <ul>
+          <li>Browser-driven OAuth: a "Connect with Google" button on <code>/fitness</code> &rarr; consent screen &rarr; callback route in <code>backend/server.py</code> &mdash; adapting the flow already in <code>backend/fitness/auth.py</code> from CLI-only to web-triggered</li>
+          <li>A session/cookie layer <span class="fine">(the app has none today &mdash; smallest version: a signed session cookie identifying the visitor)</span></li>
+          <li>Per-user token storage, replacing the single <code>backend/fitness/config.json</code></li>
+          <li>Per-user data storage, replacing the single <code>data/fitness/health_data.json</code></li>
+          <li>Add each expected visitor's email to the OAuth client's Test users list in Google Cloud Console <span class="fine">(manual, outside code, required today per the cap above)</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-next">Then</span></div>
       <div class="phase-body">
         <h3>Finance: Link + storage</h3>
         <ul>
@@ -260,7 +281,7 @@
     </div>
 
     <div class="phase">
-      <div class="phase-marker"><span class="pill pill-next">Then</span></div>
+      <div class="phase-marker"><span class="pill pill-later">Later</span></div>
       <div class="phase-body">
         <h3>Finance: transactions, and the fixes it now needs</h3>
         <ul>
@@ -272,7 +293,7 @@
     </div>
 
     <div class="phase">
-      <div class="phase-marker"><span class="pill pill-later">Later</span></div>
+      <div class="phase-marker"><span class="pill pill-later">Further out</span></div>
       <div class="phase-body">
         <h3>Finance: investments, categorization, going live</h3>
         <ul>
