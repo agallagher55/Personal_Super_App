@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personal Super App &mdash; Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f5f1;
+    --sheet: #ffffff;
+    --ink: #1f1c17;
+    --ink-dim: #6b6459;
+    --line: #e7e2d9;
+    --accent: #8a5a2b;
+    --accent-soft: #f1e4d3;
+    --green: #3f7d4f;
+    --green-soft: #e4f0e6;
+    --blue: #3b6ea5;
+    --blue-soft: #e4ecf5;
+    --amber: #a4762a;
+    --amber-soft: #f5ead3;
+    --grey-soft: #ececea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #181613;
+      --sheet: #221f1a;
+      --ink: #eee9e0;
+      --ink-dim: #a49a8a;
+      --line: #3a352c;
+      --accent: #d8a469;
+      --accent-soft: #3a2f20;
+      --green: #7fbf8f;
+      --green-soft: #223828;
+      --blue: #8fb8e0;
+      --blue-soft: #1f2c3a;
+      --amber: #dbb46a;
+      --amber-soft: #3a3020;
+      --grey-soft: #2b2822;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Work Sans", -apple-system, sans-serif;
+    line-height: 1.55;
+  }
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  header.top {
+    margin-bottom: 40px;
+  }
+  h1 {
+    font-family: "Newsreader", serif;
+    font-weight: 700;
+    font-size: 2.4rem;
+    margin: 0 0 6px;
+  }
+  .subtitle {
+    color: var(--ink-dim);
+    font-size: 1.02rem;
+    margin: 0;
+  }
+  .meta-line {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+    margin-top: 14px;
+  }
+  .card {
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 30px;
+    margin-bottom: 24px;
+  }
+  h2 {
+    font-family: "Newsreader", serif;
+    font-weight: 700;
+    font-size: 1.35rem;
+    margin: 0 0 14px;
+  }
+  h3 {
+    font-family: "Newsreader", serif;
+    font-weight: 600;
+    font-size: 1.08rem;
+    margin: 0 0 4px;
+  }
+  p { margin: 0 0 12px; }
+  p:last-child { margin-bottom: 0; }
+  a { color: var(--accent); }
+
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 14px;
+    margin-top: 4px;
+  }
+  .status-item {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .status-item .label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .status-item .name {
+    font-weight: 600;
+  }
+  .pill {
+    display: inline-block;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .pill-done { background: var(--green-soft); color: var(--green); }
+  .pill-next { background: var(--accent-soft); color: var(--accent); }
+  .pill-later { background: var(--blue-soft); color: var(--blue); }
+  .pill-idea { background: var(--grey-soft); color: var(--ink-dim); }
+  .status-item .desc {
+    color: var(--ink-dim);
+    font-size: 0.9rem;
+  }
+
+  .rec-box {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 10px 10px 0;
+    padding: 16px 20px;
+    margin-top: 6px;
+  }
+  .rec-box p { color: var(--ink); }
+
+  .phase {
+    display: flex;
+    gap: 18px;
+    padding: 18px 0;
+    border-top: 1px solid var(--line);
+  }
+  .phase:first-of-type { border-top: none; padding-top: 6px; }
+  .phase-marker {
+    flex: 0 0 auto;
+    width: 92px;
+  }
+  .phase-body { flex: 1 1 auto; }
+  .phase-body ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+  }
+  .phase-body li {
+    margin-bottom: 5px;
+    color: var(--ink);
+  }
+  .phase-body li .fine {
+    color: var(--ink-dim);
+    font-size: 0.9rem;
+  }
+  .why {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    color: var(--ink-dim);
+    font-style: italic;
+  }
+
+  footer.notes {
+    color: var(--ink-dim);
+    font-size: 0.88rem;
+    margin-top: 8px;
+  }
+  code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.85em;
+    background: var(--grey-soft);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="top">
+    <h1>Roadmap</h1>
+    <p class="subtitle">A soft, living plan &mdash; priorities and rough sequencing, not a committed schedule. Revisit whenever priorities shift.</p>
+    <div class="meta-line">Last written 2026-09-01 &middot; source docs: <code>architecture_Review.md</code>, <code>finance/ARCHITECTURE.md</code>, <code>fitness/README.md</code></div>
+  </header>
+
+  <section class="card">
+    <h2>Where things stand</h2>
+    <div class="status-grid">
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Tasks tracker</span>
+          <span class="pill pill-done">Done</span>
+        </div>
+        <div class="desc">Full CRUD, categories, tags, notes &mdash; the one feature that's been end-to-end real since the start.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Fitness / Google data pull</span>
+          <span class="pill pill-done">Done</span>
+        </div>
+        <div class="desc">The app pulling <em>one</em> person's Google Health data (steps, HRV, SpO2, sleep, weight) via OAuth is fully working &mdash; this is the Fitbit replacement, since Fitbit's own Web API is being retired Sept 2026.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Fitness / visitor Google login</span>
+          <span class="pill pill-next">Not built</span>
+        </div>
+        <div class="desc">A different thing: letting <em>someone else</em> visit <code>/fitness</code> and sign in with their own Google account to see their own data. Today's OAuth flow is a one-time CLI step for the app owner only &mdash; there's no browser-based sign-in, no sessions, and storage is a single shared file, not per-user.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Finance dashboard</span>
+          <span class="pill pill-next">Planned, not built</span>
+        </div>
+        <div class="desc">UI is real but reads a static seed JSON file. Plaid sync layer is fully spec'd in <code>finance/ARCHITECTURE.md</code> but zero code exists yet.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Real database</span>
+          <span class="pill pill-next">Planned, not built</span>
+        </div>
+        <div class="desc">Everything today is flat JSON files. <code>finance/schema.sql</code> already defines the SQLite schema &mdash; standing it up is step one of the Plaid work, not a separate project.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Recommendation</h2>
+    <p>Two of the three original items turn out to be the same step &mdash; Phase&nbsp;1 of the finance plan is literally "create <code>data/finance.db</code> from <code>schema.sql</code>," so there's no separate database decision to make. And the fitness item turned out to mean something not yet built: real per-visitor Google sign-in, not the already-working owner-side data pull.</p>
+    <div class="rec-box">
+      <p><strong>Start with fitness visitor sign-in.</strong> Smaller and lower-stakes than the Plaid build (no money movement, no encryption-at-rest requirement of that caliber), and it's the one someone's actually asking to use. One real constraint: the Google OAuth client is currently unverified and capped at a manually-added "Test users" list (100 max) &mdash; fine for family/friends scale, but going fully public later needs Google's separate app-verification process.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Soft sequencing</h2>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-next">Up next</span></div>
+      <div class="phase-body">
+        <h3>Fitness: per-visitor Google sign-in</h3>
+        <ul>
+          <li>Browser-driven OAuth: a "Connect with Google" button on <code>/fitness</code> &rarr; consent screen &rarr; callback route in <code>backend/server.py</code> &mdash; adapting the flow already in <code>backend/fitness/auth.py</code> from CLI-only to web-triggered</li>
+          <li>A session/cookie layer <span class="fine">(the app has none today &mdash; smallest version: a signed session cookie identifying the visitor)</span></li>
+          <li>Per-user token storage, replacing the single <code>backend/fitness/config.json</code></li>
+          <li>Per-user data storage, replacing the single <code>data/fitness/health_data.json</code></li>
+          <li>Add each expected visitor's email to the OAuth client's Test users list in Google Cloud Console <span class="fine">(manual, outside code, required today per the cap above)</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-next">Then</span></div>
+      <div class="phase-body">
+        <h3>Finance: Link + storage</h3>
+        <ul>
+          <li>Plaid developer account, sandbox access <span class="fine">(instant, free)</span></li>
+          <li><code>requirements.txt</code>: <code>plaid-python</code>, <code>cryptography</code> &mdash; first third-party deps in the repo</li>
+          <li><code>data/finance.db</code> from <code>finance/schema.sql</code>, plus <code>db.py</code>, <code>crypto.py</code>, <code>plaid_client.py</code></li>
+          <li>Link flow end-to-end in Sandbox: one <code>plaid_items</code> row + its <code>accounts</code> rows</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-later">Later</span></div>
+      <div class="phase-body">
+        <h3>Finance: transactions, and the fixes it now needs</h3>
+        <ul>
+          <li><code>/transactions/sync</code> integration, real transaction list on <code>/finance</code></li>
+          <li>Atomic writes + a file lock around JSON read-modify-write <span class="fine">(cheap, closes a data-loss risk that gets worse once real bank data is involved)</span></li>
+          <li>Pull the minimal auth gate forward from Phase 5 <span class="fine">(a public URL holding real transactions needs this sooner than "eventually")</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-later">Further out</span></div>
+      <div class="phase-body">
+        <h3>Finance: investments, categorization, going live</h3>
+        <ul>
+          <li>Holdings + investment transactions, net-worth/portfolio summary</li>
+          <li>User-editable transaction categories, spending-by-category view</li>
+          <li>Harden the auth gate, then flip <code>PLAID_ENV</code> from sandbox to production</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-idea">Watch list</span></div>
+      <div class="phase-body">
+        <h3>Not urgent, but resurface before it gets expensive</h3>
+        <ul>
+          <li>Flask/Django migration decision <span class="fine">(cheap to defer now, expensive to defer once finance route code piles up on stdlib <code>http.server</code>)</span></li>
+          <li>Basic test suite for <code>backend/server.py</code>'s handlers</li>
+          <li>Shared <code>static/js/api.js</code> module to stop the 4-way duplication across tasks pages</li>
+          <li>Nightly scheduled Plaid sync, liabilities product, holdings-history table <span class="fine">(finance Phase 6, optional)</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer class="notes">
+    <p>Full detail lives in <a href="finance/ARCHITECTURE.md">finance/ARCHITECTURE.md</a> (phased plan, data model, security requirements) and <a href="architecture_Review.md">architecture_Review.md</a> (the cheap-fix findings referenced above). This page is a snapshot for orientation, not a replacement for either.</p>
+  </footer>
+
+</div>
+</body>
+</html>
