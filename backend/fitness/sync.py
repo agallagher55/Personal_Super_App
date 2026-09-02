@@ -1,7 +1,8 @@
-"""Orchestrates pulling data from the Google Health API into the local
-JSON store (see docs/backend-architecture.md).
+"""Orchestrates pulling data from the Google Health API into a visitor's
+local JSON store (see fitness/ARCHITECTURE.md).
 """
 
+import threading
 from datetime import date, timedelta
 
 import google_health_client
@@ -11,12 +12,24 @@ from auth import get_valid_access_token
 # How far back to pull the first time a given metric has never been synced.
 DEFAULT_BACKFILL_DAYS = 30
 
+# One lock per user_id, created on first use. Guards against a double-clicked
+# "Sync now" interleaving two read-modify-write cycles on the same user's
+# store file - the server is a ThreadingHTTPServer, so this is reachable
+# today and gets more likely with several visitors syncing concurrently.
+_sync_locks = {}
+_sync_locks_guard = threading.Lock()
 
-def sync_all(metrics=None):
+
+def lock_for(user_id):
+    with _sync_locks_guard:
+        return _sync_locks.setdefault(user_id, threading.Lock())
+
+
+def sync_all(user_id, metrics=None):
     """Sync each metric from its last-synced date (or DEFAULT_BACKFILL_DAYS
-    ago, if never synced) through today. Returns (results, errors):
-    results is {metric: points_fetched} for metrics that succeeded, errors
-    is {metric: error message} for metrics that didn't.
+    ago, if never synced) through today, for this user. Returns (results,
+    errors): results is {metric: points_fetched} for metrics that
+    succeeded, errors is {metric: error message} for metrics that didn't.
 
     One metric's request failing (e.g. a newly-added data type whose
     read_method turns out to be wrong for this account - see
@@ -29,8 +42,8 @@ def sync_all(metrics=None):
     retried on the next sync instead of being skipped.
     """
     metrics = metrics or list(google_health_client.DATA_TYPES.keys())
-    access_token = get_valid_access_token()
-    data_store = store.load_store()
+    access_token = get_valid_access_token(user_id)
+    data_store = store.load_store(user_id)
     today = date.today()
 
     results = {}
@@ -55,5 +68,5 @@ def sync_all(metrics=None):
         data_store.setdefault("last_synced", {})[metric] = today.isoformat()
         results[metric] = len(points)
 
-    store.save_store(data_store)
+    store.save_store(user_id, data_store)
     return results, errors

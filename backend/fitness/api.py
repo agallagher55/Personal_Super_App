@@ -1,12 +1,16 @@
 """Query API for the ported Personal Health app, mounted under /fitness/api
 (see fitness/API-CONTRACT.md and backend/server.py's routing).
 
-Reshapes raw points from the local data store (data/fitness/health_data.json,
-via store.py) into the response shapes the frontend expects - never calls
-the Google Health API directly, except sync(), which delegates to
-sync.sync_all(). Plain functions rather than an HTTP handler class, since
-backend/server.py's TaskHandler owns the actual request/response plumbing
-and dispatches into these - see that module's /fitness/api/* routes.
+Reshapes raw points from a visitor's own local data store
+(data/fitness/users/<user_id>/health_data.json, via store.py) into the
+response shapes the frontend expects - never calls the Google Health API
+directly, except trigger_sync(), which delegates to sync.sync_all(). Every
+handler below takes a leading user_id, resolved by backend/server.py from
+the request's session cookie before dispatch (see
+fitness/VISITOR-SIGNIN-PLAN.md). Plain functions rather than an HTTP
+handler class, since backend/server.py's TaskHandler owns the actual
+request/response plumbing and dispatches into these - see that module's
+/fitness/api/* routes.
 
 Ported from the standalone personal_health app's backend/server.py; the
 reshaping logic itself is unchanged, only the HTTP glue was extracted out.
@@ -15,8 +19,10 @@ reshaping logic itself is unchanged, only the HTTP glue was extracted out.
 import functools
 from datetime import date, datetime, timedelta
 
+import auth
 import store
 import sync
+import users
 
 KNOWN_METRICS = ("steps", "heart_rate", "sleep", "activity", "spo2", "hrv", "breathing_rate", "temperature", "weight")
 
@@ -498,26 +504,43 @@ def _metric_records(data_store, metric, from_d, to_d):
 # (backend/server.py's TaskHandler) to serialize and send.
 # ---------------------------------------------------------------------------
 
-def health():
+def health(user_id):
     last_modified = None
-    if store.DATA_PATH.exists():
-        mtime = store.DATA_PATH.stat().st_mtime
+    path = store.data_path(user_id)
+    if path.exists():
+        mtime = path.stat().st_mtime
         last_modified = datetime.utcfromtimestamp(mtime).strftime("%Y-%m-%dT%H:%M:%SZ")
     return 200, {"status": "ok", "data_store_last_modified": last_modified}
 
 
-def metrics_summary(query):
+def me(user_id):
+    """Who the current session belongs to. Returns 200 with
+    {"signed_in": false} rather than 401 when there is no session, so the
+    frontend can render a signed-out header without treating it as an
+    error."""
+    if user_id is None:
+        return 200, {"signed_in": False}
+    record = users.load_user(user_id) or {}
+    return 200, {
+        "signed_in": True,
+        "email": record.get("email", ""),
+        "name": record.get("name", ""),
+        "has_tokens": users.load_tokens(user_id) is not None,
+    }
+
+
+def metrics_summary(user_id, query):
     from_d, to_d = _parse_range(query, DEFAULT_SUMMARY_RANGE_DAYS)
-    data_store = store.load_store_cached()
+    data_store = store.load_store_cached(user_id)
     metrics = {m: _metric_records(data_store, m, from_d, to_d) for m in KNOWN_METRICS}
     return 200, {"from": from_d.isoformat(), "to": to_d.isoformat(), "metrics": metrics}
 
 
-def metric_detail(metric, query):
+def metric_detail(user_id, metric, query):
     if metric not in KNOWN_METRICS:
         return 404, {"error": f"unknown metric: {metric}"}
     from_d, to_d = _parse_range(query, DEFAULT_DETAIL_RANGE_DAYS)
-    data_store = store.load_store_cached()
+    data_store = store.load_store_cached(user_id)
     records = _metric_records(data_store, metric, from_d, to_d)
     return 200, {
         "metric": metric,
@@ -527,7 +550,7 @@ def metric_detail(metric, query):
     }
 
 
-def metric_samples(metric, query):
+def metric_samples(user_id, metric, query):
     """GET /fitness/api/metrics/{metric}/samples?from=<ISO datetime>&to=<ISO
     datetime> - raw timestamped readings in [from, to], bypassing the daily
     bucketing _metric_records()/_RESHAPERS do. Built for the activity detail
@@ -543,7 +566,7 @@ def metric_samples(metric, query):
     if from_dt is None or to_dt is None:
         return 400, {"error": "from and to must both be ISO 8601 datetimes"}
     nested_key, value_key = SAMPLE_METRICS[metric]
-    data_store = store.load_store_cached()
+    data_store = store.load_store_cached(user_id)
     samples = []
     for p in data_store.get("metrics", {}).get(metric, []):
         payload = p.get(nested_key)
@@ -563,11 +586,18 @@ def metric_samples(metric, query):
     return 200, {"metric": metric, "from": from_str, "to": to_str, "samples": samples}
 
 
-def trigger_sync():
+def trigger_sync(user_id):
+    lock = sync.lock_for(user_id)
+    if not lock.acquire(blocking=False):
+        return 409, {"error": "a sync is already running for this account"}
     try:
-        results, errors = sync.sync_all()
-    except Exception as exc:  # noqa: BLE001 - a failure before per-metric isolation (e.g. auth) - surfaced as a 502
+        results, errors = sync.sync_all(user_id)
+    except auth.ReauthRequired as exc:
+        return 401, {"error": str(exc), "reauth_url": "/fitness/auth/start"}
+    except Exception as exc:  # noqa: BLE001 - a failure before per-metric isolation - surfaced as a 502
         return 502, {"error": f"sync failed: {exc}"}
+    finally:
+        lock.release()
     body = {
         "status": "ok",
         "synced": results,

@@ -1,5 +1,6 @@
-"""Read/write helpers for the local JSON health-data store
-(data/fitness/health_data.json - see fitness/ARCHITECTURE.md).
+"""Read/write helpers for a visitor's local JSON health-data store
+(data/fitness/users/<user_id>/health_data.json - see
+fitness/ARCHITECTURE.md and fitness/VISITOR-SIGNIN-PLAN.md).
 
 Stores the raw data points returned by the Google Health API, grouped by
 our metric name, plus a last-synced date per metric. Storing the raw
@@ -16,29 +17,32 @@ import os
 import sys
 import threading
 import time
-from pathlib import Path
 
-# backend/fitness/store.py -> backend/fitness -> backend -> repo root, then
-# data/fitness/health_data.json, alongside the rest of this app's data/ files
-# (sections.json, tasks.json, tags.json) and covered by the same persistent
-# disk mount in render.yaml.
-DATA_PATH = Path(__file__).parent.parent.parent / "data" / "fitness" / "health_data.json"
+import users
+from jsonfile import write_json_atomic
 
-# (mtime_ns, size) -> the store parsed from DATA_PATH at that state, or None
-# before the first load_store_cached() call. Guarded by _cache_lock; see
-# load_store_cached().
-_cache = None
+# (mtime_ns, size), parsed store) per user_id -> the store parsed from
+# data_path(user_id) at that state. Guarded by _cache_lock; see
+# load_store_cached(). Entries are per user, so one visitor's sync never
+# invalidates another's cache. Nothing evicts entries - at
+# family-and-friends scale that's fine.
+_cache = {}
 _cache_lock = threading.Lock()
 
 
-def load_store():
-    if not DATA_PATH.exists():
+def data_path(user_id):
+    return users.user_dir(user_id) / "health_data.json"
+
+
+def load_store(user_id):
+    path = data_path(user_id)
+    if not path.exists():
         return {"metrics": {}, "last_synced": {}}
     # Read fully and close the handle (exiting the `with` block) before any
     # possible os.replace() below - on Windows, unlike POSIX, a file can't be
     # renamed while this process still holds it open, which would otherwise
     # turn a JSONDecodeError into an unrelated PermissionError/WinError 32.
-    with open(DATA_PATH, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8") as f:
         content = f.read()
     try:
         return json.loads(content)
@@ -50,11 +54,9 @@ def load_store():
         # worse than losing this run: rename the unreadable file aside (for
         # manual inspection/recovery) and start fresh, same as a first-ever
         # sync.
-        corrupt_path = DATA_PATH.with_name(
-            f"{DATA_PATH.name}.corrupt-{int(time.time())}"
-        )
+        corrupt_path = path.with_name(f"{path.name}.corrupt-{int(time.time())}")
         try:
-            os.replace(DATA_PATH, corrupt_path)
+            os.replace(path, corrupt_path)
         except OSError as rename_exc:
             # Some other process (antivirus, OneDrive/cloud sync, an editor)
             # briefly holding the file can still make the rename itself
@@ -62,24 +64,24 @@ def load_store():
             # to the fresh store below; save_store() will overwrite the
             # still-corrupt file on the next successful sync regardless.
             print(
-                f"warning: {DATA_PATH} was not valid JSON ({exc}); could not "
+                f"warning: {path} was not valid JSON ({exc}); could not "
                 f"move it aside either ({rename_exc}) - starting from an "
                 "empty store",
                 file=sys.stderr,
             )
             return {"metrics": {}, "last_synced": {}}
         print(
-            f"warning: {DATA_PATH} was not valid JSON ({exc}); "
+            f"warning: {path} was not valid JSON ({exc}); "
             f"moved it to {corrupt_path} and starting from an empty store",
             file=sys.stderr,
         )
         return {"metrics": {}, "last_synced": {}}
 
 
-def load_store_cached():
-    """Same data as load_store(), but skips the read+JSON-parse of DATA_PATH
-    entirely when the file hasn't changed since the last call - only an
-    os.stat() (cheap) runs on a cache hit. `backend/fitness/api.py`'s
+def load_store_cached(user_id):
+    """Same data as load_store(user_id), but skips the read+JSON-parse of
+    data_path(user_id) entirely when the file hasn't changed since the last
+    call - only an os.stat() (cheap) runs on a cache hit. `backend/fitness/api.py`'s
     read-only endpoints (dashboard summary, metric detail, samples) call
     this instead of load_store(): every one of them used to re-parse the
     whole file from scratch on every single request, and that file only
@@ -95,33 +97,28 @@ def load_store_cached():
     cache with it would let a concurrent read see a sync that's only
     half-applied.
     """
-    global _cache
-    if not DATA_PATH.exists():
+    path = data_path(user_id)
+    if not path.exists():
         return {"metrics": {}, "last_synced": {}}
-    stat = DATA_PATH.stat()
+    stat = path.stat()
     cache_key = (stat.st_mtime_ns, stat.st_size)
     with _cache_lock:
-        if _cache is not None and _cache[0] == cache_key:
-            return _cache[1]
-    data = load_store()
+        cached = _cache.get(user_id)
+        if cached is not None and cached[0] == cache_key:
+            return cached[1]
+    data = load_store(user_id)
     with _cache_lock:
-        _cache = (cache_key, data)
+        _cache[user_id] = (cache_key, data)
     return data
 
 
-def save_store(store):
-    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    # Write to a temp file and swap it into place with os.replace() (atomic
-    # on both POSIX and Windows) rather than writing DATA_PATH directly -
-    # otherwise a process kill, crash, or full disk partway through
-    # json.dump() leaves a truncated, unparseable file in place of the last
+def save_store(user_id, store):
+    # See jsonfile.write_json_atomic() for why this goes through a temp
+    # file + os.replace() rather than writing data_path(user_id) directly -
+    # otherwise a process kill, crash, or full disk partway through the
+    # write leaves a truncated, unparseable file in place of the last
     # known-good store (see load_store()'s JSONDecodeError handling above).
-    tmp_path = DATA_PATH.with_name(f"{DATA_PATH.name}.tmp")
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(store, f, indent=2)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp_path, DATA_PATH)
+    write_json_atomic(data_path(user_id), store)
 
 
 def add_data_points(store, metric, data_points):

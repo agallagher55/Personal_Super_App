@@ -5,4 +5,4 @@ venv/
 .DS_Store
 service_now/.env
 backend/fitness/config.json
-data/fitness/health_data.json*
+data/fitness/

@@ -6,6 +6,11 @@ How URLs map to HTML pages, their JS, and the backend handlers in
 fly into the nested shape below and served read-only at `/tasks.json`,
 mutated only through the POST routes below.
 
+Every `/fitness*` route except `/fitness/login`, `/fitness/auth/*`, and
+`/fitness/api/me` now requires a signed-in session — a signed-out visitor
+gets a 302 to `/fitness/login` (HTML pages) or a 401 (API routes). See
+`fitness/VISITOR-SIGNIN-PLAN.md` for the sign-in design.
+
 ## GET routes
 
 | Route | Serves | Frontend JS | Notes |
@@ -17,12 +22,16 @@ mutated only through the POST routes below.
 | `/tasks/new-category` | `html/tasks/new-category.html` | — | New category (section) form. |
 | `/tasks/<slug>` | `html/tasks/index.html` | `static/js/script.js` | Same page as `/tasks`, but `script.js` reads the slug from the URL and renders only the matching section. 404 if `<slug>` doesn't match any section's `slug` (checked after the `/tasks/new`, `/tasks/new-category`, and `/tasks/categories` exact matches above). |
 | `/task/<id>` | `html/tasks/task-detail.html` | `static/js/task-detail.js` | Edit/delete a single task by id. 404 if `<id>` doesn't exist. |
-| `/fitness` | `html/fitness/index.html` | `static/fitness/js/dashboard.js` | Personal Health dashboard — see `fitness/README.md`. |
-| `/fitness/<page>` | `html/fitness/pages/<page>.html` | `static/fitness/js/pages/<page>.js` | Per-metric detail view. `<page>` is one of `steps`, `heart-rate`, `sleep`, `activity`, `spo2`, `hrv`, `breathing-rate`, `temperature`, `weight` (`FITNESS_PAGES` in `backend/server.py`). 404 otherwise. |
-| `/fitness/api/health` | JSON | — | Liveness check; see `fitness/API-CONTRACT.md`. |
-| `/fitness/api/metrics` | JSON | — | Dashboard summary across all metrics, `?from=&to=` (default last 7 days). |
-| `/fitness/api/metrics/<metric>` | JSON | — | Single-metric detail, `?from=&to=` (default last 30 days). 404 if `<metric>` isn't in `KNOWN_METRICS`. |
-| `/fitness/api/metrics/<metric>/samples` | JSON | — | Raw intraday readings in `[from, to]` (full ISO 8601 instants). Only `heart_rate` today. |
+| `/fitness` | `html/fitness/index.html` | `static/fitness/js/dashboard.js` | Personal Health dashboard — see `fitness/README.md`. Requires a session cookie; 302 to `/fitness/login` otherwise. |
+| `/fitness/<page>` | `html/fitness/pages/<page>.html` | `static/fitness/js/pages/<page>.js` | Per-metric detail view. `<page>` is one of `steps`, `heart-rate`, `sleep`, `activity`, `spo2`, `hrv`, `breathing-rate`, `temperature`, `weight` (`FITNESS_PAGES` in `backend/server.py`). 404 if unknown; 302 to `/fitness/login?next=/fitness/<page>` if signed out. |
+| `/fitness/login` | `html/fitness/login.html` | `static/fitness/js/login.js` | Sign-in page. 302 to `/fitness` if already signed in. |
+| `/fitness/auth/start` | — | — | 302 to Google's consent screen, sets a short-lived signed state cookie. `?next=` (validated to a `/fitness*` path) carries where to land after sign-in. |
+| `/fitness/auth/callback` | — | — | Google's OAuth redirect target: verifies state, exchanges the code, checks the allowlist, creates/updates the visitor's profile, sets the session cookie, 302 to `next`. On any failure, 302 to `/fitness/login?error=<code>`. |
+| `/fitness/api/me` | JSON | — | `{"signed_in": false}` or `{"signed_in": true, "email", "name", "has_tokens"}`. Never gated — the one `/fitness/api/*` route a signed-out visitor can call. |
+| `/fitness/api/health` | JSON | — | Liveness check for the signed-in visitor's own store; see `fitness/API-CONTRACT.md`. Requires a session; 401 otherwise. |
+| `/fitness/api/metrics` | JSON | — | Dashboard summary across all metrics, `?from=&to=` (default last 7 days). Requires a session; 401 otherwise. |
+| `/fitness/api/metrics/<metric>` | JSON | — | Single-metric detail, `?from=&to=` (default last 30 days). 404 if `<metric>` isn't in `KNOWN_METRICS`. Requires a session; 401 otherwise. |
+| `/fitness/api/metrics/<metric>/samples` | JSON | — | Raw intraday readings in `[from, to]` (full ISO 8601 instants). Only `heart_rate` today. Requires a session; 401 otherwise. |
 | `/finance` | `html/finance.html` | `static/finance/js/ticker.js`, `static/finance/js/dashboard.js` | Net worth dashboard template (cash, investments, bitcoin, debt, lines of credit — each collapsible, each row with a % of section total) fetched client-side from `data/finance-dashboard.json` (served as a plain static file, no backend route yet), plus a sidebar watchlist of 7 tickers (Bitcoin, gold, WTI crude, S&P 500, US 10Y Yield, US 30Y Yield, Canada 5Y Yield). See `finance/ARCHITECTURE.md` for the plan to replace that JSON file with a real Plaid-backed sync. |
 | `/finance/api/prices` | JSON | — | Watchlist quotes, proxied server-side to avoid browser CORS issues (`backend/finance_prices.py`) — 6 of the 7 tickers come from Yahoo Finance's free keyless chart endpoint; the Canada 5Y yield comes from the Bank of Canada's Valet API instead, since Yahoo has no working symbol for it. Always 200; each ticker is fetched independently and comes back with `price`/`change_pct` as `null` if its own fetch failed, rather than failing the whole response. |
 | `/finance/api/holding-prices` | JSON | — | Live quotes for arbitrary portfolio holding symbols (`?symbols=A,B,C`, comma-separated), proxied from Yahoo the same way as `/finance/api/prices` — no Bank of Canada fallback, since these are always equity/ETF symbols. 400 if `symbols` is missing; otherwise always 200 with `{"quotes": {symbol: {"price", "change_pct"} \| null}}`, one entry per requested symbol. |
@@ -40,7 +49,8 @@ static file serving from the repo root (`/static/...`, etc.).
 | `/tasks/new-category` | `handle_new_category` | Appends a new (empty) row to `sections.json`, slugified from `label`. Redirects `303` to `/tasks/categories?added=1`. 400 if the name is empty or a category with that slug/id already exists. |
 | `/tasks/update` | `handle_update_tasks` | Bulk update by task id (desc, note, tags, notes, status, priority, ticket_number, assignment_group, requested_by, due_date, reorder). Writes `tasks.json` and, if tags changed, `tags.json`. Returns JSON. |
 | `/tasks/delete` | `handle_delete_task` | Removes a task from `tasks.json` and its tags from `tags.json`. Returns JSON. |
-| `/fitness/api/sync` | `fitness_api.trigger_sync()` | Pulls new data from the Google Health API into `data/fitness/health_data.json`. Synchronous; see `fitness/API-CONTRACT.md`. |
+| `/fitness/auth/logout` | `handle_fitness_logout` | Clears the session cookie, 302 to `/fitness/login`. |
+| `/fitness/api/sync` | `fitness_api.trigger_sync(user_id)` | Pulls new data from the Google Health API into the signed-in visitor's own `data/fitness/users/<user_id>/health_data.json`. Synchronous; requires a session (401 otherwise); 409 if a sync for this visitor is already running. See `fitness/API-CONTRACT.md`. |
 
 ## Sections (current `data/sections.json`)
 

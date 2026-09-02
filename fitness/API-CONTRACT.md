@@ -6,9 +6,43 @@ The contract between `static/fitness/js/api.js` and
 `docs/api-contract.md` — only the base path changed (`/api/*` →
 `/fitness/api/*`); every response shape below is unchanged.
 
-All endpoints return `Content-Type: application/json` and read from
-`data/fitness/health_data.json` via `store.py`. None of them call the
-Google Health API directly except `POST /fitness/api/sync`.
+All endpoints return `Content-Type: application/json` and read from the
+signed-in visitor's own `data/fitness/users/<user_id>/health_data.json` via
+`store.py`. None of them call the Google Health API directly except
+`POST /fitness/api/sync`.
+
+## Authentication
+
+Every endpoint below except `GET /fitness/api/me` requires a valid
+`fitness_session` cookie, set by signing in at `/fitness/login` (see
+`VISITOR-SIGNIN-PLAN.md`). A request without one gets:
+
+**Response `401`:**
+```json
+{ "error": "sign-in required", "reauth_url": "/fitness/auth/start" }
+```
+
+`reauth_url` is also returned on a `401` from `POST /fitness/api/sync`
+when a signed-in visitor's Google refresh token has expired or been
+revoked (see `ReauthRequired` in `backend/fitness/auth.py`) — the frontend
+sends the browser there in both cases rather than showing an error the
+visitor can't act on.
+
+## `GET /fitness/api/me`
+
+Who the current session belongs to. The one endpoint that works whether or
+not the visitor is signed in, so the frontend can render its header/account
+chip without treating "signed out" as an error.
+
+**Response `200`, signed in:**
+```json
+{ "signed_in": true, "email": "visitor@example.com", "name": "Visitor Name", "has_tokens": true }
+```
+
+**Response `200`, signed out:**
+```json
+{ "signed_in": false }
+```
 
 ## Conventions
 
@@ -187,8 +221,21 @@ advanced, so the same range is retried next sync):
 }
 ```
 
-**Response `502`** (the sync couldn't start at all, e.g. token expired and
-refresh failed):
+**Response `401`** (no stored Google credentials, or the refresh token was
+rejected - see `ReauthRequired` in `backend/fitness/auth.py`):
+```json
+{ "error": "Google rejected the stored refresh token", "reauth_url": "/fitness/auth/start" }
+```
+
+**Response `409`** (a sync for this visitor is already running - a
+double-clicked "Sync now" is turned away rather than interleaving two
+read-modify-write cycles on the same store file):
+```json
+{ "error": "a sync is already running for this account" }
+```
+
+**Response `502`** (the sync couldn't start at all, for a reason other than
+`ReauthRequired`):
 ```json
 { "error": "sync failed: <reason>" }
 ```
@@ -197,5 +244,4 @@ refresh failed):
 
 - Write endpoints (this only reads from the Google Health API and re-serves
   locally; no editing stored data through the API).
-- Auth on the query API itself (see `ARCHITECTURE.md` §6).
 - Pagination/streaming for large ranges.

@@ -1,4 +1,5 @@
 import { initThemeToggle } from "../theme.js";
+import { getMe, signOut } from "../api.js";
 
 // Reusable app header: page title, the date-range filter form, and an
 // optional sync/update control. Every page (the dashboard and each metric
@@ -12,6 +13,10 @@ export function renderPageHeader(container, { title, showSync = false } = {}) {
 
   container.innerHTML = `
     <h1>${title}</h1>
+    <span class="account-chip">
+      <span id="account-email" class="account-email"></span>
+      <button type="button" id="sign-out" hidden>Sign out</button>
+    </span>
     <form class="range-controls" id="range-form">
       <label>From <input type="date" id="range-from" /></label>
       <label>To <input type="date" id="range-to" /></label>
@@ -24,6 +29,8 @@ export function renderPageHeader(container, { title, showSync = false } = {}) {
     </form>
   `;
 
+  wireAccountChip(container);
+
   return {
     form: container.querySelector("#range-form"),
     from: container.querySelector("#range-from"),
@@ -31,4 +38,21 @@ export function renderPageHeader(container, { title, showSync = false } = {}) {
     sync: container.querySelector("#sync-now"),
     lastSynced: container.querySelector("#last-synced"),
   };
+}
+
+// A failed getMe() leaves the chip empty rather than showing an error - a
+// gated page's own 401 handling will already be moving the browser away.
+async function wireAccountChip(container) {
+  const emailEl = container.querySelector("#account-email");
+  const signOutBtn = container.querySelector("#sign-out");
+  try {
+    const me = await getMe();
+    if (me.signed_in) {
+      emailEl.textContent = me.email;
+      signOutBtn.hidden = false;
+      signOutBtn.addEventListener("click", () => signOut());
+    }
+  } catch (err) {
+    // Leave the chip empty.
+  }
 }
