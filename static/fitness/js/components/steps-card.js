@@ -1,4 +1,4 @@
-import { drawBarChart } from "../charts.js";
+import { drawBarChart, formatShortDate } from "../charts.js";
 
 // `records` is docs/api-contract.md's steps shape: [{ date, value }].
 export function renderSteps(container, records) {
@@ -12,7 +12,11 @@ export function renderSteps(container, records) {
 
   const label = document.createElement("div");
   label.className = "card-sublabel";
-  label.textContent = latest ? `steps on ${latest.date}` : "no data in range";
+  // Says "in range" explicitly rather than just "on <date>" - this is the
+  // most recent day within whatever range the header's filter requested,
+  // not necessarily today, and that wasn't obvious when the two happened
+  // to coincide (the common case, since most ranges end today).
+  label.textContent = latest ? `Latest in range: ${formatShortDate(latest.date)}` : "no data in range";
   container.appendChild(label);
 
   const canvas = document.createElement("canvas");

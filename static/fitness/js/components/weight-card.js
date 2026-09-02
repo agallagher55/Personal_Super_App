@@ -1,4 +1,4 @@
-import { drawSparkline } from "../charts.js";
+import { drawSparkline, formatShortDate } from "../charts.js";
 import { getWeightUnit, setWeightUnit, convertFromKg } from "../units.js";
 
 const COLOR = "#4338ca";
@@ -37,7 +37,8 @@ export function renderWeightCard(container, records) {
 
     const label = document.createElement("div");
     label.className = "card-sublabel";
-    label.textContent = latest ? `on ${latest.date}` : "no data in range";
+    // See steps-card.js for why this says "in range" rather than just "on <date>".
+    label.textContent = latest ? `Latest in range: ${formatShortDate(latest.date)}` : "no data in range";
     container.appendChild(label);
 
     const canvas = document.createElement("canvas");
