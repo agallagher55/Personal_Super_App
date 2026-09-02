@@ -91,7 +91,21 @@ async function maybeRunFirstSync() {
   }
 }
 
+// Guards against out-of-order responses: the initial page-load fetch (the
+// default "last 7 days ending today" range) and a filter applied before it
+// resolves are two concurrent requests, and network timing doesn't respect
+// call order - whichever response arrived last used to win and render,
+// even if it was the stale default-range one. Each call captures its own
+// sequence number and only renders if it's still the most recently issued
+// call by the time its response comes back; a superseded call still runs
+// (so maybeRunFirstSync()'s one-time sync attempt isn't lost) but never
+// touches the DOM.
+let loadSequence = 0;
+
 async function loadDashboard(from, to) {
+  const requestId = ++loadSequence;
+  const isCurrent = () => requestId === loadSequence;
+
   setStatus("Loading…");
   try {
     const data = await getMetrics(from, to);
@@ -99,6 +113,7 @@ async function loadDashboard(from, to) {
     if (isEmpty && (await maybeRunFirstSync())) {
       return loadDashboard(from, to);
     }
+    if (!isCurrent()) return;
     renderSteps(els.steps, data.metrics.steps);
     renderHeartRate(els.heartRate, data.metrics.heart_rate);
     renderSleep(els.sleep, data.metrics.sleep);
@@ -113,6 +128,7 @@ async function loadDashboard(from, to) {
     renderWeightCard(els.weight, data.metrics.weight || []);
     setStatus(`Showing ${data.from} to ${data.to}`);
   } catch (err) {
+    if (!isCurrent()) return;
     setStatus(`Failed to load: ${err.message}`, true);
   }
 }

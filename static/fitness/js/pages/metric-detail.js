@@ -51,16 +51,25 @@ export function initMetricDetailPage(metric, { title, renderChart, renderTable, 
     return { from: els.from.value || fallback.from, to: els.to.value || fallback.to };
   }
 
+  // Guards against out-of-order responses: the initial page-load fetch and
+  // a filter applied before it resolves are two concurrent requests, and
+  // network timing doesn't respect call order - see dashboard.js's
+  // loadDashboard() for the same guard and the full explanation.
+  let loadSequence = 0;
+
   async function load(from, to) {
+    const requestId = ++loadSequence;
     setStatus("Loading…");
     try {
       const data = await getMetricDetail(metric, from, to);
+      if (requestId !== loadSequence) return;
       renderChart(els.chart, data.records);
       renderTable(els.tableBody, data.records);
       if (renderStats) renderStats(els.stats, data.records);
       const count = data.records.length;
       setStatus(`Showing ${data.from} to ${data.to} (${count} record${count === 1 ? "" : "s"})`);
     } catch (err) {
+      if (requestId !== loadSequence) return;
       setStatus(`Failed to load: ${err.message}`, true);
     }
   }
