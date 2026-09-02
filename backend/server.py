@@ -30,9 +30,11 @@ it has shipped to, shown once work_type is set; cmdb_updated tracks the
 CMDB update new-feature tasks specifically require.
 """
 
+import hmac
 import json
 import os
 import re
+import secrets
 import sys
 import uuid
 import http.server
@@ -70,6 +72,9 @@ FITNESS_DIR = os.path.join(BASE_DIR, 'backend', 'fitness')
 if FITNESS_DIR not in sys.path:
     sys.path.insert(0, FITNESS_DIR)
 import api as fitness_api
+import auth as fitness_auth
+import session as fitness_session
+import users as fitness_users
 import finance_prices
 
 FITNESS_PAGES = (
@@ -225,14 +230,33 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         if path == '/tasks':
             self.path = '/html/tasks/index.html'
             return super().do_GET()
+        if path == '/fitness/login':
+            if self.current_user_id() is not None:
+                return self.send_redirect('/fitness')
+            self.path = '/html/fitness/login.html'
+            return super().do_GET()
+        if path == '/fitness/auth/start':
+            return self.handle_fitness_auth_start(parsed)
+        if path == '/fitness/auth/callback':
+            return self.handle_fitness_auth_callback(parsed)
+        if path == '/fitness/api/me':
+            status, body = fitness_api.me(self.current_user_id())
+            return self.send_json(status, body)
+        if path.startswith('/fitness/api/'):
+            user_id = self.require_user()
+            if user_id is None:
+                return
+            return self.handle_fitness_api_get(user_id, path, parsed)
         if path == '/fitness':
+            if self.current_user_id() is None:
+                return self.send_redirect('/fitness/login')
             self.path = '/html/fitness/index.html'
             return super().do_GET()
-        if path.startswith('/fitness/api/'):
-            return self.handle_fitness_api_get(path, parsed)
         if path.startswith('/fitness/'):
             page = path[len('/fitness/'):]
             if page in FITNESS_PAGES:
+                if self.current_user_id() is None:
+                    return self.send_redirect('/fitness/login?next=' + path)
                 self.path = '/html/fitness/pages/' + page + '.html'
                 return super().do_GET()
             self.send_error(404, 'Unknown fitness page: ' + page)
@@ -276,24 +300,149 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 return task
         return None
 
-    def handle_fitness_api_get(self, path, parsed):
+    def handle_fitness_api_get(self, user_id, path, parsed):
         query = parse_qs(parsed.query)
         sub = path[len('/fitness/api/'):]
         if sub == 'health':
-            status, body = fitness_api.health()
+            status, body = fitness_api.health(user_id)
         elif sub == 'metrics':
-            status, body = fitness_api.metrics_summary(query)
+            status, body = fitness_api.metrics_summary(user_id, query)
         elif sub.startswith('metrics/') and sub.endswith('/samples'):
             metric = sub[len('metrics/'):-len('/samples')]
-            status, body = fitness_api.metric_samples(metric, query)
+            status, body = fitness_api.metric_samples(user_id, metric, query)
         elif sub.startswith('metrics/'):
             metric = sub[len('metrics/'):]
-            status, body = fitness_api.metric_detail(metric, query)
+            status, body = fitness_api.metric_detail(user_id, metric, query)
         else:
             status, body = 404, {'error': 'not found'}
         self.send_json(status, body)
 
-    def send_json(self, status, body):
+    # -- Fitness sign-in: cookies, identity, and the OAuth web flow --------
+    # See fitness/VISITOR-SIGNIN-PLAN.md for the design this implements.
+
+    def is_secure_request(self):
+        """Whether the browser reached us over HTTPS. Render terminates TLS
+        at its proxy and forwards plain HTTP, so the header is the only
+        signal; local development over http://localhost has neither."""
+        forwarded = self.headers.get('X-Forwarded-Proto', '')
+        return forwarded.split(',')[0].strip().lower() == 'https'
+
+    def current_user_id(self):
+        """user_id from a valid session cookie, or None."""
+        cookie_value = fitness_session.read_cookie(self.headers.get('Cookie'), fitness_session.SESSION_COOKIE)
+        if not cookie_value:
+            return None
+        payload = fitness_session.verify(cookie_value)
+        if payload is None:
+            return None
+        return payload.get('user_id')
+
+    def require_user(self):
+        """current_user_id(), or None after already having sent a 401."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            self.send_json(401, {'error': 'sign-in required', 'reauth_url': '/fitness/auth/start'})
+            return None
+        return user_id
+
+    def check_same_origin(self):
+        """Second CSRF layer alongside SameSite=Lax (see session.py):
+        reject a POST whose Origin header names a different host than this
+        request's Host, when Origin is present at all. Browsers always send
+        Origin on cross-site POSTs; same-site requests and non-browser
+        clients may omit it, so a missing Origin is not itself rejected."""
+        origin = self.headers.get('Origin')
+        if not origin:
+            return True
+        try:
+            origin_host = urlparse(origin).netloc
+        except ValueError:
+            return False
+        return origin_host == self.headers.get('Host', '')
+
+    def send_redirect(self, location, cookies=()):
+        """302 with optional Set-Cookie headers."""
+        self.send_response(302)
+        self.send_header('Location', location)
+        for cookie in cookies:
+            self.send_header('Set-Cookie', cookie)
+        self.end_headers()
+
+    def handle_fitness_auth_start(self, parsed):
+        state = secrets.token_urlsafe(24)
+        next_path = parse_qs(parsed.query).get('next', [''])[0]
+        # Open-redirect guard: `//evil.com` parses as a protocol-relative
+        # absolute URL in a browser, and startswith('/fitness') alone would
+        # let `/fitness@evil.com` through in some parsers, so require the
+        # prefix and reject a leading `//`.
+        if not next_path.startswith('/fitness') or next_path.startswith('//'):
+            next_path = '/fitness'
+        cookie = fitness_session.new_state_cookie(state, next_path, self.is_secure_request())
+        try:
+            url = fitness_auth.build_authorization_url(state)
+        except RuntimeError as exc:
+            return self.send_json(500, {'error': str(exc)})
+        self.send_redirect(url, cookies=[cookie])
+
+    def handle_fitness_auth_callback(self, parsed):
+        query = parse_qs(parsed.query)
+        secure = self.is_secure_request()
+        state_cookie_value = fitness_session.read_cookie(self.headers.get('Cookie'), fitness_session.STATE_COOKIE)
+        clear_state = fitness_session.clearing_cookie(fitness_session.STATE_COOKIE, secure, path='/fitness/auth')
+
+        def fail(error_code):
+            return self.send_redirect(f'/fitness/login?error={error_code}', cookies=[clear_state])
+
+        if query.get('error'):
+            return fail('denied')
+
+        state_payload = fitness_session.verify(state_cookie_value) if state_cookie_value else None
+        if state_payload is None:
+            return fail('state')
+
+        request_state = query.get('state', [None])[0]
+        if not request_state or not hmac.compare_digest(state_payload.get('state', ''), request_state):
+            return fail('state')
+
+        code = query.get('code', [None])[0]
+        if not code:
+            return fail('auth_failed')
+
+        try:
+            tokens = fitness_auth.exchange_code_for_tokens(code)
+        except Exception:  # noqa: BLE001 - any failure here is an opaque auth_failed to the visitor
+            return fail('auth_failed')
+
+        try:
+            client_config = fitness_auth.load_client_config()
+            claims = fitness_auth.parse_id_token_claims(tokens.get('id_token'), client_config['client_id'])
+        except (ValueError, RuntimeError):
+            return fail('auth_failed')
+
+        email = claims.get('email', '')
+        if not fitness_users.is_allowed(email):
+            error_code = 'not_allowed' if self._any_allowlist_configured() else 'not_configured'
+            return fail(error_code)
+
+        user_id = fitness_users.upsert_from_claims(claims, tokens)
+        session_cookie = fitness_session.new_session_cookie(user_id, secure)
+        next_path = state_payload.get('next') or '/fitness'
+        self.send_redirect(next_path, cookies=[session_cookie, clear_state])
+
+    @staticmethod
+    def _any_allowlist_configured():
+        return bool(
+            os.environ.get('FITNESS_ALLOWED_EMAILS')
+            or os.environ.get('FITNESS_OWNER_EMAIL')
+            or fitness_users.ALLOWED_USERS_PATH.exists()
+        )
+
+    def handle_fitness_logout(self):
+        secure = self.is_secure_request()
+        clear_session = fitness_session.clearing_cookie(fitness_session.SESSION_COOKIE, secure, path='/')
+        self.send_redirect('/fitness/login', cookies=[clear_session])
+
+    def send_json(self, status, body, cookies=()):
         payload = json.dumps(body).encode('utf-8')
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
@@ -305,6 +454,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         # real sync (issue #72). These are always live data, never static.
         self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
         self.send_header('Pragma', 'no-cache')
+        for cookie in cookies:
+            self.send_header('Set-Cookie', cookie)
         self.end_headers()
         self.wfile.write(payload)
 
@@ -321,8 +472,17 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == '/fitness/auth/logout':
+            if not self.check_same_origin():
+                return self.send_error(403, 'Cross-origin request rejected')
+            return self.handle_fitness_logout()
         if parsed.path == '/fitness/api/sync':
-            status, body = fitness_api.trigger_sync()
+            if not self.check_same_origin():
+                return self.send_error(403, 'Cross-origin request rejected')
+            user_id = self.require_user()
+            if user_id is None:
+                return
+            status, body = fitness_api.trigger_sync(user_id)
             self.send_json(status, body)
             return
         if parsed.path == '/tasks/new':

@@ -80,3 +80,33 @@ the next request after that wakes it back up, which takes a few
 seconds. This app is a personal task tracker, so that's a reasonable
 tradeoff for zero cost. Upgrade the `plan` in `render.yaml` if you
 want the service to stay warm.
+
+## Fitness sign-in environment variables
+
+`backend/fitness/config.json` is **not** on the persistent disk — the disk
+mount in `render.yaml` covers `data/` only, and `config.json` is
+git-ignored — so a deployed service has no way to read it. The
+`FITNESS_GOOGLE_*` environment variables are therefore the only way `/fitness`
+sign-in works on Render at all; `config.json` is a local-dev convenience,
+not something the deploy can fall back to.
+
+`render.yaml` declares these with `sync: false`, which tells Render to
+prompt for each value in the dashboard when the Blueprint is applied and
+never store them in the repo:
+
+| Variable | Required | What it's for |
+|---|---|---|
+| `FITNESS_GOOGLE_CLIENT_ID` | Yes | OAuth client id from `fitness/google_health.md`. |
+| `FITNESS_GOOGLE_CLIENT_SECRET` | Yes | OAuth client secret from the same setup. |
+| `FITNESS_OAUTH_REDIRECT_URI` | Yes | `https://<your-service>.onrender.com/fitness/auth/callback` — must exactly match an Authorized redirect URI on the OAuth client in Google Cloud Console. |
+| `FITNESS_SESSION_SECRET` | Recommended | HMAC key for signed session/state cookies. If unset, one is generated on first use and written to `data/fitness/session_secret` on the persistent disk — fine on Render (survives redeploys), but setting it explicitly means you control when it rotates (rotating logs every visitor out). |
+| `FITNESS_OWNER_EMAIL` | One of these three | Simplest allowlist: exactly one email may sign in. |
+| `FITNESS_ALLOWED_EMAILS` | | Comma-separated list of emails, takes precedence over `FITNESS_OWNER_EMAIL` and `data/fitness/allowed_users.json`. |
+| `FITNESS_OAUTH_SCOPES` | No | Space-separated override of the default OAuth scopes; only needed if you're changing what the app requests. |
+
+Sign-in fails closed: with none of `FITNESS_ALLOWED_EMAILS`,
+`data/fitness/allowed_users.json`, or `FITNESS_OWNER_EMAIL` set, nobody can
+sign in (`?error=not_configured`). See `fitness/VISITOR-SIGNIN-PLAN.md` §6
+for the full allowlist resolution order, and `fitness/google_health.md` §9
+for the 7-day refresh-token expiry every visitor on an unverified
+("Testing") OAuth client will hit about once a week.

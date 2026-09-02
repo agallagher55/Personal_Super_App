@@ -1,4 +1,4 @@
-import { getMetrics } from "./api.js";
+import { getHealth, getMetrics, triggerSync } from "./api.js";
 import { renderPageHeader } from "./components/page-header.js";
 import { loadLastSynced, wireSyncButton } from "./sync-control.js";
 import { initBalancedGrid } from "./balanced-grid.js";
@@ -66,10 +66,39 @@ function currentRange() {
   return { from: els.from.value || fallback.from, to: els.to.value || fallback.to };
 }
 
+// A visitor who just signed in has an empty store, so every card would
+// otherwise render "no data" with no explanation. Fires at most once per
+// page load, and only when the store is genuinely untouched (rather than
+// merely empty for the selected range).
+let firstSyncAttempted = false;
+
+async function maybeRunFirstSync() {
+  if (firstSyncAttempted) return false;
+  firstSyncAttempted = true;
+  try {
+    const health = await getHealth();
+    if (health.data_store_last_modified !== null) return false;
+  } catch (err) {
+    return false;
+  }
+  setStatus("No data yet, pulling it from Google now…");
+  try {
+    await triggerSync();
+    return true;
+  } catch (err) {
+    setStatus(`Failed to load: ${err.message}`, true);
+    return false;
+  }
+}
+
 async function loadDashboard(from, to) {
   setStatus("Loading…");
   try {
     const data = await getMetrics(from, to);
+    const isEmpty = Object.values(data.metrics).every((records) => (records || []).length === 0);
+    if (isEmpty && (await maybeRunFirstSync())) {
+      return loadDashboard(from, to);
+    }
     renderSteps(els.steps, data.metrics.steps);
     renderHeartRate(els.heartRate, data.metrics.heart_rate);
     renderSleep(els.sleep, data.metrics.sleep);

@@ -1,8 +1,11 @@
 {
   "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
   "client_secret": "YOUR_CLIENT_SECRET",
-  "redirect_uri": "http://localhost:8000/oauth/callback",
+  "redirect_uri": "http://localhost:8000/fitness/auth/callback",
   "scopes": [
+    "openid",
+    "email",
+    "profile",
     "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
     "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
     "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly"

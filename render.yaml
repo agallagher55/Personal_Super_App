@@ -8,6 +8,18 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
+      - key: FITNESS_GOOGLE_CLIENT_ID
+        sync: false
+      - key: FITNESS_GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: FITNESS_OAUTH_REDIRECT_URI
+        sync: false
+      - key: FITNESS_SESSION_SECRET
+        sync: false
+      - key: FITNESS_OWNER_EMAIL
+        sync: false
+      - key: FITNESS_ALLOWED_EMAILS
+        sync: false
     disk:
       name: tasks-data
       mountPath: /opt/render/project/src/data

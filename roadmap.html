@@ -198,7 +198,7 @@
   <header class="top">
     <h1>Roadmap</h1>
     <p class="subtitle">A soft, living plan &mdash; priorities and rough sequencing, not a committed schedule. Revisit whenever priorities shift.</p>
-    <div class="meta-line">Last written 2026-09-01 &middot; source docs: <code>architecture_Review.md</code>, <code>finance/ARCHITECTURE.md</code>, <code>fitness/README.md</code></div>
+    <div class="meta-line">Last written 2026-09-02 &middot; source docs: <code>architecture_Review.md</code>, <code>finance/ARCHITECTURE.md</code>, <code>fitness/README.md</code>, <code>fitness/VISITOR-SIGNIN-PLAN.md</code></div>
   </header>
 
   <section class="card">
@@ -221,9 +221,9 @@
       <div class="status-item">
         <div class="label-row">
           <span class="name">Fitness / visitor Google login</span>
-          <span class="pill pill-next">Not built</span>
+          <span class="pill pill-done">Done</span>
         </div>
-        <div class="desc">A different thing: letting <em>someone else</em> visit <code>/fitness</code> and sign in with their own Google account to see their own data. Today's OAuth flow is a one-time CLI step for the app owner only &mdash; there's no browser-based sign-in, no sessions, and storage is a single shared file, not per-user.</div>
+        <div class="desc">Any allowed visitor now signs in with their own Google account at <code>/fitness/login</code> and sees only their own data &mdash; browser-driven OAuth, signed session cookies, and per-user token/data storage under <code>data/fitness/users/&lt;user_id&gt;/</code>. See <code>fitness/VISITOR-SIGNIN-PLAN.md</code>.</div>
       </div>
       <div class="status-item">
         <div class="label-row">
@@ -254,21 +254,21 @@
     <h2>Soft sequencing</h2>
 
     <div class="phase">
-      <div class="phase-marker"><span class="pill pill-next">Up next</span></div>
+      <div class="phase-marker"><span class="pill pill-done">Done</span></div>
       <div class="phase-body">
         <h3>Fitness: per-visitor Google sign-in</h3>
         <ul>
-          <li>Browser-driven OAuth: a "Connect with Google" button on <code>/fitness</code> &rarr; consent screen &rarr; callback route in <code>backend/server.py</code> &mdash; adapting the flow already in <code>backend/fitness/auth.py</code> from CLI-only to web-triggered</li>
-          <li>A session/cookie layer <span class="fine">(the app has none today &mdash; smallest version: a signed session cookie identifying the visitor)</span></li>
-          <li>Per-user token storage, replacing the single <code>backend/fitness/config.json</code></li>
-          <li>Per-user data storage, replacing the single <code>data/fitness/health_data.json</code></li>
-          <li>Add each expected visitor's email to the OAuth client's Test users list in Google Cloud Console <span class="fine">(manual, outside code, required today per the cap above)</span></li>
+          <li>Browser-driven OAuth: <code>/fitness/login</code> &rarr; <code>/fitness/auth/start</code> &rarr; consent screen &rarr; <code>/fitness/auth/callback</code> in <code>backend/server.py</code> &mdash; adapted from the CLI-only flow in <code>backend/fitness/auth.py</code></li>
+          <li>A signed-cookie session layer (<code>backend/fitness/session.py</code>) &mdash; stateless, no server-side session store</li>
+          <li>Per-user token storage (<code>data/fitness/users/&lt;user_id&gt;/tokens.json</code>), replacing the single <code>backend/fitness/config.json</code></li>
+          <li>Per-user data storage (<code>data/fitness/users/&lt;user_id&gt;/health_data.json</code>), replacing the single <code>data/fitness/health_data.json</code></li>
+          <li>Each expected visitor's email still needs adding to the OAuth client's Test users list in Google Cloud Console <span class="fine">(manual, outside code, required today per the cap above)</span>, plus one of <code>FITNESS_OWNER_EMAIL</code>/<code>FITNESS_ALLOWED_EMAILS</code>/<code>data/fitness/allowed_users.json</code> set as this app's own allowlist</li>
         </ul>
       </div>
     </div>
 
     <div class="phase">
-      <div class="phase-marker"><span class="pill pill-next">Then</span></div>
+      <div class="phase-marker"><span class="pill pill-next">Up next</span></div>
       <div class="phase-body">
         <h3>Finance: Link + storage</h3>
         <ul>

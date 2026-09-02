@@ -44,10 +44,15 @@
   function loadFitness() {
     fetch('/fitness/api/metrics')
       .then(function (res) {
+        if (res.status === 401) {
+          setCard('home-fitness-metric', 'home-fitness-sub', '--', 'Sign in to see your fitness data');
+          return null;
+        }
         if (!res.ok) throw new Error('status ' + res.status);
         return res.json();
       })
       .then(function (data) {
+        if (!data) return;
         var steps = (data.metrics && data.metrics.steps) || [];
         var latest = steps[steps.length - 1];
         if (!latest) {
