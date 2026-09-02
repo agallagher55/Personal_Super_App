@@ -1,4 +1,4 @@
-import { drawStackedBar } from "../charts.js";
+import { drawStackedBar, formatShortDate } from "../charts.js";
 
 const STAGES = [
   { key: "deep", label: "Deep", color: "#1e3a8a" },
@@ -34,7 +34,8 @@ export function renderSleep(container, records) {
 
   const label = document.createElement("div");
   label.className = "card-sublabel";
-  label.textContent = `night of ${latest.date}`;
+  // See steps-card.js for why this says "in range" rather than just "night of <date>".
+  label.textContent = `Latest in range: night of ${formatShortDate(latest.date)}`;
   container.appendChild(label);
 
   const canvas = document.createElement("canvas");

@@ -1,4 +1,4 @@
-import { drawSparkline } from "../charts.js";
+import { drawSparkline, formatShortDate } from "../charts.js";
 
 // `records` is docs/api-contract.md's heart_rate shape: [{ date, resting }].
 // "resting" is currently a min-of-day-samples approximation on the backend
@@ -14,7 +14,8 @@ export function renderHeartRate(container, records) {
 
   const label = document.createElement("div");
   label.className = "card-sublabel";
-  label.textContent = latest ? `on ${latest.date}` : "no data in range";
+  // See steps-card.js for why this says "in range" rather than just "on <date>".
+  label.textContent = latest ? `Latest in range: ${formatShortDate(latest.date)}` : "no data in range";
   container.appendChild(label);
 
   const canvas = document.createElement("canvas");
