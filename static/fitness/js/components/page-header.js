@@ -13,20 +13,22 @@ export function renderPageHeader(container, { title, showSync = false } = {}) {
 
   container.innerHTML = `
     <h1>${title}</h1>
-    <span class="account-chip">
-      <span id="account-email" class="account-email"></span>
-      <button type="button" id="sign-out" hidden>Sign out</button>
-    </span>
-    <form class="range-controls" id="range-form">
-      <label>From <input type="date" id="range-from" /></label>
-      <label>To <input type="date" id="range-to" /></label>
-      <button type="submit" id="range-apply">Apply</button>
-      ${showSync ? `
-      <span class="sync-wrap">
-        <button type="button" id="sync-now">Sync now</button>
-        <span id="last-synced" class="last-synced"></span>
-      </span>` : ""}
-    </form>
+    <div class="header-right">
+      <span class="account-chip">
+        <span id="account-email" class="account-email"></span>
+        <button type="button" id="sign-out" hidden>Sign out</button>
+      </span>
+      <form class="range-controls" id="range-form">
+        <label>From <input type="date" id="range-from" /></label>
+        <label>To <input type="date" id="range-to" /></label>
+        <button type="submit" id="range-apply">Apply</button>
+        ${showSync ? `
+        <span class="sync-wrap">
+          <button type="button" id="sync-now">Sync now</button>
+          <span id="last-synced" class="last-synced"></span>
+        </span>` : ""}
+      </form>
+    </div>
   `;
 
   wireAccountChip(container);
