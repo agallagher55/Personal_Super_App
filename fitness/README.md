@@ -14,8 +14,10 @@ this repo's single stdlib `http.server` process and namespaced under
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how it's wired into the rest of
 this app, [`API-CONTRACT.md`](API-CONTRACT.md) for the `/fitness/api/*`
-response shapes, and [`google_health.md`](google_health.md) for the one-time
-Google Cloud/OAuth setup required before syncing any real data.
+response shapes, [`google_health.md`](google_health.md) for the one-time
+Google Cloud/OAuth setup required before syncing any real data, and
+[`VISITOR-SIGNIN-PLAN.md`](VISITOR-SIGNIN-PLAN.md) for the not-yet-built
+plan to let visitors sign in with their own Google account.
 
 ## Local setup (one-time)
 
