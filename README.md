@@ -16,12 +16,15 @@ Files:
 - `data/tasks.db`, the task data, in three normalized SQLite tables
   (`sections`, `tasks`, `tags`, one row each, joined by id). Created by
   `backend/tasks_db.py`; see `DATABASE-MIGRATION.md` for the schema
-- `data/sections.json`, `data/tasks.json`, `data/tags.json`, the seed data
-  the database was imported from. Kept as a readable, git-committed
-  fallback, but **no longer live**: the running app does not read or write
-  them any more
+- `data/sections.json`, `data/tasks.json`, `data/tags.json`, a readable,
+  git-committed snapshot of the database. **Not live**: the running app
+  never reads or writes them. Refresh them with
+  `python3 backend/tasks_export.py` when you want the committed copy to
+  match reality again
 - `backend/tasks_db.py`, `backend/tasks_schema.sql`, the storage layer and
   its DDL
+- `backend/tasks_export.py`, regenerates the three JSON files from the
+  database
 
 ## Running it
 
@@ -166,6 +169,28 @@ python3 backend/tasks_db.py migrate
 It imports `data/sections.json`, `data/tasks.json`, and `data/tags.json`,
 prints a row count per table, leaves the JSON files untouched, and refuses
 to run twice against a database that already has rows.
+
+### Keeping the JSON snapshot current
+
+The database is the live store, so the three JSON files stop changing the
+moment you migrate. They're still the only copy of your tasks that git
+tracks, so refresh them when you want that fallback to be current:
+
+```bash
+python3 backend/tasks_export.py          # rewrite the JSON files
+python3 backend/tasks_export.py --check  # report drift, write nothing
+```
+
+The export is the exact inverse of `migrate`: re-importing what it writes
+reproduces the same rows, and exporting again produces byte-identical
+files. Rows come out in a deterministic order (sections by position, tasks
+by section then position, tags by task then position) so git diffs show
+only real changes. `--check` exits non-zero when the files are stale, which
+makes it usable from a pre-commit hook or a scheduled job.
+
+The very first export after migrating rewrites most of `tasks.json` and
+`tags.json`, because the pre-migration files were in insertion order rather
+than sorted. Nothing is lost, only reordered; after that, diffs are small.
 
 ## Behavior
 

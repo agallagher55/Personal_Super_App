@@ -389,10 +389,29 @@ have quietly changed which URLs 404. They are two functions:
 - `service_now/sync.py`'s upsert exercised directly: create, idempotent
   re-run, and an upstream status flip to done.
 
-### Still open
+### §10's second point, resolved
 
-§10's second point stands and is now live: `data/sections.json`,
-`data/tasks.json` and `data/tags.json` are a frozen snapshot from migration
-day, not a live backup. Nothing writes them any more. If a git-backed
-current copy matters, that needs a periodic `sqlite3 data/tasks.db .dump`
-or a small export script.
+`data/sections.json`, `data/tasks.json` and `data/tags.json` stopped being
+written the moment the database went live, so they were a frozen snapshot
+from migration day rather than a backup. `backend/tasks_export.py`
+regenerates them from `data/tasks.db`:
+
+```
+python3 backend/tasks_export.py          # rewrite the JSON files
+python3 backend/tasks_export.py --check  # report drift, write nothing
+```
+
+It is the exact inverse of `tasks_db.py migrate` (verified both ways: the
+files it writes re-import to identical rows, and exporting those rows again
+is byte-identical), writes with the same `indent=2` plus trailing newline
+`save_json()` used, and orders rows deterministically so git diffs show
+only real changes. `--check` exits 1 on drift, for a pre-commit hook or a
+cron job.
+
+Deliberately manual rather than wired into every write: the JSON files are
+a fallback, and having each `POST /tasks/update` rewrite three files would
+put back exactly the whole-file-rewrite cost and crash-window this
+migration removed.
+
+Verified on the real store: exporting the migrated database changed **zero
+fields** across all 86 rows, only their order.

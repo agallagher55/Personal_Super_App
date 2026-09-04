@@ -1,5 +1,19 @@
 [
   {
+    "id": "68bd3f946998",
+    "task_id": "66ff15254b85",
+    "position": 0,
+    "text": "Lisa O'Toole",
+    "flag": false
+  },
+  {
+    "id": "8304d4646a0c",
+    "task_id": "66ff15254b85",
+    "position": 1,
+    "text": "no firm deadline",
+    "flag": false
+  },
+  {
     "id": "a3e263fce101",
     "task_id": "d7edf9e2da04",
     "position": 0,
@@ -19,13 +33,6 @@
     "position": 2,
     "text": "due Aug 7",
     "flag": false
-  },
-  {
-    "id": "0b18829c5c61",
-    "task_id": "676272d4ee91",
-    "position": 0,
-    "text": "top priority",
-    "flag": true
   },
   {
     "id": "41123bafb733",
@@ -49,18 +56,25 @@
     "flag": true
   },
   {
-    "id": "68bd3f946998",
-    "task_id": "66ff15254b85",
+    "id": "c484216e48cb",
+    "task_id": "0e6ee6c1c406",
     "position": 0,
-    "text": "Lisa O'Toole",
+    "text": "top priority",
+    "flag": true
+  },
+  {
+    "id": "d9520d756b22",
+    "task_id": "0e6ee6c1c406",
+    "position": 1,
+    "text": "Mike Potter",
     "flag": false
   },
   {
-    "id": "8304d4646a0c",
-    "task_id": "66ff15254b85",
-    "position": 1,
-    "text": "no firm deadline",
-    "flag": false
+    "id": "0b18829c5c61",
+    "task_id": "676272d4ee91",
+    "position": 0,
+    "text": "top priority",
+    "flag": true
   },
   {
     "id": "8510f472e468",
@@ -133,20 +147,6 @@
     "flag": false
   },
   {
-    "id": "c484216e48cb",
-    "task_id": "0e6ee6c1c406",
-    "position": 0,
-    "text": "top priority",
-    "flag": true
-  },
-  {
-    "id": "d9520d756b22",
-    "task_id": "0e6ee6c1c406",
-    "position": 1,
-    "text": "Mike Potter",
-    "flag": false
-  },
-  {
     "id": "38f171ab2682",
     "task_id": "06c418a27cff",
     "position": 0,
@@ -161,13 +161,6 @@
     "flag": true
   },
   {
-    "id": "c414144c5165",
-    "task_id": "6f6d4de7ea70",
-    "position": 0,
-    "text": "landlord",
-    "flag": false
-  },
-  {
     "id": "c2586871eb52",
     "task_id": "1d59a881dec6",
     "position": 0,
@@ -179,6 +172,13 @@
     "task_id": "b596be1078c9",
     "position": 0,
     "text": "research",
+    "flag": false
+  },
+  {
+    "id": "c414144c5165",
+    "task_id": "6f6d4de7ea70",
+    "position": 0,
+    "text": "landlord",
     "flag": false
   },
   {
