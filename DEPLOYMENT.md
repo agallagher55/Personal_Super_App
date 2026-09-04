@@ -74,6 +74,10 @@ Import them once, after the first deploy of this code:
    disk untouched as a point-in-time fallback; they do **not** track
    changes made after the migration.
 
+To refresh that fallback later, run `python3 backend/tasks_export.py` in a
+Shell session and commit the result, or run it locally against a copy of
+the database. `--check` reports drift without writing.
+
 ### Port binding
 
 Render assigns a port at runtime via the `$PORT` environment variable

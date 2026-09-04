@@ -237,7 +237,7 @@
           <span class="name">Real database</span>
           <span class="pill pill-done">Tasks done, finance pending</span>
         </div>
-        <div class="desc">Tasks moved off flat JSON onto SQLite: <code>data/tasks.db</code> with <code>sections</code>/<code>tasks</code>/<code>tags</code> tables, a generated <code>done</code> column that can't drift from <code>status</code>, and transactional writes. See <code>DATABASE-MIGRATION.md</code>. Finance still reads a static seed file; <code>finance/schema.sql</code> already defines its schema and standing it up is step one of the Plaid work below. Fitness stays on JSON deliberately (<code>fitness/ARCHITECTURE.md</code> &sect;6).</div>
+        <div class="desc">Tasks moved off flat JSON onto SQLite: <code>data/tasks.db</code> with <code>sections</code>/<code>tasks</code>/<code>tags</code> tables, a generated <code>done</code> column that can't drift from <code>status</code>, and transactional writes. <code>backend/tasks_export.py</code> regenerates the committed JSON snapshot from it. See <code>DATABASE-MIGRATION.md</code>. Finance still reads a static seed file; <code>finance/schema.sql</code> already defines its schema and standing it up is step one of the Plaid work below. Fitness stays on JSON deliberately (<code>fitness/ARCHITECTURE.md</code> &sect;6).</div>
       </div>
     </div>
   </section>
