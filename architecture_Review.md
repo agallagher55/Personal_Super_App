@@ -4,6 +4,18 @@ Reviewed 2026-08-17. Scope: everything in the repo at the time of review —
 `backend/server.py`, `html/`, `static/`, `data/tasks.json`, `service_now/`,
 `render.yaml`, and the docs (`README.md`, `DEPLOYMENT.md`, `routes.md`).
 
+**Since diverged (as of 2026-09-04):** `/fitness` and `/finance` are no
+longer the two placeholder stubs §1 describes below. `/fitness` is now a
+fully working per-visitor Google Health dashboard with real OAuth
+sign-in — see `fitness/README.md` and `fitness/ARCHITECTURE.md`.
+`/finance` grew a real, working dashboard UI (still reading a static
+seed file; the Plaid sync layer is fully planned but not yet built) —
+see `finance/README.md` and `finance/ARCHITECTURE.md`. §8 item 6
+("decide the fate of `/fitness` and `/finance`") is resolved by the
+same two docs. `roadmap.html` tracks current status; everything else
+below (the tasks-tracker/backend findings and recommended priorities
+1–5) is unaffected and still applies.
+
 ## 1. What this app actually is today
 
 Despite the "Super App" name, this is a **single-page personal task
