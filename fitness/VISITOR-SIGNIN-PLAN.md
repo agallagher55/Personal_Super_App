@@ -995,8 +995,9 @@ Run with `python -m unittest discover -s backend/fitness/tests`. Use
 `tempfile.TemporaryDirectory` and monkeypatch the module-level roots rather
 than touching real `data/`.
 
-Shipped as written: 20 tests across the three files, green from the repo
-root with exactly that command.
+Shipped as written, plus six more in `test_session.py` covering
+`get_secret()`'s generate-and-persist path (see §15): 26 tests across the
+three files, green from the repo root with exactly that command.
 
 ---
 
@@ -1082,26 +1083,41 @@ something other than a dict, and `server.py`'s `check_same_origin()` is
 the `Origin` check §5 asks for, factored into one helper used by both
 POST routes.
 
-### Known gap found in this review
+### Gap found in this review, since fixed
 
-`session.get_secret()` is not safe against concurrent first use. On a
+`session.get_secret()` was not safe against concurrent first use. On a
 deploy with no `FITNESS_SESSION_SECRET` set and no
-`data/fitness/session_secret` on disk yet, every thread that gets past the
-`SECRET_PATH.exists()` check races into
-`os.open(..., O_CREAT | O_EXCL)`: one wins and the rest raise
-`FileExistsError`, which nothing catches, so those requests 500. Reproduced
-with 8 concurrent cold callers, 5 of which raised. The same race has a
-narrower window where a thread sees the file in the instant between
-`os.open()` and the `write()`, reads it empty, and caches `b""` as the
-secret, which would silently invalidate every cookie it then signs.
-
+`data/fitness/session_secret` on disk yet, every thread that got past the
+`SECRET_PATH.exists()` check raced into
+`os.open(..., O_CREAT | O_EXCL)`: one won and the rest raised
+`FileExistsError`, which nothing caught, so those requests 500'd.
+Reproduced with 8 concurrent cold callers, 5 of which raised. The same race
+had a narrower window where a thread saw the file in the instant between
+`os.open()` and the `write()`, read it empty, and cached `b""` as the
+secret, which would silently invalidate every cookie it then signed.
 `server.py` reaches this on the first `/fitness/auth/start`, so the
-practical blast radius is one failed sign-in that works on retry. The fix
-is small: catch `FileExistsError` and fall through to reading the winner's
-file, and write through the same temp-file-then-`os.replace()` dance
-`jsonfile.write_json_atomic()` already uses. Setting
-`FITNESS_SESSION_SECRET`, which `DEPLOYMENT.md` already recommends, avoids
-the path entirely.
+practical symptom was a failed first sign-in that worked on retry.
+
+Fixed in two parts, because the two windows have different causes:
+
+1. **A module-level `threading.Lock` around the read-or-generate.** This is
+   the whole fix for the reproduced failure: `server.py` is a
+   `ThreadingHTTPServer`, so the racers are threads in one process, and
+   serializing them means exactly one generates.
+2. **Publish through `os.link()` rather than by creating `SECRET_PATH`
+   directly.** The secret is written to a private `0o600` temp file first
+   and then hard-linked into place. `os.link()` refuses an existing
+   destination, which makes "publish this secret, or lose to whoever got
+   there first" one atomic step, and it means `SECRET_PATH` never exists
+   empty for another *process* to read. Losing that link is not an error:
+   the winner's secret is the one already signing live cookies, so
+   `get_secret()` adopts it. A filesystem with no hard-link support (some
+   Windows setups) falls back to the old exclusive create, which is
+   narrower than the original bug and still never raises.
+
+`data/fitness/session_secret` keeps its `0o600` mode and the temp file is
+always cleaned up. Setting `FITNESS_SESSION_SECRET`, which `DEPLOYMENT.md`
+already recommends, still skips the whole path.
 
 ### Still open, tracked in `roadmap.html`
 
