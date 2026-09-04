@@ -44,9 +44,6 @@ from urllib.parse import parse_qs, urlparse
 PORT = int(os.environ.get('PORT', 8000))
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
-SECTIONS_FILE = os.path.join(DATA_DIR, 'sections.json')
-TASKS_FILE = os.path.join(DATA_DIR, 'tasks.json')
-TAGS_FILE = os.path.join(DATA_DIR, 'tags.json')
 # Mirrors the Notion "Weekly Tasks" database's Status options (Not started,
 # In progress, Pending, Done, Cancelled), keeping this app's existing
 # open/in-progress/done names for the three states it already had.
@@ -76,6 +73,7 @@ import auth as fitness_auth
 import session as fitness_session
 import users as fitness_users
 import finance_prices
+import tasks_db
 
 FITNESS_PAGES = (
     'steps', 'heart-rate', 'sleep', 'activity', 'spo2', 'hrv',
@@ -112,61 +110,17 @@ def format_sentence(text):
     return text
 
 
-def load_json(path, default):
-    try:
-        with open(path, 'r') as f:
-            return json.load(f)
-    except OSError:
-        return default
-
-
-def save_json(path, data):
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
-        f.write('\n')
-
-
-def load_sections():
-    return load_json(SECTIONS_FILE, [])
-
-
-def load_tasks():
-    return load_json(TASKS_FILE, [])
-
-
-def load_tags():
-    return load_json(TAGS_FILE, [])
-
-
-def save_sections(sections):
-    save_json(SECTIONS_FILE, sections)
-
-
-def save_tasks(tasks):
-    save_json(TASKS_FILE, tasks)
-
-
-def save_tags(tags):
-    save_json(TAGS_FILE, tags)
-
-
-def reposition_section(tasks, section_id):
-    """Renumber the 'position' field of a section's tasks to 0..n-1,
-    keeping their current relative order."""
-    section_tasks = sorted(
-        (t for t in tasks if t.get('section_id') == section_id),
-        key=lambda t: t.get('position', 0)
-    )
-    for i, task in enumerate(section_tasks):
-        task['position'] = i
-
-
 def build_nested():
     """Join sections + tasks + tags into the nested shape the frontend
     expects, the same way a database view would."""
-    sections = load_sections()
-    tasks = load_tasks()
-    tags = load_tags()
+    conn = tasks_db.connect()
+
+    try:
+        sections = tasks_db.load_sections(conn)
+        tasks = tasks_db.load_tasks(conn)
+        tags = tasks_db.load_tags(conn)
+    finally:
+        conn.close()
 
     tags_by_task = {}
     for tag in sorted(tags, key=lambda t: t.get('position', 0)):
@@ -292,13 +246,20 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def section_slug_exists(self, slug):
-        return any(s.get('slug') == slug for s in load_sections())
+        conn = tasks_db.connect()
+
+        try:
+            return tasks_db.section_slug_exists(conn, slug)
+        finally:
+            conn.close()
 
     def find_task(self, task_id):
-        for task in load_tasks():
-            if task.get('id') == task_id:
-                return task
-        return None
+        conn = tasks_db.connect()
+
+        try:
+            return tasks_db.find_task(conn, task_id)
+        finally:
+            conn.close()
 
     def handle_fitness_api_get(self, user_id, path, parsed):
         query = parse_qs(parsed.query)
@@ -524,68 +485,64 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(400, 'Section and description are required')
             return
 
-        sections = load_sections()
-        section = next((s for s in sections if s['id'] == section_id), None)
-        if section is None:
-            self.send_error(400, 'Unknown section: ' + section_id)
-            return
+        conn = tasks_db.connect()
 
-        tasks = load_tasks()
-        tags = load_tags()
+        try:
+            if tasks_db.find_section(conn, section_id) is None:
+                self.send_error(400, 'Unknown section: ' + section_id)
+                return
 
-        if parent_id and not any(t.get('id') == parent_id for t in tasks):
-            parent_id = ''
+            if parent_id and not tasks_db.task_exists(conn, parent_id):
+                parent_id = ''
 
-        raw_tags = []
-        if flag_tag:
-            raw_tags.append({'text': flag_tag, 'flag': True})
-        for raw_tag in tags_raw.split(','):
-            raw_tag = raw_tag.strip()
-            if raw_tag:
-                raw_tags.append({'text': raw_tag, 'flag': False})
+            raw_tags = []
+            if flag_tag:
+                raw_tags.append({'text': flag_tag, 'flag': True})
+            for raw_tag in tags_raw.split(','):
+                raw_tag = raw_tag.strip()
+                if raw_tag:
+                    raw_tags.append({'text': raw_tag, 'flag': False})
 
-        created = now_iso()
-        task_id = uuid.uuid4().hex[:12]
-        position = sum(1 for t in tasks if t.get('section_id') == section_id)
-        new_task = {
-            'id': task_id,
-            'section_id': section_id,
-            'position': position,
-            'desc': desc,
-            'note': note,
-            'notes': '',
-            'status': 'done' if done else 'open',
-            'done': done,
-            'priority': priority,
-            'ticket_number': ticket_number,
-            'assignment_group': assignment_group,
-            'requested_by': requested_by,
-            'due_date': due_date,
-            'time_estimate': time_estimate,
-            'related_files': related_files,
-            'parent_id': parent_id,
-            'work_type': work_type,
-            'env_dev': False,
-            'env_qa': False,
-            'env_prod': False,
-            'cmdb_updated': False,
-            'created': created,
-            'modified': created,
-            'completed': created if done else ''
-        }
-        tasks.append(new_task)
+            created = now_iso()
+            task_id = uuid.uuid4().hex[:12]
+            # No 'done' key: it's a generated column now, derived from
+            # status, so there's nothing to write and nothing to drift.
+            new_task = {
+                'id': task_id,
+                'section_id': section_id,
+                'position': tasks_db.next_task_position(conn, section_id),
+                'desc': desc,
+                'note': note,
+                'notes': '',
+                'status': 'done' if done else 'open',
+                'priority': priority,
+                'ticket_number': ticket_number,
+                'assignment_group': assignment_group,
+                'requested_by': requested_by,
+                'due_date': due_date,
+                'time_estimate': time_estimate,
+                'related_files': related_files,
+                'parent_id': parent_id,
+                'work_type': work_type,
+                'env_dev': False,
+                'env_qa': False,
+                'env_prod': False,
+                'cmdb_updated': False,
+                'created': created,
+                'modified': created,
+                'completed': created if done else ''
+            }
 
-        for tag_position, tag in enumerate(raw_tags):
-            tags.append({
-                'id': uuid.uuid4().hex[:12],
-                'task_id': task_id,
-                'position': tag_position,
-                'text': tag['text'],
-                'flag': tag['flag']
-            })
-
-        save_tasks(tasks)
-        save_tags(tags)
+            # One transaction: the task and its tags land together, or
+            # neither does. Two separate file writes used to be able to
+            # disagree if the process died between them.
+            with conn:
+                tasks_db.insert_task(conn, new_task)
+                tasks_db.replace_task_tags(conn, task_id, [
+                    dict(tag, id=uuid.uuid4().hex[:12]) for tag in raw_tags
+                ])
+        finally:
+            conn.close()
 
         self.send_response(303)
         self.send_header('Location', '/tasks?added=1')
@@ -606,18 +563,23 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(400, 'Category name must contain letters or numbers')
             return
 
-        sections = load_sections()
-        if any(s.get('slug') == slug or s.get('id') == slug for s in sections):
-            self.send_error(400, 'A category with that name already exists')
-            return
+        conn = tasks_db.connect()
 
-        sections.append({
-            'id': slug,
-            'label': label,
-            'slug': slug,
-            'note': ''
-        })
-        save_sections(sections)
+        try:
+            if tasks_db.section_name_taken(conn, slug):
+                self.send_error(400, 'A category with that name already exists')
+                return
+
+            with conn:
+                tasks_db.insert_section(conn, {
+                    'id': slug,
+                    'position': tasks_db.next_section_position(conn),
+                    'label': label,
+                    'slug': slug,
+                    'note': ''
+                })
+        finally:
+            conn.close()
 
         self.send_response(303)
         self.send_header('Location', '/tasks/categories?added=1')
@@ -645,143 +607,165 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 updates_by_id[task_id] = item
                 order_index.setdefault(task_id, len(order_index))
 
-        tasks = load_tasks()
-        tags = load_tags()
+        conn = tasks_db.connect()
 
-        updated_count = 0
-        now = now_iso()
-        touched_sections = set()
-        for task in tasks:
-            update = updates_by_id.get(task.get('id'))
-            if update is None:
-                continue
+        try:
+            tasks = tasks_db.load_tasks(conn)
+            tags = tasks_db.load_tags(conn)
 
-            changed = False
+            # Which rows actually changed, so a task that was submitted but
+            # not edited doesn't get a pointless UPDATE, and which tasks need
+            # their tag set rewritten.
+            dirty_task_ids = set()
+            tag_writes = {}
+            position_writes = []
 
-            if 'desc' in update:
-                new_desc = (update['desc'] or '').strip()
-                if new_desc and new_desc != task.get('desc'):
-                    task['desc'] = new_desc
+            updated_count = 0
+            now = now_iso()
+            touched_sections = set()
+            for task in tasks:
+                update = updates_by_id.get(task.get('id'))
+                if update is None:
+                    continue
+
+                changed = False
+
+                if 'desc' in update:
+                    new_desc = (update['desc'] or '').strip()
+                    if new_desc and new_desc != task.get('desc'):
+                        task['desc'] = new_desc
+                        changed = True
+
+                if 'note' in update:
+                    new_note = update['note'] if isinstance(update['note'], str) else ''
+                    if new_note != task.get('note', ''):
+                        task['note'] = new_note
+                        changed = True
+
+                if 'tags' in update and isinstance(update['tags'], list):
+                    new_tags = []
+                    for tag in update['tags']:
+                        if isinstance(tag, dict) and str(tag.get('text', '')).strip():
+                            new_tags.append({
+                                'text': str(tag['text']).strip(),
+                                'flag': bool(tag.get('flag'))
+                            })
+                    existing_tags = sorted(
+                        (t for t in tags if t.get('task_id') == task['id']),
+                        key=lambda t: t.get('position', 0)
+                    )
+                    existing_simple = [{'text': t['text'], 'flag': bool(t.get('flag'))} for t in existing_tags]
+                    if new_tags != existing_simple:
+                        # Recorded now, written inside the transaction below, so
+                        # a task's tags never land without the task itself.
+                        tag_writes[task['id']] = new_tags
+                        changed = True
+
+                if 'notes' in update and update['notes'] != task.get('notes', ''):
+                    task['notes'] = update['notes']
                     changed = True
 
-            if 'note' in update:
-                new_note = update['note'] if isinstance(update['note'], str) else ''
-                if new_note != task.get('note', ''):
-                    task['note'] = new_note
-                    changed = True
+                if 'status' in update:
+                    new_status = update['status']
+                    if new_status not in STATUSES:
+                        new_status = 'done' if task.get('done') else 'open'
+                    if new_status != task.get('status'):
+                        task['status'] = new_status
+                        task['done'] = (new_status == 'done')
+                        task['completed'] = now if new_status == 'done' else ''
+                        changed = True
 
-            if 'tags' in update and isinstance(update['tags'], list):
-                new_tags = []
-                for tag in update['tags']:
-                    if isinstance(tag, dict) and str(tag.get('text', '')).strip():
-                        new_tags.append({
-                            'text': str(tag['text']).strip(),
-                            'flag': bool(tag.get('flag'))
-                        })
-                existing_tags = sorted(
-                    (t for t in tags if t.get('task_id') == task['id']),
-                    key=lambda t: t.get('position', 0)
+                if 'priority' in update:
+                    new_priority = update['priority']
+                    if new_priority not in PRIORITIES:
+                        new_priority = task.get('priority', 'medium')
+                    if new_priority != task.get('priority'):
+                        task['priority'] = new_priority
+                        changed = True
+
+                for field in ('ticket_number', 'assignment_group', 'requested_by', 'due_date',
+                              'time_estimate', 'related_files'):
+                    if field in update:
+                        new_value = update[field].strip() if isinstance(update[field], str) else ''
+                        if new_value != task.get(field, ''):
+                            task[field] = new_value
+                            changed = True
+
+                if 'parent_id' in update:
+                    new_parent_id = update['parent_id'].strip() if isinstance(update['parent_id'], str) else ''
+                    if new_parent_id == task.get('id'):
+                        new_parent_id = ''
+                    elif new_parent_id and not any(t.get('id') == new_parent_id for t in tasks):
+                        new_parent_id = ''
+                    if new_parent_id != task.get('parent_id', ''):
+                        task['parent_id'] = new_parent_id
+                        changed = True
+
+                if 'work_type' in update:
+                    new_work_type = update['work_type'] if isinstance(update['work_type'], str) else ''
+                    if new_work_type not in WORK_TYPES or task.get('section_id') != WORK_SECTION_ID:
+                        new_work_type = ''
+                    if new_work_type != task.get('work_type', ''):
+                        task['work_type'] = new_work_type
+                        changed = True
+
+                for env in ENVIRONMENTS:
+                    field = 'env_' + env
+                    if field in update:
+                        new_value = bool(update[field])
+                        if new_value != bool(task.get(field, False)):
+                            task[field] = new_value
+                            changed = True
+
+                if 'cmdb_updated' in update:
+                    new_value = bool(update['cmdb_updated'])
+                    if new_value != bool(task.get('cmdb_updated', False)):
+                        task['cmdb_updated'] = new_value
+                        changed = True
+
+                if changed:
+                    task['modified'] = now
+                    dirty_task_ids.add(task['id'])
+
+                touched_sections.add(task.get('section_id'))
+                updated_count += 1
+
+            # order_index reflects drag-and-drop reordering: the frontend's
+            # "Save Changes" always submits every task currently rendered on the
+            # page, in the section's intended new order. Only reposition a
+            # section when the payload actually covers all of its tasks -
+            # otherwise (e.g. task-detail.js saving a single task) order_index
+            # only knows about that one task and would wrongly shove it to the
+            # front of its section.
+            for section_id in touched_sections:
+                section_tasks = [t for t in tasks if t.get('section_id') == section_id]
+                if not all(t.get('id') in updates_by_id for t in section_tasks):
+                    continue
+                section_tasks.sort(
+                    key=lambda t: order_index.get(t.get('id'), len(order_index))
                 )
-                existing_simple = [{'text': t['text'], 'flag': bool(t.get('flag'))} for t in existing_tags]
-                if new_tags != existing_simple:
-                    tags = [t for t in tags if t.get('task_id') != task['id']]
-                    for tag_position, tag in enumerate(new_tags):
-                        tags.append({
-                            'id': uuid.uuid4().hex[:12],
-                            'task_id': task['id'],
-                            'position': tag_position,
-                            'text': tag['text'],
-                            'flag': tag['flag']
-                        })
-                    changed = True
+                for i, task in enumerate(section_tasks):
+                    if task.get('position') != i:
+                        task['position'] = i
+                        position_writes.append((task['id'], i))
 
-            if 'notes' in update and update['notes'] != task.get('notes', ''):
-                task['notes'] = update['notes']
-                changed = True
 
-            if 'status' in update:
-                new_status = update['status']
-                if new_status not in STATUSES:
-                    new_status = 'done' if task.get('done') else 'open'
-                if new_status != task.get('status'):
-                    task['status'] = new_status
-                    task['done'] = (new_status == 'done')
-                    task['completed'] = now if new_status == 'done' else ''
-                    changed = True
+            # One transaction for the whole payload: tasks, their tags, and
+            # the reordering either all land or none do. This is the case the
+            # two-separate-save_json()-calls version could leave half-applied.
+            with conn:
+                for task in tasks:
+                    if task['id'] in dirty_task_ids:
+                        tasks_db.update_task(conn, task)
 
-            if 'priority' in update:
-                new_priority = update['priority']
-                if new_priority not in PRIORITIES:
-                    new_priority = task.get('priority', 'medium')
-                if new_priority != task.get('priority'):
-                    task['priority'] = new_priority
-                    changed = True
+                for task_id, new_tags in tag_writes.items():
+                    tasks_db.replace_task_tags(conn, task_id, [
+                        dict(tag, id=uuid.uuid4().hex[:12]) for tag in new_tags
+                    ])
 
-            for field in ('ticket_number', 'assignment_group', 'requested_by', 'due_date',
-                          'time_estimate', 'related_files'):
-                if field in update:
-                    new_value = update[field].strip() if isinstance(update[field], str) else ''
-                    if new_value != task.get(field, ''):
-                        task[field] = new_value
-                        changed = True
-
-            if 'parent_id' in update:
-                new_parent_id = update['parent_id'].strip() if isinstance(update['parent_id'], str) else ''
-                if new_parent_id == task.get('id'):
-                    new_parent_id = ''
-                elif new_parent_id and not any(t.get('id') == new_parent_id for t in tasks):
-                    new_parent_id = ''
-                if new_parent_id != task.get('parent_id', ''):
-                    task['parent_id'] = new_parent_id
-                    changed = True
-
-            if 'work_type' in update:
-                new_work_type = update['work_type'] if isinstance(update['work_type'], str) else ''
-                if new_work_type not in WORK_TYPES or task.get('section_id') != WORK_SECTION_ID:
-                    new_work_type = ''
-                if new_work_type != task.get('work_type', ''):
-                    task['work_type'] = new_work_type
-                    changed = True
-
-            for env in ENVIRONMENTS:
-                field = 'env_' + env
-                if field in update:
-                    new_value = bool(update[field])
-                    if new_value != bool(task.get(field, False)):
-                        task[field] = new_value
-                        changed = True
-
-            if 'cmdb_updated' in update:
-                new_value = bool(update['cmdb_updated'])
-                if new_value != bool(task.get('cmdb_updated', False)):
-                    task['cmdb_updated'] = new_value
-                    changed = True
-
-            if changed:
-                task['modified'] = now
-
-            touched_sections.add(task.get('section_id'))
-            updated_count += 1
-
-        # order_index reflects drag-and-drop reordering: the frontend's
-        # "Save Changes" always submits every task currently rendered on the
-        # page, in the section's intended new order. Only reposition a
-        # section when the payload actually covers all of its tasks -
-        # otherwise (e.g. task-detail.js saving a single task) order_index
-        # only knows about that one task and would wrongly shove it to the
-        # front of its section.
-        for section_id in touched_sections:
-            section_tasks = [t for t in tasks if t.get('section_id') == section_id]
-            if not all(t.get('id') in updates_by_id for t in section_tasks):
-                continue
-            section_tasks.sort(
-                key=lambda t: order_index.get(t.get('id'), len(order_index))
-            )
-            for i, task in enumerate(section_tasks):
-                task['position'] = i
-
-        save_tasks(tasks)
-        save_tags(tags)
+                tasks_db.set_task_positions(conn, position_writes)
+        finally:
+            conn.close()
 
         response_body = json.dumps({'status': 'ok', 'updated': updated_count}).encode('utf-8')
         self.send_response(200)
@@ -805,20 +789,23 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_error(400, 'Missing task id')
             return
 
-        tasks = load_tasks()
-        target = next((t for t in tasks if t.get('id') == task_id), None)
-        if target is None:
-            self.send_json_error(404, 'No task found with that id')
-            return
+        conn = tasks_db.connect()
 
-        section_id = target.get('section_id')
-        tasks = [t for t in tasks if t.get('id') != task_id]
-        reposition_section(tasks, section_id)
-        save_tasks(tasks)
+        try:
+            target = tasks_db.find_task(conn, task_id)
+            if target is None:
+                self.send_json_error(404, 'No task found with that id')
+                return
 
-        tags = load_tags()
-        tags = [t for t in tags if t.get('task_id') != task_id]
-        save_tags(tags)
+            section_id = target.get('section_id')
+
+            # The row, its tags (ON DELETE CASCADE) and the renumbering of
+            # what's left, in one transaction.
+            with conn:
+                tasks_db.delete_task(conn, task_id)
+                tasks_db.reposition_section(conn, section_id)
+        finally:
+            conn.close()
 
         response_body = json.dumps({'status': 'ok', 'deleted': True}).encode('utf-8')
         self.send_response(200)
@@ -843,6 +830,11 @@ class TaskServer(http.server.ThreadingHTTPServer):
 
 def main():
     os.chdir(BASE_DIR)
+    # Creates data/tasks.db and its schema if they don't exist yet, so a
+    # fresh clone serves an empty task list instead of failing on a missing
+    # table. Importing existing data is a separate, explicit step:
+    # `python3 backend/tasks_db.py migrate` (see DATABASE-MIGRATION.md).
+    tasks_db.ensure_database()
     with TaskServer(('', PORT), TaskHandler) as httpd:
         print('Serving at http://localhost:%d' % PORT)
         httpd.serve_forever()

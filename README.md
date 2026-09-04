@@ -13,10 +13,15 @@ Files:
 - `backend/server.py`, a small custom server (see below, this is what makes
   saving new tasks actually work); `backend/start-server.bat` runs it for
   double-click use on Windows
-- `data/sections.json`, `data/tasks.json`, `data/tags.json`, the task data,
-  split into three normalized files (one section/task/tag per row, joined by
-  id) so the storage shape already looks like the tables this app will move
-  to in a real database eventually
+- `data/tasks.db`, the task data, in three normalized SQLite tables
+  (`sections`, `tasks`, `tags`, one row each, joined by id). Created by
+  `backend/tasks_db.py`; see `DATABASE-MIGRATION.md` for the schema
+- `data/sections.json`, `data/tasks.json`, `data/tags.json`, the seed data
+  the database was imported from. Kept as a readable, git-committed
+  fallback, but **no longer live**: the running app does not read or write
+  them any more
+- `backend/tasks_db.py`, `backend/tasks_schema.sql`, the storage layer and
+  its DDL
 
 ## Running it
 
@@ -57,8 +62,8 @@ These category pages are the same app as the main page (status
 dropdowns, notes, Save Changes, delete all work identically), just filtered to
 one section, with a "&larr; All categories" link back to `/tasks/categories`. The
 **+ New Task** button on a category page pre-selects that category in
-the form. Slugs live in each section's `"slug"` field in `data/sections.json`,
-add one there if you add a new section by hand.
+the form. Slugs live in each section's `slug` column, set automatically from the
+category name when you add one through **+ New category**.
 
 ## Adding a task from the browser
 
@@ -66,64 +71,101 @@ Click **+ New task** in the header, or go straight to
 `http://localhost:8000/tasks/new`. Fill in the section, description,
 and optionally a note, a priority tag, other tags (comma separated),
 and whether it's already done. Submitting POSTs to `/tasks/new`, which
-`backend/server.py` handles by appending a row to `data/tasks.json` (and any
-tags to `data/tags.json`) and writing the files back to disk, then redirects
-you back to the main page with a "Task added" confirmation.
+`backend/server.py` handles by inserting a row into `tasks` (and any tags
+into `tags`, in the same transaction), then redirects you back to the main
+page with a "Task added" confirmation.
 
 ## Editing tasks
 
-The data lives in three files, no HTML knowledge needed to edit any of them
-directly:
+The data lives in `data/tasks.db`, a SQLite database. Day to day you edit
+it through the app: the status dropdowns, the Notes boxes, drag-and-drop
+reordering, **+ New task**, and **+ New category** all write to it.
 
-- `data/sections.json`, an array of sections:
+For a one-off change the UI can't make, use the `sqlite3` CLI (bundled with
+Python, so `python3 -c "import sqlite3"` proves you have it) or a GUI like
+[DB Browser for SQLite](https://sqlitebrowser.org/):
+
+```bash
+sqlite3 data/tasks.db "SELECT id, status, \"desc\" FROM tasks LIMIT 5;"
+sqlite3 data/tasks.db "UPDATE tasks SET priority = 'high' WHERE id = '...';"
+```
+
+This is the one thing the move off flat JSON took away: you can no longer
+open the store in a text editor. In exchange, a half-written save can no
+longer truncate it, a task and its tags can no longer disagree after a
+crash, and a typo can no longer produce invalid JSON that silently reads
+back as an empty task list.
+
+Stop the server before writing to the database by hand, so your change and
+a concurrent save don't race.
+
+The columns, which are also what the three seed JSON files hold:
+
+- `sections`:
   - `id`, a unique identifier for the section, referenced by tasks as
     `section_id`
   - `label`, the display name shown in the header
   - `slug`, used in category URLs like `/tasks/finance`
+  - `position`, where the section sorts on the page (lower first)
   - `note`, an optional top-level note shown under the section header
     (used for reference info that isn't tied to one task, like the TD
     rate note under Finance), `""` for none
-- `data/tasks.json`, an array of tasks:
+- `tasks`:
   - `id`, a unique identifier auto-assigned to every task, this is what
     the Save Changes button uses to match a task in the browser back to
     its entry in the file, don't reuse an id across tasks
   - `section_id`, which section this task belongs to, matches a
-    section's `id` in `data/sections.json`
+    section's `id`
   - `position`, where the task sorts within its section (lower first)
   - `desc`, the task text
   - `note`, the fixed descriptive detail shown under the task (leave as
     `""` for none)
   - `notes`, your own freeform scratch notes typed into the Notes box on
     each task, saved to disk via the Save Changes button
-  - `done`, `true` or `false`, kept in sync with `status` (`true` only
-    when `status` is `"done"`), done tasks are pulled out into the
-    Completed panel automatically
-  - `status`, one of `"open"`, `"in-progress"`, or `"done"`, set via the
-    status dropdown on each task
+  - `done`, `true` or `false`. A **generated column**, computed from
+    `status` on every read rather than stored, so the two can never
+    disagree. It's read-only: change `status` instead. Done tasks are
+    pulled out into the Completed panel automatically
+  - `status`, one of `"open"`, `"in-progress"`, `"pending"`, `"done"`, or
+    `"cancelled"`, set via the status dropdown on each task
   - `created`, the UTC timestamp the task was added, set automatically
     and never changed afterward
   - `modified`, the UTC timestamp of the task's last notes or status
     change, updated automatically
   - `completed`, the UTC timestamp `status` last became `"done"`, or
     `""` if the task isn't done
-- `data/tags.json`, an array of tags:
+- `tags`:
   - `id`, a unique identifier for the tag
-  - `task_id`, which task this tag belongs to, matches a task's `id` in
-    `data/tasks.json`
+  - `task_id`, which task this tag belongs to, matches a task's `id`.
+    Deleting a task deletes its tags with it
   - `position`, where the tag sorts within its task
   - `text`, the tag's label
   - `flag`, `true` or `false`, `true` renders the tag in red (used for
     the most urgent/important tags)
 
 `GET /tasks.json` (what the frontend actually fetches) joins these three
-files back into the nested `{ sections: [{ tasks: [{ tags: [...] }] }] }`
-shape on every request, so the browser-facing API hasn't changed even
-though the on-disk storage is now normalized.
+tables back into the nested `{ sections: [{ tasks: [{ tags: [...] }] }] }`
+shape on every request, so the browser-facing API is byte-for-byte what it
+was when the store was three JSON files.
 
-To add a new task by hand instead of using the form, copy an existing
-task object in `data/tasks.json`, give it a unique `id`, and set its
-`section_id`. To add a new section, copy a section object in
-`data/sections.json` and give it a unique `id`.
+`tasks` has more columns than are listed above (`ticket_number`,
+`assignment_group`, `requested_by`, `due_date`, `time_estimate`,
+`related_files`, `parent_id`, `work_type`, `env_dev`/`env_qa`/`env_prod`,
+`cmdb_updated`, `servicenow_sys_id`) driving the task detail view and the
+ServiceNow sync. `backend/tasks_schema.sql` is the full, commented list.
+
+### Setting up the database
+
+A fresh clone has no `data/tasks.db`; the server creates an empty one on
+startup. To load the committed seed data into it instead, run this once:
+
+```bash
+python3 backend/tasks_db.py migrate
+```
+
+It imports `data/sections.json`, `data/tasks.json`, and `data/tags.json`,
+prints a row count per table, leaves the JSON files untouched, and refuses
+to run twice against a database that already has rows.
 
 ## Behavior
 
