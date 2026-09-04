@@ -2,8 +2,13 @@
 
 Plan for replacing `data/sections.json` / `data/tasks.json` / `data/tags.json`
 with a real SQLite database, using the exact same engine `finance/ARCHITECTURE.md`
-already committed to for the Plaid work. This is a planning document — nothing
-below is implemented yet.
+already committed to for the Plaid work.
+
+**Status: built** (2026-09-04). Everything below is implemented for tasks;
+finance is untouched and still waiting on its own Phase 1. §11 records the
+four places the build deviated from this plan and why. Where this text and
+the code disagree, the code wins; `backend/tasks_schema.sql` is the
+authoritative schema.
 
 ## Scope, confirmed with the user 2026-09-04
 
@@ -323,3 +328,71 @@ document the new path rather than the old one.
   fallback still matters to you, or explicitly accepting that the
   persistent disk becomes the only copy of current data (same trust model
   `data/fitness/` already has).
+
+---
+
+## 11. Build notes: where this deviated
+
+Four things this plan did not account for, found while building it against
+the real `data/*.json`. All four are in `backend/tasks_schema.sql` with
+comments; this is the reasoning.
+
+### `sections` needed a `position` column
+
+§4's `sections` table has no ordering column, but `build_nested()` renders
+categories in `data/sections.json`'s **array order**, and a table has no
+inherent order: `SELECT * FROM sections` would have returned them
+arbitrarily. Categories would have silently reshuffled on the first page
+load. Added `position INTEGER NOT NULL`, set from the array index at
+migration time and from `MAX(position) + 1` for new categories. It is not
+exposed in `GET /tasks.json`, so nothing downstream changed.
+
+### `parent_id` had to become NULL, not `''`
+
+§4 declares `parent_id TEXT REFERENCES tasks(id)`, and all 47 tasks in
+`data/tasks.json` carry `"parent_id": ""`. An empty string is a real value
+to a foreign key, and no task has id `''`, so every single row would have
+failed the constraint. `parent_id` is now NULL on disk when unset and read
+back as `''`, keeping the API response identical.
+
+### The foreign keys needed explicit delete rules
+
+With `PRAGMA foreign_keys = ON` and the default RESTRICT, deleting a task
+that has subtasks would have **failed**, where before the migration it
+succeeded and left the children behind. `parent_id` is now
+`ON DELETE SET NULL` (children survive, orphaned, as they did) and
+`tags.task_id` is `ON DELETE CASCADE` (which is what `handle_delete_task`
+was doing by hand anyway).
+
+### The slug check was two different checks
+
+§6 says handler logic is unchanged, but `section_slug_exists()` used for
+routing matched on `slug` only, while `handle_new_category`'s collision
+check matched `slug` **or** `id`. Collapsing them into one helper would
+have quietly changed which URLs 404. They are two functions:
+`section_slug_exists()` and `section_name_taken()`.
+
+### Verification
+
+- `GET /tasks.json` from the migrated database is **byte-for-byte
+  identical** to the pre-migration response, diffed against the live
+  server on the real 6 sections / 47 tasks / 33 tags. That is the whole
+  read path, including `done` and the `env_*` flags coming back as JSON
+  booleans rather than SQLite's 0/1.
+- Every write path exercised against a running server: new category,
+  duplicate category rejected, new task with tags and a flag tag, unknown
+  section rejected, status change, notes, tag replacement, drag-and-drop
+  reordering, delete, and delete of a missing id.
+- `backend/tests/test_tasks_db.py`, 25 tests, covering the schema, the
+  generated `done` column (including that a contradictory `done` cannot be
+  written), round-tripping, tags, deletes, and `migrate_from_json()`.
+- `service_now/sync.py`'s upsert exercised directly: create, idempotent
+  re-run, and an upstream status flip to done.
+
+### Still open
+
+§10's second point stands and is now live: `data/sections.json`,
+`data/tasks.json` and `data/tags.json` are a frozen snapshot from migration
+day, not a live backup. Nothing writes them any more. If a git-backed
+current copy matters, that needs a periodic `sqlite3 data/tasks.db .dump`
+or a small export script.

@@ -1,10 +1,11 @@
 # Routes
 
 How URLs map to HTML pages, their JS, and the backend handlers in
-`backend/server.py`. Data lives in three normalized files —
-`data/sections.json`, `data/tasks.json`, `data/tags.json` — joined on the
-fly into the nested shape below and served read-only at `/tasks.json`,
-mutated only through the POST routes below.
+`backend/server.py`. Data lives in three normalized SQLite tables —
+`sections`, `tasks`, `tags` in `data/tasks.db` — joined on the fly into the
+nested shape below and served read-only at `/tasks.json`, mutated only
+through the POST routes below. See `DATABASE-MIGRATION.md` for the schema
+and the one-time import from the JSON files this replaced.
 
 Every `/fitness*` route except `/fitness/login`, `/fitness/auth/*`, and
 `/fitness/api/me` now requires a signed-in session — a signed-out visitor

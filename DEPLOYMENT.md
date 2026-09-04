@@ -8,8 +8,7 @@ no writable filesystem. This app needs both:
 - `POST /tasks/update` (saving notes/status/priority changes)
 - `POST /tasks/delete` (deleting a task)
 - `POST /tasks/new` (creating a task)
-- reading and writing `data/sections.json`, `data/tasks.json`, and
-  `data/tags.json` on disk as the datastore
+- reading and writing `data/tasks.db` on disk as the datastore
 
 All of that is handled by `backend/server.py`, a small Python
 `http.server`-based server. Pages can't run it, so deploying there
@@ -38,17 +37,42 @@ included.
 
 ### What the persistent disk does
 
-`data/sections.json`, `data/tasks.json`, and `data/tags.json` are the
-only datastore this app has, and they're plain files on disk. Render's
+`data/tasks.db` is the only datastore this app has (plus
+`data/fitness/`, see below), and it's a plain file on disk. Render's
 ephemeral filesystem is wiped on every deploy, so without a disk every
 deploy would reset your tasks back to whatever's committed in the repo.
 
 The disk in `render.yaml` is mounted directly over `data/`. On the
 **first** deploy, Render copies whatever's already at that path (the
-three JSON files committed to the repo) onto the new disk to seed it.
-After that, all reads/writes from `backend/server.py` go to the
-persistent disk, so edits made through the running app survive
-redeploys, restarts, and code pushes.
+three seed JSON files committed to the repo) onto the new disk. After
+that, all reads/writes from `backend/server.py` go to the persistent
+disk, so edits made through the running app survive redeploys, restarts,
+and code pushes.
+
+### Tasks database: the one-time migration
+
+`data/tasks.db` is git-ignored, so unlike the seed JSON files it does
+**not** arrive on a fresh persistent disk. The server creates an empty
+database on startup if none exists, which means a fresh deploy comes up
+with no tasks until the JSON files are imported.
+
+Import them once, after the first deploy of this code:
+
+1. Open a **Shell** session on the running Render service (or a one-off
+   job) and run:
+
+   ```bash
+   python3 backend/tasks_db.py migrate
+   ```
+
+   It reads the `data/*.json` files already seeded onto the disk, prints a
+   row count per table, and refuses to run a second time against a
+   database that already holds rows.
+2. Verify `/tasks`, `/tasks/categories`, and one category page load with
+   your real data.
+3. From then on `data/tasks.db` is the live store. The JSON files stay on
+   disk untouched as a point-in-time fallback; they do **not** track
+   changes made after the migration.
 
 ### Port binding
 

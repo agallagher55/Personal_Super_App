@@ -198,7 +198,7 @@
   <header class="top">
     <h1>Roadmap</h1>
     <p class="subtitle">A soft, living plan &mdash; priorities and rough sequencing, not a committed schedule. Revisit whenever priorities shift.</p>
-    <div class="meta-line">Last written 2026-09-04 &middot; source docs: <code>architecture_Review.md</code>, <code>finance/ARCHITECTURE.md</code>, <code>fitness/README.md</code>, <code>fitness/VISITOR-SIGNIN-PLAN.md</code></div>
+    <div class="meta-line">Last written 2026-09-04 &middot; source docs: <code>architecture_Review.md</code>, <code>finance/ARCHITECTURE.md</code>, <code>fitness/README.md</code>, <code>fitness/VISITOR-SIGNIN-PLAN.md</code>, <code>DATABASE-MIGRATION.md</code></div>
   </header>
 
   <section class="card">
@@ -235,16 +235,16 @@
       <div class="status-item">
         <div class="label-row">
           <span class="name">Real database</span>
-          <span class="pill pill-next">Planned, not built</span>
+          <span class="pill pill-done">Tasks done, finance pending</span>
         </div>
-        <div class="desc">Everything today is flat JSON files. <code>finance/schema.sql</code> already defines the SQLite schema &mdash; standing it up is step one of the Plaid work, not a separate project.</div>
+        <div class="desc">Tasks moved off flat JSON onto SQLite: <code>data/tasks.db</code> with <code>sections</code>/<code>tasks</code>/<code>tags</code> tables, a generated <code>done</code> column that can't drift from <code>status</code>, and transactional writes. See <code>DATABASE-MIGRATION.md</code>. Finance still reads a static seed file; <code>finance/schema.sql</code> already defines its schema and standing it up is step one of the Plaid work below. Fitness stays on JSON deliberately (<code>fitness/ARCHITECTURE.md</code> &sect;6).</div>
       </div>
     </div>
   </section>
 
   <section class="card">
     <h2>Recommendation</h2>
-    <p>Fitness visitor sign-in &mdash; the item this recommendation used to point at &mdash; is done. The database question was never a separate decision to begin with: Phase&nbsp;1 of the finance plan is literally "create <code>data/finance.db</code> from <code>schema.sql</code>," so it folds into the finance work below.</p>
+    <p>Fitness visitor sign-in and the tasks database are both done. What's left of the database question folds into the finance work below: Phase&nbsp;1 of the finance plan is literally "create <code>data/finance.db</code> from <code>schema.sql</code>," and it can now copy the pattern <code>backend/tasks_db.py</code> proved out.</p>
     <div class="rec-box">
       <p><strong>Start with Finance: Link + storage.</strong> A free Plaid sandbox account, this repo's first third-party dependencies (<code>plaid-python</code>, <code>cryptography</code>), and an end-to-end Link flow against sandbox data &mdash; no real bank credentials or auth gate needed yet, since sandbox data isn't real money. See the "Up next" phase below for the concrete checklist, and note that the minimal auth gate has to land before anything later touches real transactions or flips <code>PLAID_ENV</code> to production.</p>
     </div>
@@ -310,7 +310,7 @@
         <h3>Not urgent, but resurface before it gets expensive</h3>
         <ul>
           <li>Flask/Django migration decision <span class="fine">(cheap to defer now, expensive to defer once finance route code piles up on stdlib <code>http.server</code>)</span></li>
-          <li>Basic test suite for <code>backend/server.py</code>'s handlers</li>
+          <li>Basic test suite for <code>backend/server.py</code>'s handlers <span class="fine">(the storage layer now has one, <code>backend/tests/test_tasks_db.py</code>; the request handlers themselves still don't)</span></li>
           <li>Shared <code>static/js/api.js</code> module to stop the 4-way duplication across tasks pages</li>
           <li>Nightly scheduled Plaid sync, liabilities product, holdings-history table <span class="fine">(finance Phase 6, optional)</span></li>
           <li>Fitness OAuth client verification in Google Cloud Console <span class="fine">(removes the 7-day refresh-token expiry and 100-user Test users cap &mdash; the single biggest thing making sign-in feel unfinished past family/friends scale, see <code>fitness/google_health.md</code> &sect;9)</span></li>
