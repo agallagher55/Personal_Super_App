@@ -4,9 +4,22 @@ Turns `/fitness` from a single-user, owner-only dashboard into one where
 any allowed visitor signs in with their own Google account and sees only
 their own Google Health data.
 
-This is the "Up next" item in `roadmap.html`. Read
-[`ARCHITECTURE.md`](ARCHITECTURE.md) first for how `/fitness` is wired
-today; this document describes only what changes.
+**Status: shipped.** Reviewed against the tree on 2026-09-04: every phase
+below is implemented, the tests in §12 are green, and `roadmap.html` marks
+the item Done. It landed in `a534108`, with follow-ups in `3aa8665`,
+`b4dedb3` and `a1b9ff9`.
+
+The document stays in place, in its original forward-looking voice, because
+it is the only written record of *why* the design is shaped this way, and
+twelve files link here for it: `backend/server.py`, `backend/fitness/`'s
+`auth.py` / `api.py` / `store.py` / `cli.py`, `routes.md`, `DEPLOYMENT.md`,
+`fitness/README.md`, `fitness/ARCHITECTURE.md`, `fitness/API-CONTRACT.md`,
+`fitness/google_health.md`, and `roadmap.html`.
+
+Read it as design rationale, not as work to do. §15 records where the
+shipped code diverged from the text; where the two disagree, the code wins.
+For what `/fitness` does *now*, [`ARCHITECTURE.md`](ARCHITECTURE.md) and
+[`API-CONTRACT.md`](API-CONTRACT.md) are the current references.
 
 ---
 
@@ -638,10 +651,15 @@ python cli.py migrate
 
 which:
 
-1. Errors unless exactly one user directory exists (0 users: "sign in at
-   /fitness/login first"; 2+: "pass --user <email>").
-2. Errors if the destination `health_data.json` already exists.
-3. `os.replace()`s `data/fitness/health_data.json` into that directory.
+1. Errors if nobody has signed in yet ("sign in at /fitness/login first").
+   With several visitors signed in, `--user <email>` picks the target;
+   without it, 2+ visitors is an error.
+2. Errors if the destination `health_data.json` already exists, rather than
+   overwriting it.
+3. Moves `data/fitness/health_data.json` into that visitor's directory. A
+   missing source file is not an error, it just prints "nothing to migrate"
+   and carries on to step 4, so the command is safe to run on a fresh
+   install.
 4. Strips `access_token` / `refresh_token` / `token_expires_at` /
    `token_type` from `backend/fitness/config.json` if present, so a live
    refresh token is not left lying in a file nothing reads any more.
@@ -977,11 +995,17 @@ Run with `python -m unittest discover -s backend/fitness/tests`. Use
 `tempfile.TemporaryDirectory` and monkeypatch the module-level roots rather
 than touching real `data/`.
 
+Shipped as written: 20 tests across the three files, green from the repo
+root with exactly that command.
+
 ---
 
 ## 13. Suggested commit sequence
 
-Each of these is independently reviewable and leaves the tree working:
+Not how it landed: the work went in as the single commit `a534108`. Kept
+because the dependency it describes is still the useful part if any of this
+is ever revisited. Each step is independently reviewable and leaves the
+tree working:
 
 1. `jsonfile.py` + `.gitignore` + `config.py` env overrides (no behavior
    change yet beyond credentials being loadable from the environment)
@@ -1012,17 +1036,81 @@ Steps 4 through 6 are the ones that cannot land separately without breaking
 | `cli.py auth` removed | Keep it. It cannot coexist with the main server on port 8000, and the browser flow strictly supersedes it |
 | Dashboard triggers the first sync, not the callback | Sync inside the callback. Rejected: a synchronous multi-second Google pull inside a redirect looks like a hung sign-in |
 
-Genuinely open, worth a decision before implementing:
+Open when this was written, and how each was settled:
 
 1. **Should signed-out visitors see anything at `/fitness`?** The plan
    redirects them straight to `/fitness/login`. A public landing page
    describing the app is possible, but it is more markup for no clear gain
    at family-and-friends scale.
+   **Settled as planned.** `/fitness` and `/fitness/<page>` 302 to
+   `/fitness/login`; there is no public landing page.
 2. **Session length.** 30 days is assumed. Shorter is more careful with
    health data on a shared machine; longer is not really available anyway,
    since the 7-day refresh-token expiry forces a Google round trip more
    often than the session itself expires.
+   **Settled as planned.** `session.SESSION_MAX_AGE_SECONDS` is 30 days.
+   Rotating `FITNESS_SESSION_SECRET` is the lever for ending every session
+   early.
 3. **Does the homepage card stay?** It currently shows the owner's step
    count to anyone who loads `/`. After this change it shows the signed-in
    visitor's own steps, or a sign-in prompt, which is correct, but it does
    mean `/` makes an authenticated call on every load.
+   **Settled: it stays.** `static/js/home.js` renders "Sign in to see your
+   fitness data" on a 401, so `/` does make one authenticated call per load.
+
+---
+
+## 15. Review notes: shipped code vs. this plan
+
+Checked against the tree on 2026-09-04. Everything in §§4 to 12 is
+implemented and the three test files pass. The differences below are the
+ones worth knowing about.
+
+### Where the code diverges
+
+| This plan says | The code does | Assessment |
+|---|---|---|
+| §8: `migrate` "errors unless exactly one user directory exists" | Takes `--user <email>` to pick among several, and treats a missing `data/fitness/health_data.json` as "nothing to migrate" rather than an error | Plan was wrong and self-contradictory: §11 already documented the `--user` flag. §8 has been corrected above to match §11 and the code |
+| §8: `migrate` "`os.replace()`s" the old file | `Path.rename()` | Equivalent here, since step 2 has already established the destination does not exist |
+| §9: gate with `path.startswith('/fitness/api/') and path != '/fitness/api/me'` | `/fitness/api/me` is its own exact-match branch placed *above* the prefix branch in `do_GET` | Same effect, and it leaves §9's "ordering matters" rule doing all the work instead of splitting the exemption across an ordering rule and a condition |
+| §13: an eight-commit sequence | One commit, `a534108` | The plan's own caveat, that steps 4 to 6 cannot land separately without breaking `/fitness`, turned out to cover more of the sequence than expected |
+| §10: the account chip "appended to the rendered markup" | Moved to the header's top-right in `3aa8665`, then back into the date-range/sync controls row in `a1b9ff9` | Layout iteration only, no behavior change |
+
+Two things the code added that the plan did not spell out, both worth
+keeping: `session.verify()` also rejects a payload that decodes to
+something other than a dict, and `server.py`'s `check_same_origin()` is
+the `Origin` check §5 asks for, factored into one helper used by both
+POST routes.
+
+### Known gap found in this review
+
+`session.get_secret()` is not safe against concurrent first use. On a
+deploy with no `FITNESS_SESSION_SECRET` set and no
+`data/fitness/session_secret` on disk yet, every thread that gets past the
+`SECRET_PATH.exists()` check races into
+`os.open(..., O_CREAT | O_EXCL)`: one wins and the rest raise
+`FileExistsError`, which nothing catches, so those requests 500. Reproduced
+with 8 concurrent cold callers, 5 of which raised. The same race has a
+narrower window where a thread sees the file in the instant between
+`os.open()` and the `write()`, reads it empty, and caches `b""` as the
+secret, which would silently invalidate every cookie it then signs.
+
+`server.py` reaches this on the first `/fitness/auth/start`, so the
+practical blast radius is one failed sign-in that works on retry. The fix
+is small: catch `FileExistsError` and fall through to reading the winner's
+file, and write through the same temp-file-then-`os.replace()` dance
+`jsonfile.write_json_atomic()` already uses. Setting
+`FITNESS_SESSION_SECRET`, which `DEPLOYMENT.md` already recommends, avoids
+the path entirely.
+
+### Still open, tracked in `roadmap.html`
+
+Neither is a defect in this plan; both are the follow-on work it implies.
+
+- **OAuth client verification in Google Cloud Console.** Until then the
+  7-day refresh-token expiry in §1 and the 100-user Test users cap both
+  stand, which is the single biggest thing making sign-in feel unfinished
+  past family-and-friends scale.
+- **Scheduled sync for every visitor.** §11 built `cli.py sync --all` for
+  exactly this, but nothing runs it on a cron yet, so a visitor's data only
+  refreshes on first sign-in or a manual "Sync now".
