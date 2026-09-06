@@ -82,6 +82,7 @@ if FINANCE_DIR not in sys.path:
     sys.path.insert(0, FINANCE_DIR)
 import db as finance_db
 import import_csv as finance_import_csv
+import summary as finance_summary
 
 FITNESS_PAGES = (
     'steps', 'heart-rate', 'sleep', 'activity', 'spo2', 'hrv',
@@ -235,6 +236,15 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             symbols = [s.strip() for s in symbols_param.split(',') if s.strip()]
             status, body = finance_prices.fetch_holding_quotes(symbols)
             self.send_json(status, body)
+            return
+        if path == '/finance/spending-summary.json':
+            window = parse_qs(parsed.query).get('window', [finance_summary.DEFAULT_WINDOW])[0]
+            conn = finance_db.connect()
+            try:
+                summary = finance_summary.build_summary(conn, window)
+            finally:
+                conn.close()
+            self.send_json(200, summary)
             return
         if path.startswith('/tasks/'):
             slug = path[len('/tasks/'):]

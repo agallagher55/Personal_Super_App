@@ -103,6 +103,48 @@
         </div>
       </div>
 
+      <div class="fin-block-header">
+        <span class="fin-block-title">Spending</span>
+        <select class="fin-spending-window" id="fin-spending-window">
+          <option value="month">This month</option>
+          <option value="30d">Last 30 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="all">All time</option>
+        </select>
+      </div>
+
+      <div class="fin-donut-row fin-spending-row">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Spending by Category</div>
+          <div class="donut-card-body">
+            <div class="donut-wrap">
+              <div id="fin-spending-donut"></div>
+              <div class="donut-center">
+                <span class="donut-center-label">Spent</span>
+                <span class="donut-center-value" id="fin-spending-donut-center-value">&middot;&middot;&middot;</span>
+              </div>
+            </div>
+            <div class="fin-legend" id="fin-spending-legend"></div>
+          </div>
+        </div>
+
+        <div class="fin-overview-card fin-spending-merchants-card">
+          <div class="fin-overview-card-title">Top Merchants</div>
+          <div class="fin-rows" id="fin-spending-merchants"></div>
+        </div>
+      </div>
+
+      <div class="fin-chart-row">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Spend by Month</div>
+          <div class="fin-chart-wrap">
+            <canvas class="fin-bar-canvas" id="fin-spend-month-canvas"></canvas>
+            <div class="fin-tooltip" id="fin-spend-month-tooltip"></div>
+            <p class="fin-empty-note" id="fin-spend-month-empty" hidden>No spending history yet — import a CSV export above to get started.</p>
+          </div>
+        </div>
+      </div>
+
       <div class="section">
         <div class="section-header">
           <span class="section-label">Cash</span>
@@ -163,9 +205,11 @@
     import { initTickerBar } from "/static/finance/js/ticker.js";
     import { initFinanceDashboard } from "/static/finance/js/dashboard.js";
     import { initFinanceImport } from "/static/finance/js/import.js";
+    import { initFinanceSpending } from "/static/finance/js/spending.js";
     initTickerBar();
     initFinanceDashboard();
     initFinanceImport();
+    initFinanceSpending();
   </script>
 </body>
 </html>

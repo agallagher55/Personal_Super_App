@@ -7,11 +7,14 @@
   populated from CSV exports pulled by hand from the credit card and bank
   websites — no Plaid account, no `plaid-python`/`cryptography` dependency,
   no production-approval process, right now.
-- **Phase 1 (storage + import) is built** — see A4/A7. `backend/finance/`
-  (`db.py`, `csv_schema.sql`, `import_csv.py`) plus a
-  `POST /finance/import` route and an "Import CSV Export" button on
-  `/finance` are live. Phase 2 (spending summary + the category
-  donut/monthly chart on the dashboard) is not started yet.
+- **Phases 1-3 (storage, summary, and the dashboard graphic) are built** —
+  see A4/A5/A7. `backend/finance/` (`db.py`, `csv_schema.sql`,
+  `import_csv.py`, `summary.py`) plus `POST /finance/import`,
+  `GET /finance/spending-summary.json`, and the "Import CSV Export" button
+  + "Spending" section (category donut, top merchants, monthly bar chart,
+  window selector) on `/finance` are all live. Phase 4 (multi-card
+  support, a real auth gate, folding in chequing income for a cash-flow
+  view) is not started.
 - **Deferred: Plaid-based live sync** (Part B below). This was the original
   plan for this file and is kept in full further down, unstarted and
   unimplemented, in case account-linking is revisited later. Nothing in Part
@@ -163,36 +166,54 @@ What's actually built, in `backend/finance/`:
 entry point (same parsing/loading code, reads a file from disk instead of
 an HTTP body) — kept for scripting/testing, not the primary path.
 
-### A5. Dashboard integration — the spending graphic (not built yet, Phase 2/3)
+### A5. Dashboard integration — the spending graphic — built
 
-New **Spending** section on `html/finance.html`, sitting with the existing
-donut row/net-worth chart and reusing `static/finance/js/charts.js`'s
-existing renderers rather than introducing a new charting approach:
+A **Spending** block on `html/finance.html`, between the net-worth chart
+and the Cash section, built as described below with a few deviations from
+the original sketch (each noted):
 
-- **Spending by Category** donut (the graphic asked for) — sums
-  `abs(amount)` for `activity_type = Purchase` rows (netted against
-  `Refund` rows in the same category), grouped by `category`, for the
-  current calendar month by default. `Payment`/`Uncategorized` rows are
-  excluded — they're bill payments, not spend. Visually matches the
-  existing "Asset Allocation" / "Investment Breakdown" donuts already on
-  the page.
-- **Spend by Month** bar chart underneath, same treatment as the existing
-  "Net Worth Over Time" line chart — one bar per month of imported history,
-  so the trend across however many exports you've pulled in is visible at a
-  glance.
-- Small **Top Merchants** list (merchant, total, visit count) below the
-  donut — cheap to compute from the same query, directly answers "where is
-  the money actually going."
+- **Spending by Category** donut — sums `-amount` for `Purchase` rows
+  netted against `Refund` rows in the same category, grouped by
+  `category`. `Payment`/`Uncategorized` rows are excluded — they're the
+  card bill being paid off, not spend. Visually matches the existing
+  "Asset Allocation" / "Investment Breakdown" donuts, reusing
+  `charts.js`'s `drawDonut` directly.
+- **Spend by Month** bar chart underneath, in its own card the same shape
+  as "Net Worth Over Time" — one bar per month across the full imported
+  history (not window-filtered, unlike the category donut and top
+  merchants, so the trend is visible regardless of which window is
+  selected). New `drawMonthlyBarChart` in `charts.js`, sharing that file's
+  `niceAxis`/`formatCad`/`formatMonth`/`themeColor` helpers rather than
+  duplicating them.
+- **Top Merchants** list (merchant, total, visit count), next to the donut
+  rather than below it — reuses `dashboard.js`'s existing `renderRow` (now
+  exported) instead of a new template, same as the Cash/Debt/Investments
+  rows.
+- **A window selector** (`<select>`: This month / Last 30 days / Last 90
+  days / All time) resolves A8's "what's the default window" question by
+  giving you the control instead of picking one - defaults to "This
+  month," matching how a credit card statement reads.
+- Every one of these three has an empty state ("No spending in this window
+  yet," "No purchases in this window yet," "No spending history yet —
+  import a CSV export above to get started") rather than a broken-looking
+  blank chart before anything's been imported - verified by screenshotting
+  a fresh install.
 
-New backend route (`backend/server.py` dispatching into
-`finance/routes.py`, same pattern Part B §4/§5 already proposed):
-`GET /finance/spending-summary.json` serves the cached
-`data/finance/spending-summary.json` instantly (no recompute in the request
-path):
+**Deviation from the original sketch: no `spending-summary.json` cache
+file.** `backend/finance/summary.py`'s `build_summary()` queries
+`data/finance/finance.db` live on every request instead of writing and
+serving a cached JSON file. Part B's Plaid design cached because a Plaid
+API call is slow and shouldn't sit in the request path; here the "upstream"
+is a local SQLite query over a few hundred/thousand personal rows, fast
+enough that a cache would only add invalidation (regenerate after every
+import) to worry about for no real benefit. `GET
+/finance/spending-summary.json?window=<month|30d|90d|all>` in
+`backend/server.py` calls it directly:
 
 ```json
 {
   "asOf": "2026-09-06",
+  "window": "month",
   "windowStart": "2026-09-01",
   "windowEnd": "2026-09-06",
   "byCategory": [{ "category": "Restaurants", "total": 812.44 }],
@@ -201,9 +222,12 @@ path):
 }
 ```
 
-`dashboard.js` gains a `renderSpendingSection(data)` that fetches this the
-same way it already fetches `finance-dashboard.json` today — no change to
-how the existing net-worth/cash/investment/debt sections work.
+**Deviation: a new `static/finance/js/spending.js`, not
+`dashboard.js`'s `renderSpendingSection`.** Self-contained (fetches its
+own data, owns its own DOM) like `ticker.js` and `import.js` already are,
+rather than folded into `initFinanceDashboard()` - `dashboard.js` only
+changes to `export` `renderRow`/`renderLegend` for reuse, nothing about
+its own net-worth/cash/investment/debt rendering changes.
 
 ### A6. File layout, and what's gitignored
 
@@ -217,29 +241,32 @@ implementation started, 2026-09-06:
 data/finance/                  gitignored — real personal financial data lives only here
   imports/                     timestamped audit copy of every uploaded CSV
   finance.db                   SQLite store (accounts, transactions)
-  spending-summary.json        (Phase 2, not built yet) generated cache
+                                (no spending-summary.json - A5's build_summary() queries live, no cache file)
 
 backend/finance/                tracked — code, no real data, mirrors backend/fitness/'s layout
   db.py                          connect() / init_schema() / ensure_database(), range-replace load
   csv_schema.sql                 DDL for accounts + transactions (A3) — separate from finance/schema.sql,
                                   which is Part B's Plaid-oriented DDL and unrelated to this
   import_csv.py                  CSV parsing + range-replace load; also a CLI entry point
+  summary.py                     category/monthly/top-merchant queries for GET /finance/spending-summary.json
   tests/test_import_csv.py       19 tests: parsing, idempotency, range-replace, the real upload path
-  (summary.py, Phase 2, not built yet)
+  tests/test_summary.py          19 tests: netting, window filtering, exclusions, empty-database handling
 
 finance/                       tracked — docs + the Part B (Plaid) schema reference only, no code
   ARCHITECTURE.md              (this file)
   README.md
   schema.sql                    Part B's Plaid-oriented DDL (unused, deferred)
 
-backend/server.py               gains POST /finance/import (handle_finance_import) and a
+backend/server.py               gains POST /finance/import, GET /finance/spending-summary.json, and a
                                  finance_db.ensure_database() call at startup
 
 static/finance/
   finance-dashboard.json        unchanged — existing sample balance/net-worth data
-  js/import.js                   new — wires the "Import CSV Export" button (A4)
-  css/dashboard.css              gains .fin-import-* rules for that button/status line
-  js/dashboard.js, js/charts.js  unchanged so far — Phase 2/3 (A5) is what touches these
+  js/import.js                   wires the "Import CSV Export" button (A4)
+  js/spending.js                 wires the "Spending" section - donut, top merchants, monthly chart, window select (A5)
+  js/dashboard.js                unchanged except exporting renderRow/renderLegend for spending.js to reuse
+  js/charts.js                   gains drawMonthlyBarChart, sharing its existing axis/theme/format helpers
+  css/dashboard.css               gains .fin-import-*, .fin-block-*, .fin-spending-*, .fin-bar-canvas, .fin-empty-note rules
 ```
 
 `.gitignore` has `data/finance/` — mirrors the existing `data/fitness/`
@@ -257,13 +284,22 @@ entry, same reasoning (real personal data, never committed).
    rejected. 19 tests in `backend/finance/tests/test_import_csv.py`, plus
    the existing 40 (`backend/tests`) + 26 (`backend/fitness/tests`) still
    pass.
-2. **Phase 2 — summary + route.** `backend/finance/summary.py` (category
-   totals, monthly trend, top merchants, computed over *all* rows
-   regardless of `status` per A8) writing `spending-summary.json`;
-   `GET /finance/spending-summary.json` wired into `backend/server.py`.
-3. **Phase 3 — dashboard.** The Spending section on `html/finance.html`
-   (category donut + monthly bar chart + top-merchants list), `dashboard.js`
-   fetching the new route.
+2. **Phase 2 — summary + route. Built 2026-09-06.** `backend/finance/summary.py`
+   (category totals over the selected window, a 12-month trend regardless
+   of window, top merchants) computed live over *all* rows regardless of
+   `status` per A8 — no cache file, see A5's deviation note.
+   `GET /finance/spending-summary.json?window=<...>` wired into
+   `backend/server.py`. 19 tests in `backend/finance/tests/test_summary.py`.
+3. **Phase 3 — dashboard. Built 2026-09-06.** The Spending block on
+   `html/finance.html` (category donut, top merchants, monthly bar chart,
+   window selector — A5), `static/finance/js/spending.js` fetching the new
+   route. Verified in a real browser (Playwright): both sample exports
+   imported through the actual upload button, the donut/legend/merchants/
+   chart all render with the correct numbers, the empty states render
+   correctly on a fresh database, and a real bug this surfaced (the
+   monthly chart's "no data yet" text staying visible on top of real bars,
+   because an explicit `display: flex` in the new CSS was beating the
+   browser's own `[hidden]` rule) was fixed before landing.
 4. **Phase 4 — stretch, later.** Fold in chequing income/cashback/bill-pay
    rows for a full income-vs-expense cash-flow view (excluding the CC
    payment transfer rows, per A2, to avoid double counting); support more
@@ -273,23 +309,23 @@ entry, same reasoning (real personal data, never committed).
 
 ### A8. Open questions
 
-Two settled 2026-09-06, two still open:
+Three settled, one still open:
 
 - ~~**Import trigger**~~ — **decided: a button/upload form on the
   dashboard**, built in Phase 1 rather than deferred to Phase 4. See A4.
 - ~~**Pending purchases**~~ — **decided: count immediately**, same as
   `Completed`. `status` is still stored on every row (so a future UI could
   filter by it if that ever turns out to matter), but nothing in
-  `import_csv.py` filters on it, and Phase 2's summary queries should
-  follow the same rule rather than re-litigating it.
+  `import_csv.py` or `summary.py` filters on it.
+- ~~**Default window**~~ — **decided: give you the control instead of
+  picking one.** The Spending block's window selector (This month / Last
+  30 days / Last 90 days / All time) defaults to "This month," per A5.
 - **Multiple cards later**: since neither export file names or contains a
   stable card/institution identifier, how should a second card's export be
   told apart from the first? Still just the fixed `main-credit-card`
   account today (A2). (Proposal, unchanged: a CLI/route flag to pick the
   target account, e.g. `import_csv.py --account second-card
   path/to/export.csv`, until there's a reason to automate it.)
-- **Default window** for the category donut (Phase 3): current calendar
-  month, trailing 30 days, or a picker on the dashboard?
 
 ---
 

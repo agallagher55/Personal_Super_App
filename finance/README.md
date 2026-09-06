@@ -16,11 +16,14 @@ from the credit card and bank sites — see **Part A** of
 contain, the import/storage design, and a new "Spending by Category" +
 "Spend by Month" section this adds to the dashboard).
 
-**Storage + import is built** (Phase 1, `backend/finance/`): `/finance` has
-an "Import CSV Export" button that uploads a credit card or bank activity
-export and range-replace loads it into `data/finance/finance.db`. The
-spending graphic itself (Phase 2/3 — a summary endpoint plus the category
-donut and monthly chart on the dashboard) isn't built yet.
+**Phases 1-3 are built** (`backend/finance/`): `/finance` has an "Import
+CSV Export" button that uploads a credit card or bank activity export and
+range-replace loads it into `data/finance/finance.db`, and a "Spending"
+block (category donut, top merchants, a spend-by-month chart, and a
+This month/30 days/90 days/All time window selector) reading from
+`GET /finance/spending-summary.json`. Phase 4 (a second credit card, a
+real auth gate, folding in chequing income for a full cash-flow view)
+isn't started.
 
 Plaid-based live account linking (Wealthsimple first, any Plaid-supported
 institution after that) is kept as **Part B** of `ARCHITECTURE.md`,
