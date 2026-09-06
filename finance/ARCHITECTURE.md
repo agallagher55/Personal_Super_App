@@ -46,6 +46,20 @@ periodically, there's no live sync) and messier source data (free-text
 merchant names, no stable transaction IDs) — acceptable for "see my spending
 in the dashboard now," revisit Part B if that stops being enough.
 
+**What this doesn't touch, worth being explicit about:** `/finance`'s
+stat tiles (Net Worth/Assets/Debt), the three overview donuts, the
+Cash/Investments/Bitcoin/Debt/Lines of Credit sections, and the Net Worth
+Over Time chart are **all still reading `static/finance/finance-dashboard.json`**
+- the hardcoded sample data ("Sample data — no accounts are connected
+yet," per that file's own `note` field) this dashboard was scaffolded
+with before any of Part A existed. None of it is real, and none of it is
+touched by anything in this document. Only **Spending** (A5) and **Cash
+Flow** (A5b) read your real imported CSV data. Populating the rest for
+real means either building CSV import for those sources too (bills and
+lines of credit aren't things a credit card or chequing export would
+contain anyway - they'd need their own source) or eventually landing
+Part B's Plaid sync, which was designed to cover all of it at once.
+
 ### A2. What the exports actually contain
 
 Reviewed two sample exports (2026-09-06 pull, covering ~Jun–Sep 2026):
@@ -317,6 +331,50 @@ reuses `drawMonthlyBarChart`'s axis/theme/resize/hover scaffolding). New
 route: `GET /finance/cash-flow.json?window=<...>` →
 `summary.build_cash_flow()`.
 
+### A5c. Click a category to filter Top Merchants, and a "data last imported" indicator — built (2026-09-06)
+
+Two small requested additions on top of A5/A5b:
+
+**Click-to-filter.** Clicking a category - either its donut segment or its
+legend row - narrows the Top Merchants list to just that category;
+clicking the same category again (or the "× Clear" chip that appears next
+to "Top Merchants") clears it. Selecting a category never re-renders the
+donut/legend itself (`byCategory` doesn't change), only restyles it -
+`GET /finance/spending-summary.json` gains an optional `&category=<name>`
+param that narrows `topMerchants` alone (`summary.build_summary()`,
+`summary.top_merchants()`), leaving `byCategory`/`byMonth` computed the
+same as always.
+
+`charts.js`'s `drawDonut()` and `dashboard.js`'s `renderLegend()` (used
+by every donut on the page, not just Spending's) each gained one optional
+parameter - `onSliceClick`/`onClick` - so only `spending.js` opts into
+click behavior; every other donut/legend call site is unchanged. Selected/
+dimmed styling is plain DOM class-toggling in `spending.js` after render
+(`.fin-legend-row-selected`, `.fin-legend-row-dimmed`,
+`.donut-seg-dimmed`), not baked into the shared, generic render helpers.
+Switching the window selector clears any active category filter, so a
+stale filter can never point at data outside the newly selected window.
+
+**"Data last imported."** A `db.last_imported_at()` (`MAX(imported_at)`
+across every transaction row) behind a new
+`GET /finance/last-imported.json`, shown next to the "Import CSV Export"
+button (`static/finance/js/import.js`, styled `.fin-last-imported`) -
+fetched on page load and refreshed immediately after a successful upload.
+Deliberately one global timestamp across both accounts, not a
+per-account/per-source one - simplest thing that answers "did my last
+import actually happen and when," which is what was asked; revisit if
+per-source staleness (e.g. "chequing data is 3 weeks older than the
+credit card's") ever turns out to matter.
+
+Verified in a real browser (Playwright): clicking a category correctly
+narrows the merchant list and restyles the legend/donut, clicking it
+again and the Clear chip both restore the exact original unfiltered
+list, and the last-imported timestamp updates after a real upload (a
+timing gap between the upload finishing and the async refresh landing
+is a test-script race, not a product bug - confirmed by waiting slightly
+longer before reading it). 5 new tests (`test_summary.py`'s category-filter
+cases, `test_db.py`'s `last_imported_at` cases).
+
 ### A6. File layout, and what's gitignored
 
 Code lives under `backend/finance/`, matching the repo's actual
@@ -332,35 +390,51 @@ data/finance/                  gitignored — real personal financial data lives
                                 (no spending-summary.json/cash-flow.json - summary.py queries live, no cache file)
 
 backend/finance/                tracked — code, no real data, mirrors backend/fitness/'s layout
-  db.py                          connect() / init_schema() / ensure_database(), range-replace load
+  db.py                          connect() / init_schema() / ensure_database(), range-replace load,
+                                  last_imported_at() (A5c)
   csv_schema.sql                 DDL for accounts + transactions (A3) — separate from finance/schema.sql,
                                   which is Part B's Plaid-oriented DDL and unrelated to this
   import_csv.py                  CSV parsing + range-replace load; also a CLI entry point
-  summary.py                     category/monthly/top-merchant queries (A5) + cash-flow queries (A5b)
+  summary.py                     category/monthly/top-merchant queries (A5, with an optional category
+                                  filter for A5c) + cash-flow queries (A5b)
   tests/test_import_csv.py       21 tests: parsing, idempotency, range-replace, the real upload path,
                                   the activity_sub_type extraction fix (A5b)
-  tests/test_summary.py          19 tests: netting, window filtering, exclusions, empty-database handling
+  tests/test_summary.py          22 tests: netting, window filtering, exclusions, empty-database
+                                  handling, the category filter (A5c)
   tests/test_cash_flow.py        15 tests: income/expense classification, the negative-expense
                                   regression (A5b), empty-database handling
+  tests/test_db.py               2 tests: last_imported_at() (A5c)
 
 finance/                       tracked — docs + the Part B (Plaid) schema reference only, no code
   ARCHITECTURE.md              (this file)
   README.md
   schema.sql                    Part B's Plaid-oriented DDL (unused, deferred)
 
-backend/server.py               gains POST /finance/import, GET /finance/spending-summary.json,
-                                 GET /finance/cash-flow.json, and a finance_db.ensure_database() call at startup
+backend/server.py               gains POST /finance/import, GET /finance/spending-summary.json
+                                 (now takes &category=, A5c), GET /finance/cash-flow.json,
+                                 GET /finance/last-imported.json (A5c), and a finance_db.ensure_database()
+                                 call at startup
 
 static/finance/
-  finance-dashboard.json        unchanged — existing sample balance/net-worth data
-  js/import.js                   wires the "Import CSV Export" button (A4)
-  js/spending.js                 wires the "Spending" section - donut, top merchants, monthly chart, window select (A5)
+  finance-dashboard.json        unchanged — existing sample balance/net-worth data. Cash, Investments,
+                                 Bitcoin, Debt (student loan/credit cards/bills), and Lines of Credit are
+                                 ALL still sourced from here, not from any CSV import - only Spending and
+                                 Cash Flow (A5/A5b) read real imported data. See A1's "what this doesn't
+                                 touch" note.
+  js/import.js                   wires the "Import CSV Export" button (A4) and the "data last imported"
+                                  indicator (A5c)
+  js/spending.js                 wires the "Spending" section - donut, top merchants (with the category
+                                  click-to-filter, A5c), monthly chart, window select (A5)
   js/cashflow.js                 wires the "Cash Flow" section - stat tiles, monthly chart, window select (A5b)
-  js/dashboard.js                unchanged except exporting renderRow/renderLegend for spending.js to reuse
+  js/dashboard.js                unchanged except exporting renderRow/renderLegend (with an optional
+                                  onClick, A5c) for spending.js to reuse
   js/charts.js                   gains drawMonthlyBarChart (A5) and drawIncomeExpenseChart (A5b),
-                                  sharing their axis/theme/format helpers
+                                  sharing their axis/theme/format helpers; drawDonut gains an optional
+                                  onSliceClick (A5c)
   css/dashboard.css               gains .fin-import-*, .fin-block-*, .fin-spending-*, .fin-bar-canvas,
-                                  .fin-empty-note, .fin-chart-legend*, .fin-stat-value-negative rules
+                                  .fin-empty-note, .fin-chart-legend*, .fin-stat-value-negative,
+                                  .fin-legend-row-selected/-dimmed, .donut-seg-dimmed, .fin-merchants-filter*,
+                                  .fin-last-imported rules
 ```
 
 `.gitignore` has `data/finance/` — mirrors the existing `data/fitness/`

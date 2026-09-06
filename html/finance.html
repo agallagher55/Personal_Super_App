@@ -32,6 +32,7 @@
         <button class="fin-import-button" id="fin-import-button" type="button">Import CSV Export</button>
         <input type="file" id="fin-import-input" accept=".csv" hidden>
         <span class="fin-import-status" id="fin-import-status"></span>
+        <span class="fin-last-imported" id="fin-last-imported"></span>
       </div>
 
       <div class="fin-stat-row">
@@ -130,6 +131,10 @@
 
         <div class="fin-overview-card fin-spending-merchants-card">
           <div class="fin-overview-card-title">Top Merchants</div>
+          <div class="fin-merchants-filter" id="fin-merchants-filter" hidden>
+            Filtered by <span class="fin-filter-chip" id="fin-filter-chip-label"></span>
+            <button class="fin-filter-clear" id="fin-merchants-filter-clear" type="button">&times; Clear</button>
+          </div>
           <div class="fin-rows" id="fin-spending-merchants"></div>
         </div>
       </div>

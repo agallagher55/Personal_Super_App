@@ -118,6 +118,13 @@
   color: var(--status-red);
 }
 
+.fin-last-imported {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-left: auto;
+}
+
 /* --- Summary strip: net worth / assets / debt stat tiles --- */
 
 .fin-stat-row {
@@ -235,6 +242,37 @@
    wouldn't hide this element without restating it here. */
 .fin-chart-wrap .fin-empty-note[hidden] {
   display: none;
+}
+
+.fin-merchants-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-bottom: 12px;
+}
+
+.fin-filter-chip {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.fin-filter-clear {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.fin-filter-clear:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
 }
 
 .fin-overview-card {
@@ -382,6 +420,31 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink);
+}
+
+/* --- Click-to-filter (Spending's category -> Top Merchants drill-down,
+   finance/ARCHITECTURE.md) - scoped to the Spending donut/legend
+   specifically, not every donut/legend on the page, since only this one
+   is clickable. --- */
+
+#fin-spending-legend .fin-legend-row,
+#fin-spending-donut .donut-seg {
+  transition: opacity 0.15s ease;
+}
+
+.fin-legend-row-selected .fin-legend-label {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.fin-legend-row-selected .fin-legend-swatch {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.fin-legend-row-dimmed,
+.donut-seg-dimmed {
+  opacity: 0.4;
 }
 
 .fin-legend-value {
