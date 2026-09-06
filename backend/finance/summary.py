@@ -167,9 +167,11 @@ def chequing_income_total(conn, start, end):
         f'''SELECT COALESCE(SUM(t.amount), 0) AS total
             FROM transactions t
             JOIN accounts a ON a.id = t.account_id
+            LEFT JOIN cash_flow_exclusions e ON e.transaction_id = t.id
             WHERE a.kind = 'chequing'
               AND t.activity_type IN ({_placeholders(CHEQUING_INCOME_TYPES)})
-              AND t.date >= ? AND t.date <= ?''',
+              AND t.date >= ? AND t.date <= ?
+              AND e.transaction_id IS NULL''',
         (*CHEQUING_INCOME_TYPES, start, end),
     ).fetchone()
     return max(row['total'], 0.0)
@@ -180,9 +182,11 @@ def chequing_expense_total(conn, start, end):
         f'''SELECT COALESCE(SUM(-t.amount), 0) AS total
             FROM transactions t
             JOIN accounts a ON a.id = t.account_id
+            LEFT JOIN cash_flow_exclusions e ON e.transaction_id = t.id
             WHERE a.kind = 'chequing'
               AND t.activity_type IN ({_placeholders(CHEQUING_EXPENSE_TYPES)})
-              AND t.date >= ? AND t.date <= ?''',
+              AND t.date >= ? AND t.date <= ?
+              AND e.transaction_id IS NULL''',
         (*CHEQUING_EXPENSE_TYPES, start, end),
     ).fetchone()
     return max(row['total'], 0.0)
@@ -196,8 +200,10 @@ def credit_card_expense_total(conn, start, end):
     monthly_trend's `max(..., 0)` already are: a window where refunds
     outweigh purchases is "no net spend," not negative expense."""
     row = conn.execute(
-        f'''SELECT COALESCE({_SPEND_CASE}, 0) AS total FROM transactions_effective
-            WHERE {_SPEND_FILTER} AND date >= ? AND date <= ?''',
+        f'''SELECT COALESCE({_SPEND_CASE}, 0) AS total
+            FROM transactions_effective t
+            LEFT JOIN cash_flow_exclusions e ON e.transaction_id = t.id
+            WHERE {_SPEND_FILTER} AND date >= ? AND date <= ? AND e.transaction_id IS NULL''',
         (start, end),
     ).fetchone()
     return max(row['total'], 0.0)
@@ -208,7 +214,9 @@ def cash_flow_by_month(conn, months=MONTHS_OF_TREND):
         f'''SELECT substr(t.date, 1, 7) AS month, SUM(t.amount) AS total
             FROM transactions t
             JOIN accounts a ON a.id = t.account_id
+            LEFT JOIN cash_flow_exclusions e ON e.transaction_id = t.id
             WHERE a.kind = 'chequing' AND t.activity_type IN ({_placeholders(CHEQUING_INCOME_TYPES)})
+              AND e.transaction_id IS NULL
             GROUP BY month''',
         CHEQUING_INCOME_TYPES,
     ).fetchall()
@@ -218,13 +226,17 @@ def cash_flow_by_month(conn, months=MONTHS_OF_TREND):
         f'''SELECT substr(t.date, 1, 7) AS month, SUM(-t.amount) AS total
             FROM transactions t
             JOIN accounts a ON a.id = t.account_id
+            LEFT JOIN cash_flow_exclusions e ON e.transaction_id = t.id
             WHERE a.kind = 'chequing' AND t.activity_type IN ({_placeholders(CHEQUING_EXPENSE_TYPES)})
+              AND e.transaction_id IS NULL
             GROUP BY month''',
         CHEQUING_EXPENSE_TYPES,
     ).fetchall()
     cc_expense_rows = conn.execute(
         f'''SELECT substr(date, 1, 7) AS month, {_SPEND_CASE} AS total
-            FROM transactions_effective WHERE {_SPEND_FILTER} GROUP BY month'''
+            FROM transactions_effective t
+            LEFT JOIN cash_flow_exclusions e ON e.transaction_id = t.id
+            WHERE {_SPEND_FILTER} AND e.transaction_id IS NULL GROUP BY month'''
     ).fetchall()
 
     expense_by_month = {}
@@ -252,38 +264,61 @@ def cash_flow_month_transactions(conn, month, kind):
     same "positive = contributes to this total" convention the stat tiles
     use - for expense, a credit-card Refund row (which nets against
     spend) comes back negative, same as it does in every expense total
-    elsewhere in this module."""
+    elsewhere in this module.
+
+    Every matching transaction is returned, including ones excluded from
+    Cash Flow (csv_schema.sql's cash_flow_exclusions, ARCHITECTURE.md A5f) -
+    each row carries `excluded`/`reason` rather than being filtered out, so
+    the dialog can show the full picture with a per-row toggle. Callers that
+    need a total should sum only the non-excluded rows (see server.py's
+    /finance/cash-flow-transactions.json)."""
     if kind != 'expense':
         rows = conn.execute(
-            f'''SELECT date, description, amount
+            f'''SELECT t.id AS id, t.date, t.description, t.amount,
+                       e.transaction_id IS NOT NULL AS excluded, e.reason AS reason
                 FROM transactions t
                 JOIN accounts a ON a.id = t.account_id
+                LEFT JOIN cash_flow_exclusions e ON e.transaction_id = t.id
                 WHERE a.kind = 'chequing' AND t.activity_type IN ({_placeholders(CHEQUING_INCOME_TYPES)})
                   AND substr(t.date, 1, 7) = ?
                 ORDER BY t.date DESC, t.id DESC''',
             (*CHEQUING_INCOME_TYPES, month),
         ).fetchall()
-        return [{'date': r['date'], 'description': r['description'], 'amount': round(r['amount'], 2)} for r in rows]
+        return [_cash_flow_tx_row(r) for r in rows]
 
     chequing_rows = conn.execute(
-        f'''SELECT date, description, -amount AS amount
+        f'''SELECT t.id AS id, t.date, t.description, -t.amount AS amount,
+                   e.transaction_id IS NOT NULL AS excluded, e.reason AS reason
             FROM transactions t
             JOIN accounts a ON a.id = t.account_id
+            LEFT JOIN cash_flow_exclusions e ON e.transaction_id = t.id
             WHERE a.kind = 'chequing' AND t.activity_type IN ({_placeholders(CHEQUING_EXPENSE_TYPES)})
               AND substr(t.date, 1, 7) = ?''',
         (*CHEQUING_EXPENSE_TYPES, month),
     ).fetchall()
     cc_rows = conn.execute(
-        f'''SELECT date, description, -amount AS amount
-            FROM transactions_effective
+        f'''SELECT t.id AS id, t.date, t.description, -t.amount AS amount,
+                   e.transaction_id IS NOT NULL AS excluded, e.reason AS reason
+            FROM transactions_effective t
+            LEFT JOIN cash_flow_exclusions e ON e.transaction_id = t.id
             WHERE {_SPEND_FILTER} AND substr(date, 1, 7) = ?''',
         (month,),
     ).fetchall()
 
-    combined = [{'date': r['date'], 'description': r['description'], 'amount': round(r['amount'], 2)} for r in chequing_rows]
-    combined += [{'date': r['date'], 'description': r['description'], 'amount': round(r['amount'], 2)} for r in cc_rows]
+    combined = [_cash_flow_tx_row(r) for r in chequing_rows] + [_cash_flow_tx_row(r) for r in cc_rows]
     combined.sort(key=lambda r: r['date'], reverse=True)
     return combined
+
+
+def _cash_flow_tx_row(r):
+    return {
+        'id': r['id'],
+        'date': r['date'],
+        'description': r['description'],
+        'amount': round(r['amount'], 2),
+        'excluded': bool(r['excluded']),
+        'reason': r['reason'],
+    }
 
 
 def build_cash_flow(conn, window=DEFAULT_WINDOW, today=None):

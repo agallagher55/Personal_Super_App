@@ -412,6 +412,20 @@
   color: var(--ink);
 }
 
+/* --- Cash Flow exclusions (finance/ARCHITECTURE.md A5f) --- */
+
+.fin-cashflow-tx-row-excluded .fin-category-tx-date,
+.fin-cashflow-tx-row-excluded .fin-category-tx-description,
+.fin-cashflow-tx-row-excluded .fin-category-tx-amount {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.fin-category-dialog button.fin-cashflow-tx-toggle {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
 .fin-category-dialog-subtitle {
   font-family: var(--mono);
   font-size: 11.5px;

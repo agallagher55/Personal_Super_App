@@ -214,8 +214,8 @@ class TestCashFlowMonthTransactions(CashFlowTestCase):
         )
         result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'income')
         self.assertEqual(result, [
-            {'date': '2026-09-02', 'description': 'Cash back', 'amount': 5.5},
-            {'date': '2026-09-01', 'description': 'Direct deposit received', 'amount': 2000.0},
+            {'id': 'WK1WPY033CAD:2026-09-02:0', 'date': '2026-09-02', 'description': 'Cash back', 'amount': 5.5, 'excluded': False, 'reason': None},
+            {'id': 'WK1WPY033CAD:2026-09-01:0', 'date': '2026-09-01', 'description': 'Direct deposit received', 'amount': 2000.0, 'excluded': False, 'reason': None},
         ])
 
     def test_income_excludes_expense_and_transfer_rows(self):
@@ -234,14 +234,16 @@ class TestCashFlowMonthTransactions(CashFlowTestCase):
 
         result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'expense')
         self.assertEqual(result, [
-            {'date': '2026-09-02', 'description': 'Cafe', 'amount': 10.0},
-            {'date': '2026-09-01', 'description': 'Debit spend', 'amount': 50.0},
+            {'id': 'main-credit-card:2026-09-02:0', 'date': '2026-09-02', 'description': 'Cafe', 'amount': 10.0, 'excluded': False, 'reason': None},
+            {'id': 'WK1WPY033CAD:2026-09-01:0', 'date': '2026-09-01', 'description': 'Debit spend', 'amount': 50.0, 'excluded': False, 'reason': None},
         ])
 
     def test_expense_shows_a_refund_as_negative(self):
         self.load(CC_HEADER + cc_row('2026-09-01', 'Refund', 'Airbnb Refund', 50.00, 'Hotels'), 'cc.csv')
         result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'expense')
-        self.assertEqual(result, [{'date': '2026-09-01', 'description': 'Airbnb Refund', 'amount': -50.0}])
+        self.assertEqual(result, [
+            {'id': 'main-credit-card:2026-09-01:0', 'date': '2026-09-01', 'description': 'Airbnb Refund', 'amount': -50.0, 'excluded': False, 'reason': None},
+        ])
 
     def test_expense_excludes_the_credit_card_payment_transfer(self):
         self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'TRANSFER', 'Credit card payment', -1896.62), 'bank.csv')
@@ -256,7 +258,101 @@ class TestCashFlowMonthTransactions(CashFlowTestCase):
     def test_unknown_kind_falls_back_to_income(self):
         self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Deposit', 2000.00), 'bank.csv')
         result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'not-a-real-kind')
-        self.assertEqual(result, [{'date': '2026-09-01', 'description': 'Deposit', 'amount': 2000.0}])
+        self.assertEqual(result, [
+            {'id': 'WK1WPY033CAD:2026-09-01:0', 'date': '2026-09-01', 'description': 'Deposit', 'amount': 2000.0, 'excluded': False, 'reason': None},
+        ])
+
+
+class TestCashFlowExclusions(CashFlowTestCase):
+    """A transaction excluded via db.set_cash_flow_exclusion (finance/
+    ARCHITECTURE.md A5f) should drop out of every Cash Flow total but keep
+    showing up (annotated) in cash_flow_month_transactions - it does not
+    touch Spending at all (no test here reaches into summary.category_breakdown
+    etc, since exclusions are deliberately out of scope for that module)."""
+
+    def test_excluded_income_row_does_not_count_toward_income_total(self):
+        self.load(
+            BANK_HEADER
+            + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Direct deposit received', 2000.00)
+            + bank_row('2026-09-25', 'MoneyMovement', 'AFT_IN', 'Direct deposit received', 320.00),
+            'bank.csv',
+        )
+        finance_db.set_cash_flow_exclusion(
+            self.conn, 'WK1WPY033CAD:2026-09-25:0', True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
+        )
+        total = summary.chequing_income_total(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(total, 2000.0)
+
+    def test_excluded_chequing_expense_row_does_not_count_toward_expense_total(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'SPEND', 'Spend', -73.50), 'bank.csv')
+        finance_db.set_cash_flow_exclusion(
+            self.conn, 'WK1WPY033CAD:2026-09-01:0', True, None, '2026-09-06T00:00:00Z'
+        )
+        total = summary.chequing_expense_total(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(total, 0.0)
+
+    def test_excluded_credit_card_row_does_not_count_toward_expense_total(self):
+        self.load(CC_HEADER + cc_row('2026-09-01', 'Purchase', 'Cafe', -5.00, 'Coffee'), 'cc.csv')
+        finance_db.set_cash_flow_exclusion(
+            self.conn, 'main-credit-card:2026-09-01:0', True, None, '2026-09-06T00:00:00Z'
+        )
+        total = summary.credit_card_expense_total(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(total, 0.0)
+
+    def test_excluded_row_dropped_from_cash_flow_by_month(self):
+        self.load(
+            BANK_HEADER
+            + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Direct deposit received', 2000.00)
+            + bank_row('2026-09-25', 'MoneyMovement', 'AFT_IN', 'Direct deposit received', 320.00),
+            'bank.csv',
+        )
+        finance_db.set_cash_flow_exclusion(
+            self.conn, 'WK1WPY033CAD:2026-09-25:0', True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
+        )
+        result = summary.cash_flow_by_month(self.conn)
+        self.assertEqual(result, [{'month': '2026-09', 'income': 2000.0, 'expense': 0.0}])
+
+    def test_excluded_row_still_listed_in_month_transactions_but_flagged(self):
+        self.load(
+            BANK_HEADER
+            + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Direct deposit received', 2000.00)
+            + bank_row('2026-09-25', 'MoneyMovement', 'AFT_IN', 'Direct deposit received', 320.00),
+            'bank.csv',
+        )
+        finance_db.set_cash_flow_exclusion(
+            self.conn, 'WK1WPY033CAD:2026-09-25:0', True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
+        )
+        result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'income')
+        self.assertEqual(result, [
+            {'id': 'WK1WPY033CAD:2026-09-25:0', 'date': '2026-09-25', 'description': 'Direct deposit received',
+             'amount': 320.0, 'excluded': True, 'reason': 'Benefits reimbursement'},
+            {'id': 'WK1WPY033CAD:2026-09-01:0', 'date': '2026-09-01', 'description': 'Direct deposit received',
+             'amount': 2000.0, 'excluded': False, 'reason': None},
+        ])
+
+    def test_removing_the_exclusion_restores_the_total(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Deposit', 320.00), 'bank.csv')
+        finance_db.set_cash_flow_exclusion(
+            self.conn, 'WK1WPY033CAD:2026-09-01:0', True, 'Reimbursement', '2026-09-06T00:00:00Z'
+        )
+        self.assertEqual(summary.chequing_income_total(self.conn, '2026-09-01', '2026-09-30'), 0.0)
+
+        finance_db.set_cash_flow_exclusion(self.conn, 'WK1WPY033CAD:2026-09-01:0', False, None, '2026-09-06T00:00:00Z')
+        self.assertEqual(summary.chequing_income_total(self.conn, '2026-09-01', '2026-09-30'), 320.0)
+
+    def test_build_cash_flow_reflects_exclusion(self):
+        self.load(
+            BANK_HEADER
+            + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Paycheck', 2000.00)
+            + bank_row('2026-09-25', 'MoneyMovement', 'AFT_IN', 'Direct deposit received', 320.00),
+            'bank.csv',
+        )
+        finance_db.set_cash_flow_exclusion(
+            self.conn, 'WK1WPY033CAD:2026-09-25:0', True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
+        )
+        result = summary.build_cash_flow(self.conn, 'month', today=date(2026, 9, 30))
+        self.assertEqual(result['income'], 2000.0)
+        self.assertEqual(result['net'], 2000.0)
 
 
 if __name__ == '__main__':

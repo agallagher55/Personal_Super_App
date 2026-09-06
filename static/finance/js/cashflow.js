@@ -45,6 +45,11 @@ function renderStats(data) {
 
 // --- Click a bar to see its transactions ---------------------------------
 
+// Set while the dialog is open, so a toggle click can re-fetch this same
+// month/kind and re-render in place without closing the dialog.
+let currentTxDialogMonth = null;
+let currentTxDialogKind = null;
+
 function renderCashFlowTxRows(container, transactions) {
   container.innerHTML = "";
   if (transactions.length === 0) {
@@ -53,19 +58,75 @@ function renderCashFlowTxRows(container, transactions) {
   }
   for (const tx of transactions) {
     const row = document.createElement("div");
-    row.className = "fin-category-tx-row";
+    row.className = "fin-category-tx-row fin-cashflow-tx-row";
+    row.classList.toggle("fin-cashflow-tx-row-excluded", tx.excluded);
     row.innerHTML = `
       <span class="fin-category-tx-date">${formatShortDate(tx.date)}</span>
       <span class="fin-category-tx-description">${escapeHtml(tx.description)}</span>
       <span class="fin-category-tx-amount">${cad(tx.amount)}</span>
+      <button type="button" class="fin-cashflow-tx-toggle" data-transaction-id="${escapeHtml(tx.id)}" data-excluded="${tx.excluded}">
+        ${tx.excluded ? "Include" : "Exclude"}
+      </button>
     `;
     container.appendChild(row);
+  }
+
+  container.querySelectorAll(".fin-cashflow-tx-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+      const transactionId = button.dataset.transactionId;
+      const currentlyExcluded = button.dataset.excluded === "true";
+      toggleCashFlowExclusion(transactionId, !currentlyExcluded);
+    });
+  });
+}
+
+async function toggleCashFlowExclusion(transactionId, excluded) {
+  try {
+    const res = await fetch("/finance/cash-flow-exclusions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transaction_id: transactionId, excluded }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (err) {
+    console.warn("finance cash flow: failed to update exclusion", err);
+    return;
+  }
+
+  // The dialog stays open (unlike the category-edit dialog) so several rows
+  // can be reviewed in one sitting - re-fetch this same month/kind in place,
+  // then refresh the stat tiles/chart in the background so the numbers stay
+  // correct without forcing the user back out of the dialog.
+  if (currentTxDialogMonth) {
+    await loadAndRenderCashFlowTx(currentTxDialogMonth, currentTxDialogKind);
+  }
+  const windowSelect = document.getElementById("fin-cashflow-window");
+  if (windowSelect) renderCashFlow(windowSelect.value);
+}
+
+async function loadAndRenderCashFlowTx(month, kind) {
+  const subtitle = document.getElementById("fin-cashflow-tx-dialog-subtitle");
+  const list = document.getElementById("fin-cashflow-tx-list");
+  try {
+    const params = new URLSearchParams({ month, kind });
+    const res = await fetch(`${CASH_FLOW_TX_URL}?${params}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderCashFlowTxRows(list, data.transactions);
+    if (subtitle) {
+      subtitle.textContent = `${data.transactions.length} transaction${data.transactions.length === 1 ? "" : "s"} · ${cad(data.total)}`;
+    }
+  } catch (err) {
+    list.innerHTML = `<p class="fin-empty-note">Couldn't load transactions (${err.message}).</p>`;
   }
 }
 
 async function openCashFlowTransactions(month, kind) {
   const dialog = document.getElementById("fin-cashflow-tx-dialog");
   if (!dialog) return;
+
+  currentTxDialogMonth = month;
+  currentTxDialogKind = kind;
 
   const title = document.getElementById("fin-cashflow-tx-dialog-title");
   const subtitle = document.getElementById("fin-cashflow-tx-dialog-subtitle");
@@ -75,19 +136,7 @@ async function openCashFlowTransactions(month, kind) {
   list.innerHTML = `<p class="fin-empty-note">Loading…</p>`;
   dialog.showModal();
 
-  try {
-    const params = new URLSearchParams({ month, kind });
-    const res = await fetch(`${CASH_FLOW_TX_URL}?${params}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    renderCashFlowTxRows(list, data.transactions);
-    if (subtitle) {
-      const total = data.transactions.reduce((sum, tx) => sum + tx.amount, 0);
-      subtitle.textContent = `${data.transactions.length} transaction${data.transactions.length === 1 ? "" : "s"} · ${cad(total)}`;
-    }
-  } catch (err) {
-    list.innerHTML = `<p class="fin-empty-note">Couldn't load transactions (${err.message}).</p>`;
-  }
+  await loadAndRenderCashFlowTx(month, kind);
 }
 
 function renderChart(byMonth) {
@@ -129,4 +178,12 @@ export function initFinanceCashFlow() {
   if (!select) return;
   renderCashFlow(select.value);
   select.addEventListener("change", () => renderCashFlow(select.value));
+
+  const dialog = document.getElementById("fin-cashflow-tx-dialog");
+  if (dialog) {
+    dialog.addEventListener("close", () => {
+      currentTxDialogMonth = null;
+      currentTxDialogKind = null;
+    });
+  }
 }
