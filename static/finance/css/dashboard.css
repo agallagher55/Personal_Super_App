@@ -149,6 +149,10 @@
   font-weight: 600;
 }
 
+.fin-stat-value-negative {
+  color: var(--status-red);
+}
+
 @media (max-width: 640px) {
   .fin-stat-row {
     grid-template-columns: 1fr;
@@ -248,6 +252,38 @@
   text-transform: uppercase;
   color: var(--ink-soft);
   margin-bottom: 14px;
+}
+
+.fin-overview-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fin-overview-card-title-row .fin-overview-card-title {
+  margin-bottom: 0;
+}
+
+.fin-chart-legend {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.fin-chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.fin-chart-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
 }
 
 @media (max-width: 900px) {

@@ -145,6 +145,48 @@
         </div>
       </div>
 
+      <div class="fin-block-header">
+        <span class="fin-block-title">Cash Flow</span>
+        <select class="fin-spending-window" id="fin-cashflow-window">
+          <option value="month">This month</option>
+          <option value="30d">Last 30 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="all">All time</option>
+        </select>
+      </div>
+
+      <div class="fin-stat-row fin-cashflow-stat-row">
+        <div class="fin-stat">
+          <div class="fin-stat-label">Income</div>
+          <div class="fin-stat-value" id="fin-cashflow-income">&middot;&middot;&middot;</div>
+        </div>
+        <div class="fin-stat">
+          <div class="fin-stat-label">Expense</div>
+          <div class="fin-stat-value" id="fin-cashflow-expense">&middot;&middot;&middot;</div>
+        </div>
+        <div class="fin-stat">
+          <div class="fin-stat-label">Net</div>
+          <div class="fin-stat-value" id="fin-cashflow-net">&middot;&middot;&middot;</div>
+        </div>
+      </div>
+
+      <div class="fin-chart-row">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title-row">
+            <div class="fin-overview-card-title">Income vs Expense by Month</div>
+            <div class="fin-chart-legend">
+              <span class="fin-chart-legend-item"><span class="fin-chart-legend-swatch" style="background:var(--status-green)"></span>Income</span>
+              <span class="fin-chart-legend-item"><span class="fin-chart-legend-swatch" style="background:var(--status-red)"></span>Expense</span>
+            </div>
+          </div>
+          <div class="fin-chart-wrap">
+            <canvas class="fin-bar-canvas" id="fin-cashflow-canvas"></canvas>
+            <div class="fin-tooltip" id="fin-cashflow-tooltip"></div>
+            <p class="fin-empty-note" id="fin-cashflow-empty" hidden>No bank activity imported yet — import a bank activity export above to see income vs expense.</p>
+          </div>
+        </div>
+      </div>
+
       <div class="section">
         <div class="section-header">
           <span class="section-label">Cash</span>
@@ -206,10 +248,12 @@
     import { initFinanceDashboard } from "/static/finance/js/dashboard.js";
     import { initFinanceImport } from "/static/finance/js/import.js";
     import { initFinanceSpending } from "/static/finance/js/spending.js";
+    import { initFinanceCashFlow } from "/static/finance/js/cashflow.js";
     initTickerBar();
     initFinanceDashboard();
     initFinanceImport();
     initFinanceSpending();
+    initFinanceCashFlow();
   </script>
 </body>
 </html>

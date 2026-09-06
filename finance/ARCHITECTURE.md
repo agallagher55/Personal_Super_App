@@ -12,9 +12,19 @@
   `import_csv.py`, `summary.py`) plus `POST /finance/import`,
   `GET /finance/spending-summary.json`, and the "Import CSV Export" button
   + "Spending" section (category donut, top merchants, monthly bar chart,
-  window selector) on `/finance` are all live. Phase 4 (multi-card
-  support, a real auth gate, folding in chequing income for a cash-flow
-  view) is not started.
+  window selector) on `/finance` are all live.
+- **Phase 4a (Cash Flow — chequing income folded in) is built** — see A5b.
+  A separate "Cash Flow" block (income/expense/net stat tiles + a monthly
+  income-vs-expense chart) reads chequing income/expense alongside the
+  existing credit-card spend total. A real bug this surfaced (a big refund
+  could push the overall expense total negative) was caught in browser
+  testing against the real sample data and fixed before landing.
+- **Phase 4b (a second credit card, from a different institution) is
+  documented, not built** — see A9. No sample export from that institution
+  exists yet to design a parser against, so this is a concrete plan for
+  what changes when one does, not code.
+- **Not started**: a real auth gate in front of the upload/route endpoints
+  (still just the same-origin check from A4).
 - **Deferred: Plaid-based live sync** (Part B below). This was the original
   plan for this file and is kept in full further down, unstarted and
   unimplemented, in case account-linking is revisited later. Nothing in Part
@@ -229,6 +239,84 @@ rather than folded into `initFinanceDashboard()` - `dashboard.js` only
 changes to `export` `renderRow`/`renderLegend` for reuse, nothing about
 its own net-worth/cash/investment/debt rendering changes.
 
+### A5b. Cash Flow — income vs expense — built (Phase 4a, 2026-09-06)
+
+Requested explicitly: "fold chequing income in for a full income-vs-expense
+view." The Spending block above is credit-card-purchases-only by design
+(A5); this is the separate, broader picture - what actually came in
+against everything that actually went out, combining both imported
+sources.
+
+**A real parsing gap had to be fixed first.** `import_csv.py`'s bank-
+activity parser was only storing the CSV's coarse `activity_type` column
+(`MoneyMovement` / `BonusPayment` / `Interest`) - the same value on a
+paycheck, a bill payment, and an e-transfer alike, useless for telling
+income from expense. Fixed to store `activity_sub_type` instead (`AFT_IN`,
+`SPEND`, `CASHBACK`, `E_TRFOUT`, ...), falling back to the coarse type only
+when sub_type is blank/`-` (Interest rows). `csv_schema.sql`'s comment on
+`activity_type` documents this dual meaning (Purchase/Payment/Refund for
+credit card rows, the sub_type for chequing rows). Re-importing existing
+data (already the normal flow, per A4's range-replace) picks this up
+automatically - no migration needed.
+
+**Classification** (`backend/finance/summary.py`), keyed off that now-
+correct `activity_type`:
+
+| Bucket | Chequing `activity_type` values |
+|---|---|
+| Income | `AFT_IN`, `CASHBACK`, `GIVEAWAY`, `Interest` |
+| Expense | `SPEND`, `AFT_OUT`, `OBP_OUT`, `P2P` |
+| Neither (excluded) | `E_TRFIN`, `E_TRFOUT`, `TRANSFER`, `TRANSFER_TF`, `EFT`, anything else |
+
+**The "neither" bucket is a deliberate, conservative default worth
+flagging, not a settled judgment call.** Interac e-Transfers and EFT
+transfers are indistinguishable, from the CSV alone, between "paid/was
+paid by another person" (real income/expense) and "moved to/from one of
+your own other accounts" (not real income/expense - e.g. sending money to
+an investment account). Excluding them entirely never double-counts your
+own money moving around, but it does mean a real e-transfer payment to a
+friend (splitting a bill, say) doesn't show up as expense here. `TRANSFER`
+specifically also catches the chequing-side mirror of a credit card bill
+payment (`activity_sub_type = TRANSFER`, description "Credit card
+payment") - that one's unambiguous and correctly excluded, since the
+underlying purchases already count as expense on the card side. Revisit
+the e-transfer/EFT default if it turns out to hide too much of the real
+picture.
+
+Total expense combines both sources:
+`chequing_expense_total()` + `credit_card_expense_total()` (the latter is
+literally the same "real spend" query `category_breakdown()`/
+`monthly_trend()` already use - Purchase netted against Refund,
+Payment/Uncategorized excluded).
+
+**A real bug this surfaced, caught in browser testing (not just unit
+tests) against the actual reviewed sample data:** `credit_card_expense_total()`
+wasn't clamped at 0 the way `category_breakdown()`'s `HAVING total > 0`
+and `monthly_trend()`'s `max(..., 0)` already were. The sample credit card
+export has a $445.62 refund against a much smaller total of real
+purchases in the same window, and summing across *all* categories at once
+(rather than per-category, where the existing clamp lived) let that one
+refund push the overall total negative - "Expense: -$96" on the dashboard,
+which reads as nonsense. Fixed by clamping all three total functions
+(`chequing_income_total`, `chequing_expense_total`,
+`credit_card_expense_total`) at 0, with a regression test
+(`test_a_large_refund_clamps_to_zero_rather_than_going_negative`) using
+the same shape of data that exposed it. This is exactly the kind of bug
+unit tests alone (built from hand-picked, individually-reasonable
+fixtures) can miss and a real end-to-end check against real data catches.
+
+**Dashboard**: a second `.fin-block-header` ("Cash Flow", with its own
+window selector - independent from the Spending block's, so
+`spending.js` and the new `static/finance/js/cashflow.js` stay fully
+decoupled, each owning its own DOM, matching A5's established pattern),
+a 3-tile stat row (Income / Expense / Net - `net` gets a
+`.fin-stat-value-negative` red-text class when negative), and an "Income
+vs Expense by Month" grouped bar chart (`drawIncomeExpenseChart`, new in
+`charts.js`, two bars per month rising from a shared zero baseline -
+reuses `drawMonthlyBarChart`'s axis/theme/resize/hover scaffolding). New
+route: `GET /finance/cash-flow.json?window=<...>` →
+`summary.build_cash_flow()`.
+
 ### A6. File layout, and what's gitignored
 
 Code lives under `backend/finance/`, matching the repo's actual
@@ -241,32 +329,38 @@ implementation started, 2026-09-06:
 data/finance/                  gitignored — real personal financial data lives only here
   imports/                     timestamped audit copy of every uploaded CSV
   finance.db                   SQLite store (accounts, transactions)
-                                (no spending-summary.json - A5's build_summary() queries live, no cache file)
+                                (no spending-summary.json/cash-flow.json - summary.py queries live, no cache file)
 
 backend/finance/                tracked — code, no real data, mirrors backend/fitness/'s layout
   db.py                          connect() / init_schema() / ensure_database(), range-replace load
   csv_schema.sql                 DDL for accounts + transactions (A3) — separate from finance/schema.sql,
                                   which is Part B's Plaid-oriented DDL and unrelated to this
   import_csv.py                  CSV parsing + range-replace load; also a CLI entry point
-  summary.py                     category/monthly/top-merchant queries for GET /finance/spending-summary.json
-  tests/test_import_csv.py       19 tests: parsing, idempotency, range-replace, the real upload path
+  summary.py                     category/monthly/top-merchant queries (A5) + cash-flow queries (A5b)
+  tests/test_import_csv.py       21 tests: parsing, idempotency, range-replace, the real upload path,
+                                  the activity_sub_type extraction fix (A5b)
   tests/test_summary.py          19 tests: netting, window filtering, exclusions, empty-database handling
+  tests/test_cash_flow.py        15 tests: income/expense classification, the negative-expense
+                                  regression (A5b), empty-database handling
 
 finance/                       tracked — docs + the Part B (Plaid) schema reference only, no code
   ARCHITECTURE.md              (this file)
   README.md
   schema.sql                    Part B's Plaid-oriented DDL (unused, deferred)
 
-backend/server.py               gains POST /finance/import, GET /finance/spending-summary.json, and a
-                                 finance_db.ensure_database() call at startup
+backend/server.py               gains POST /finance/import, GET /finance/spending-summary.json,
+                                 GET /finance/cash-flow.json, and a finance_db.ensure_database() call at startup
 
 static/finance/
   finance-dashboard.json        unchanged — existing sample balance/net-worth data
   js/import.js                   wires the "Import CSV Export" button (A4)
   js/spending.js                 wires the "Spending" section - donut, top merchants, monthly chart, window select (A5)
+  js/cashflow.js                 wires the "Cash Flow" section - stat tiles, monthly chart, window select (A5b)
   js/dashboard.js                unchanged except exporting renderRow/renderLegend for spending.js to reuse
-  js/charts.js                   gains drawMonthlyBarChart, sharing its existing axis/theme/format helpers
-  css/dashboard.css               gains .fin-import-*, .fin-block-*, .fin-spending-*, .fin-bar-canvas, .fin-empty-note rules
+  js/charts.js                   gains drawMonthlyBarChart (A5) and drawIncomeExpenseChart (A5b),
+                                  sharing their axis/theme/format helpers
+  css/dashboard.css               gains .fin-import-*, .fin-block-*, .fin-spending-*, .fin-bar-canvas,
+                                  .fin-empty-note, .fin-chart-legend*, .fin-stat-value-negative rules
 ```
 
 `.gitignore` has `data/finance/` — mirrors the existing `data/fitness/`
@@ -300,16 +394,24 @@ entry, same reasoning (real personal data, never committed).
    monthly chart's "no data yet" text staying visible on top of real bars,
    because an explicit `display: flex` in the new CSS was beating the
    browser's own `[hidden]` rule) was fixed before landing.
-4. **Phase 4 — stretch, later.** Fold in chequing income/cashback/bill-pay
-   rows for a full income-vs-expense cash-flow view (excluding the CC
-   payment transfer rows, per A2, to avoid double counting); support more
-   than one credit card (needs a real answer to A8's still-open question);
-   a proper auth gate in front of the upload endpoint (and the rest of the
-   app), since A4's same-origin check is a basic guard, not real auth.
+4. **Phase 4a — Cash Flow. Built 2026-09-06.** Chequing income/expense
+   classification, combined with credit-card spend, into a full
+   income-vs-expense view (A5b) — the fixes and the design tradeoffs
+   (what counts as income/expense vs. is excluded as a transfer) are
+   documented there, not repeated here.
+5. **Phase 4b — a second credit card, a different institution.
+   Documented, not built** — see A9. Explicitly requested but explicitly
+   not buildable yet: every institution's export format differs, and
+   there's no real sample from the second one to design a parser against.
+   A9 is the concrete plan for when there is one.
+6. **Phase 4c — still not started.** A proper auth gate in front of the
+   upload/route endpoints (and the rest of the app), since A4's
+   same-origin check is a basic guard, not real auth.
 
 ### A8. Open questions
 
-Three settled, one still open:
+All four resolved (the fourth by A9, a plan rather than a decision - it's
+blocked on a real sample export, not on a choice):
 
 - ~~**Import trigger**~~ — **decided: a button/upload form on the
   dashboard**, built in Phase 1 rather than deferred to Phase 4. See A4.
@@ -320,12 +422,71 @@ Three settled, one still open:
 - ~~**Default window**~~ — **decided: give you the control instead of
   picking one.** The Spending block's window selector (This month / Last
   30 days / Last 90 days / All time) defaults to "This month," per A5.
-- **Multiple cards later**: since neither export file names or contains a
-  stable card/institution identifier, how should a second card's export be
-  told apart from the first? Still just the fixed `main-credit-card`
-  account today (A2). (Proposal, unchanged: a CLI/route flag to pick the
-  target account, e.g. `import_csv.py --account second-card
-  path/to/export.csv`, until there's a reason to automate it.)
+- ~~**Multiple cards later**~~ — **not a decision, a plan: see A9.** The
+  original proposal here (a CLI/route flag to pick the target account) is
+  still roughly right, but A9 goes further: the second institution's
+  export format is unknown, so `detect_kind()` needs a third branch built
+  against a real sample when one exists, categorization may differ or be
+  entirely absent (which would silently exclude that card's spend under
+  the current `category != 'Uncategorized'` filter - a real gap to fix at
+  that time, not before).
+
+### A9. Adding a second credit card (a different institution) — documented, not built
+
+Explicitly requested (2026-09-06): a second card is coming, but it's from
+a different institution than the Wealthsimple-issued card the current
+parser was built against, so its export will very likely look nothing
+like `CREDIT_CARD_HEADER` in `import_csv.py`. This section is what to do
+when a real sample of that export exists - not speculative code against a
+format nobody has seen yet.
+
+**Why not built now:** every card issuer's CSV export is genuinely
+different - different column names, different date formats, different
+sign conventions (some show purchases as positive with a separate
+debit/credit indicator column instead of a signed amount), and no
+guarantee of issuer-provided categories at all. Guessing at that shape
+without a real file to test against would just produce a parser for a
+format that doesn't exist.
+
+**What changes when a real sample export shows up:**
+
+1. **A third `detect_kind()` branch.** `import_csv.py`'s `detect_kind()`
+   matches on an exact header-column-set (`CREDIT_CARD_HEADER` today) -
+   add the new institution's header set alongside it, and a
+   `_rows_from_<institution>_credit_card()` parser mirroring
+   `_rows_from_credit_card()`'s shape (date, description, amount,
+   activity_type, category, status).
+2. **`DEFAULT_CREDIT_CARD_ACCOUNT` stops being a single constant.** Today
+   *any* file matching the one known credit-card header shape resolves to
+   the same hardcoded `main-credit-card` account (A2/A8) - that assumption
+   breaks the moment a second, differently-shaped credit card export
+   exists, since now there are two *different* header shapes, each
+   needing its own fixed account id (e.g. `main-credit-card` and
+   `second-credit-card`). The natural fix given the new header shape is
+   already how `detect_kind()` tells the two apart: hardcode each known
+   institution's shape to its own account id, the same one-shape-one-account
+   pattern used today, just doubled rather than turned into a
+   general-purpose "which account" parameter - no reason to build that
+   generality before there's a third format to justify it.
+3. **Categorization may differ or be entirely absent - and this is a real
+   gap to fix, not just a note.** The current `category != 'Uncategorized'`
+   filter (`_SPEND_FILTER` in `summary.py`) uses "has a real category" as
+   a proxy for "this is a purchase, not a bill payment," because the
+   Wealthsimple-issued card always provides one. **If the second
+   institution doesn't categorize purchases at all, every one of that
+   card's purchases would silently vanish from Spending, Cash Flow, and
+   the Income vs Expense chart** - not an error, just quietly excluded,
+   which is worse. Fix at that time: filter on `activity_type = 'Purchase'`
+   for what counts as spend, and treat "has a category" as a separate,
+   optional thing only the *category breakdown* needs (falling back to an
+   "Uncategorized" or "Other" bucket in the donut rather than dropping the
+   row from spend entirely).
+4. **Watch for format quirks specific to the new issuer**: date format
+   (`MM/DD/YYYY` vs. this export's `YYYY-MM-DD`), amount sign convention
+   (signed amount vs. a separate debit/credit or type column), and
+   currency (assumed CAD throughout today, per A1 - fine unless the new
+   card is USD-denominated, which would need real per-row currency
+   handling rather than the implicit CAD assumption).
 
 ---
 

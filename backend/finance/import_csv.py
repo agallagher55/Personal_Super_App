@@ -76,11 +76,22 @@ def _rows_from_bank_activity(rows_in):
         date = row['effective_date'].strip()
         if not date:
             continue
+        # `activity_type` alone (MoneyMovement/BonusPayment/Interest) is too
+        # coarse to be useful downstream - it's the same value on a direct
+        # deposit, a bill payment, and an e-transfer alike. `activity_sub_type`
+        # (AFT_IN, SPEND, CASHBACK, E_TRFOUT, ...) is what actually
+        # distinguishes them, and is what summary.py's income/expense
+        # classification (ARCHITECTURE.md Part A, Cash Flow) keys off. Falls
+        # back to the coarse type only when sub_type is blank or '-' (as on
+        # Interest rows), so that case still gets a meaningful value instead
+        # of an empty string.
+        sub_type = row['activity_sub_type'].strip()
+        activity_type = sub_type if sub_type and sub_type != '-' else row['activity_type'].strip()
         rows.append({
             'date': date,
             'description': row['description'].strip(),
             'amount': float(row['net_cash_amount']),
-            'activity_type': row['activity_type'].strip(),
+            'activity_type': activity_type,
             'category': None,
             'status': None,
         })

@@ -17,7 +17,11 @@ CREATE TABLE IF NOT EXISTS transactions (
   date          TEXT NOT NULL,
   description   TEXT NOT NULL,      -- merchant (credit card) or activity description (bank)
   amount        REAL NOT NULL,      -- negative = outflow, positive = inflow, CAD
-  activity_type TEXT NOT NULL,      -- Purchase | Payment | Refund | MoneyMovement | BonusPayment | Interest
+  activity_type TEXT NOT NULL,      -- credit card: Purchase | Payment | Refund
+                                     -- chequing: the export's activity_sub_type (AFT_IN, SPEND, CASHBACK,
+                                     -- E_TRFOUT, TRANSFER, ...), falling back to activity_type (e.g.
+                                     -- 'Interest') only when sub_type is blank/'-' - see import_csv.py's
+                                     -- _rows_from_bank_activity and summary.py's income/expense classification
   category      TEXT,               -- issuer-provided (credit card export only), NULL otherwise
   status        TEXT,               -- Completed | Pending (credit card export only), NULL otherwise
   source_file   TEXT NOT NULL,      -- which upload this row came from, for audit
