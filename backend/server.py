@@ -246,6 +246,15 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 conn.close()
             self.send_json(200, summary)
             return
+        if path == '/finance/cash-flow.json':
+            window = parse_qs(parsed.query).get('window', [finance_summary.DEFAULT_WINDOW])[0]
+            conn = finance_db.connect()
+            try:
+                cash_flow = finance_summary.build_cash_flow(conn, window)
+            finally:
+                conn.close()
+            self.send_json(200, cash_flow)
+            return
         if path.startswith('/tasks/'):
             slug = path[len('/tasks/'):]
             if self.section_slug_exists(slug):

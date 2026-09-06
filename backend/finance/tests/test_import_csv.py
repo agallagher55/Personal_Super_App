@@ -23,6 +23,8 @@ BANK_ACTIVITY_CSV = """effective_date,effective_time,settlement_date,account_id,
 2026-06-06,13:42:46,,WK1WPY033CAD,Chequing,MoneyMovement,E_TRFOUT,Interac e-Transfer® Out,,,,CAD,-75,,,-75
 2026-06-08,01:00:00,,WK1WPY033CAD,Chequing,BonusPayment,CASHBACK,Cash back - Credit card,,,,CAD,0.35,,,0.35
 2026-06-15,18:07:55,,WK1WPY033CAD,Chequing,MoneyMovement,TRANSFER,Credit card payment,,,,CAD,-1659.23,,,-1659.23
+2026-07-01,01:00:00,,WK1WPY033CAD,Chequing,Interest,-,Interest received (executed at 2026-07-01),,,,CAD,3.26,,,3.26
+2026-07-08,18:05:06,,WK1WPY033CAD,Chequing,MoneyMovement,AFT_IN,Direct deposit received,,,,CAD,2008.53,,,2008.53
 """
 
 
@@ -87,9 +89,29 @@ class TestParseCsvText(unittest.TestCase):
         self.assertEqual(account_id, 'WK1WPY033CAD')
         self.assertEqual(label, 'Chequing')
         self.assertEqual(account_kind, 'chequing')
-        self.assertEqual(len(rows), 3)
+        self.assertEqual(len(rows), 5)
         self.assertIsNone(rows[0]['category'])
         self.assertIsNone(rows[0]['status'])
+
+    def test_bank_activity_type_uses_the_finer_sub_type(self):
+        # activity_type alone (MoneyMovement/BonusPayment/Interest) is too
+        # coarse for summary.py's income/expense classification to use -
+        # activity_sub_type (AFT_IN, CASHBACK, TRANSFER, ...) is what's
+        # actually stored in the `activity_type` field on chequing rows.
+        _, _, _, _, rows = import_csv.parse_csv_text(BANK_ACTIVITY_CSV)
+        by_description = {r['description']: r for r in rows}
+        self.assertEqual(by_description['Interac e-Transfer® Out']['activity_type'], 'E_TRFOUT')
+        self.assertEqual(by_description['Cash back - Credit card']['activity_type'], 'CASHBACK')
+        self.assertEqual(by_description['Credit card payment']['activity_type'], 'TRANSFER')
+        self.assertEqual(by_description['Direct deposit received']['activity_type'], 'AFT_IN')
+
+    def test_bank_activity_type_falls_back_when_sub_type_is_a_dash(self):
+        # Interest rows carry activity_sub_type='-', not a real sub-type -
+        # falls back to the coarse activity_type ('Interest') instead of
+        # storing the meaningless '-'.
+        _, _, _, _, rows = import_csv.parse_csv_text(BANK_ACTIVITY_CSV)
+        interest_row = next(r for r in rows if 'Interest received' in r['description'])
+        self.assertEqual(interest_row['activity_type'], 'Interest')
 
     def test_unrecognized_header_raises(self):
         with self.assertRaises(import_csv.ImportFormatError):
@@ -134,7 +156,7 @@ class TestImportCsvText(ImportDbTestCase):
     def test_imports_bank_activity_rows_under_their_own_account_id(self):
         summary = import_csv.import_csv_text(self.conn, 'bank.csv', BANK_ACTIVITY_CSV)
         self.assertEqual(summary['account_id'], 'WK1WPY033CAD')
-        self.assertEqual(summary['rows_imported'], 3)
+        self.assertEqual(summary['rows_imported'], 5)
 
     def test_reimporting_identical_file_is_idempotent(self):
         import_csv.import_csv_text(self.conn, 'cc.csv', CREDIT_CARD_CSV)
@@ -173,7 +195,7 @@ class TestImportCsvText(ImportDbTestCase):
         import_csv.import_csv_text(self.conn, 'cc.csv', CREDIT_CARD_CSV)
         import_csv.import_csv_text(self.conn, 'bank.csv', BANK_ACTIVITY_CSV)
         self.assertEqual(finance_db.account_transaction_count(self.conn, 'main-credit-card'), 5)
-        self.assertEqual(finance_db.account_transaction_count(self.conn, 'WK1WPY033CAD'), 3)
+        self.assertEqual(finance_db.account_transaction_count(self.conn, 'WK1WPY033CAD'), 5)
 
 
 class TestImportUploadedFile(unittest.TestCase):

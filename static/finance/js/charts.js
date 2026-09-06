@@ -442,3 +442,139 @@ export function drawMonthlyBarChart(canvas, tooltipEl, points, { colorVar = "--i
     tooltipEl.classList.remove("show");
   });
 }
+
+/**
+ * Draws a grouped income-vs-expense bar chart (two bars per month, both
+ * rising from a shared zero baseline - income and expense are always
+ * non-negative here, so a diverging up/down layout isn't needed) on
+ * `canvas`, reusing the same axis/theme/resize/hover scaffolding as
+ * drawMonthlyBarChart above. `points` is
+ * [{ month: "YYYY-MM", income: number, expense: number }, ...].
+ */
+export function drawIncomeExpenseChart(canvas, tooltipEl, points, { incomeColorVar = "--status-green", expenseColorVar = "--status-red" } = {}) {
+  const ctx = canvas.getContext("2d");
+
+  let incomeColor, expenseColor, gridColor, mutedColor;
+  function readThemeColors() {
+    incomeColor = themeColor(incomeColorVar);
+    expenseColor = themeColor(expenseColorVar);
+    gridColor = themeColor("--line");
+    mutedColor = themeColor("--ink-soft");
+  }
+  readThemeColors();
+
+  const padding = { top: 14, right: 10, bottom: 22, left: 60 };
+
+  const maxVal = Math.max(...points.flatMap((p) => [p.income, p.expense]), 0);
+  const { max: yMax, step: tickStep } = niceAxis(0, maxVal || 1, 4);
+  const yRange = yMax || 1;
+  const tickCount = Math.round(yMax / tickStep);
+
+  let cssWidth, cssHeight, innerH, barWidth, gap, xForGroup, yFor;
+
+  function measure() {
+    const dpr = window.devicePixelRatio || 1;
+    cssWidth = canvas.clientWidth || canvas.width;
+    cssHeight = canvas.clientHeight || canvas.height;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const innerW = cssWidth - padding.left - padding.right;
+    innerH = cssHeight - padding.top - padding.bottom;
+    const slot = points.length > 0 ? innerW / points.length : innerW;
+    barWidth = Math.max(slot * 0.28, 3);
+    gap = barWidth * 0.25;
+    xForGroup = (i) => padding.left + slot * i + slot / 2;
+    yFor = (v) => padding.top + innerH - (v / yRange) * innerH;
+  }
+
+  function drawFrame(hoverIndex) {
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.fillStyle = mutedColor;
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    for (let s = 0; s <= tickCount; s++) {
+      const v = s * tickStep;
+      const y = yFor(v);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(cssWidth - padding.right, y);
+      ctx.stroke();
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(formatCad(v), padding.left - 8, y);
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    points.forEach((p, i) => {
+      ctx.fillText(formatMonth(p.month), xForGroup(i), cssHeight - 6);
+    });
+
+    points.forEach((p, i) => {
+      const cx = xForGroup(i);
+      ctx.globalAlpha = hoverIndex == null || i === hoverIndex ? 1 : 0.7;
+
+      const incomeTop = yFor(p.income);
+      ctx.fillStyle = incomeColor;
+      ctx.fillRect(cx - barWidth - gap / 2, incomeTop, barWidth, padding.top + innerH - incomeTop);
+
+      const expenseTop = yFor(p.expense);
+      ctx.fillStyle = expenseColor;
+      ctx.fillRect(cx + gap / 2, expenseTop, barWidth, padding.top + innerH - expenseTop);
+
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function render() {
+    measure();
+    drawFrame(null);
+  }
+
+  render();
+
+  const themeObserver = new MutationObserver(() => {
+    readThemeColors();
+    render();
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  let resizeTimer = null;
+  const resizeObserver = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 100);
+  });
+  resizeObserver.observe(canvas);
+
+  if (!tooltipEl) return;
+
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    let nearest = 0;
+    let nearestDist = Infinity;
+    points.forEach((_, i) => {
+      const d = Math.abs(xForGroup(i) - mx);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = i;
+      }
+    });
+    drawFrame(nearest);
+    const p = points[nearest];
+    const year = p.month.slice(0, 4);
+    tooltipEl.textContent = `${formatMonth(p.month)} ${year} — ${formatCad(p.income)} in, ${formatCad(p.expense)} out`;
+    tooltipEl.style.left = `${xForGroup(nearest)}px`;
+    tooltipEl.style.top = `${yFor(Math.max(p.income, p.expense))}px`;
+    tooltipEl.classList.add("show");
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    drawFrame(null);
+    tooltipEl.classList.remove("show");
+  });
+}
