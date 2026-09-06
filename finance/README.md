@@ -14,9 +14,13 @@ through Plaid, the dashboard gets populated from CSV exports pulled by hand
 from the credit card and bank sites — see **Part A** of
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full plan (what the exports
 contain, the import/storage design, and a new "Spending by Category" +
-"Spend by Month" section this adds to the dashboard). Nothing in that
-import layer is built yet either — this is still the plan, not the
-implementation.
+"Spend by Month" section this adds to the dashboard).
+
+**Storage + import is built** (Phase 1, `backend/finance/`): `/finance` has
+an "Import CSV Export" button that uploads a credit card or bank activity
+export and range-replace loads it into `data/finance/finance.db`. The
+spending graphic itself (Phase 2/3 — a summary endpoint plus the category
+donut and monthly chart on the dashboard) isn't built yet.
 
 Plaid-based live account linking (Wealthsimple first, any Plaid-supported
 institution after that) is kept as **Part B** of `ARCHITECTURE.md`,

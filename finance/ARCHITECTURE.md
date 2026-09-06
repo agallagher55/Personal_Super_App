@@ -3,10 +3,15 @@
 ## Status (as of 2026-09-06)
 
 - **Current plan: manual CSV import** (Part A below). Decided 2026-09-06:
-  instead of connecting real accounts through Plaid, the dashboard will be
+  instead of connecting real accounts through Plaid, the dashboard is
   populated from CSV exports pulled by hand from the credit card and bank
   websites — no Plaid account, no `plaid-python`/`cryptography` dependency,
   no production-approval process, right now.
+- **Phase 1 (storage + import) is built** — see A4/A7. `backend/finance/`
+  (`db.py`, `csv_schema.sql`, `import_csv.py`) plus a
+  `POST /finance/import` route and an "Import CSV Export" button on
+  `/finance` are live. Phase 2 (spending summary + the category
+  donut/monthly chart on the dashboard) is not started yet.
 - **Deferred: Plaid-based live sync** (Part B below). This was the original
   plan for this file and is kept in full further down, unstarted and
   unimplemented, in case account-linking is revisited later. Nothing in Part
@@ -115,22 +120,50 @@ file> AND <max date in file>`, then insert every row from the file fresh.
 Re-running the same or an overlapping export is then naturally idempotent,
 and there's no cross-file matching heuristic to get wrong.
 
-### A4. Import flow
+### A4. Import flow — built
 
-1. Export CSVs from the card/bank site by hand, save them into
-   `data/finance/imports/` (gitignored — see A6). No enforced filename, but
-   recommend `<account-id>-<export-date>.csv`, e.g.
-   `main-credit-card-2026-09-06.csv`.
-2. Run `python3 finance/import_csv.py` — detects file type by header row
-   (credit card vs. bank activity), resolves the account via a small
-   `data/finance/accounts.json` mapping, and applies the range-replace load
-   from A3 into `data/finance/finance.db` (SQLite, stdlib `sqlite3`, no new
-   dependency — consistent with the rest of this repo).
-3. The same run recomputes `data/finance/spending-summary.json` (A5).
-4. No scheduling for now — this is a manual, on-demand step, the same shape
-   as `service_now/sync.py`'s existing CLI-driven pattern.
+Decided 2026-09-06 (see A8): the trigger is a button on the dashboard
+itself, not a CLI-only step, so this differs from the original sketch here.
+What's actually built, in `backend/finance/`:
 
-### A5. Dashboard integration — the spending graphic
+1. **`/finance` has an "Import CSV Export" button.** Clicking it opens a
+   file picker (`accept=".csv"`); picking a file uploads it immediately —
+   no separate "drop into a folder, then run a script" step.
+2. **The browser sends the file's raw bytes as the POST body** — deliberately
+   *not* `multipart/form-data`. `static/finance/js/import.js` calls
+   `fetch("/finance/import?filename=<name>", { method: "POST", body: file })`,
+   and `backend/server.py`'s new `handle_finance_import` reads it with a
+   plain `Content-Length` + `self.rfile.read(length)`, the same pattern
+   every other POST handler in that file already uses. This avoids writing
+   a multipart parser (Python's `cgi` module is deprecated/gone in newer
+   versions) for a one-file form with no other fields.
+3. **`import_csv.py` detects the file type from its header row** (the sets
+   in A2 above) and dispatches to the credit-card or bank-activity parser.
+   No `accounts.json` mapping file — the credit card always resolves to
+   the fixed `main-credit-card` account (A2/A8), and the bank file carries
+   its own `account_id` column, so there was nothing left for a mapping
+   file to do. Revisit if a second card is ever added.
+4. **Range-replace load** (A3) into `data/finance/finance.db` via
+   `backend/finance/db.py`.
+5. **An audit copy of every upload** is saved to `data/finance/imports/`
+   (timestamped filename) before parsing, so the original export is never
+   lost even though the trigger is now upload-based rather than
+   drop-a-file-and-run-a-script.
+6. **A same-origin check** (`check_same_origin()`, the same one
+   `/fitness/auth/logout` and `/fitness/api/sync` already use) rejects a
+   POST whose `Origin` names a different host. This is not a real auth
+   gate — there still isn't one anywhere in this app (Part B §6's caveat
+   applies here too, now that it's live instead of hypothetical) — just a
+   basic cross-site-request guard. Revisit before this app's URL is shared
+   or exposed more broadly than "just me."
+7. Still no scheduling — each import is a manual click after pulling a
+   fresh export.
+
+`python3 backend/finance/import_csv.py <path-to-csv>` also works as a CLI
+entry point (same parsing/loading code, reads a file from disk instead of
+an HTTP body) — kept for scripting/testing, not the primary path.
+
+### A5. Dashboard integration — the spending graphic (not built yet, Phase 2/3)
 
 New **Spending** section on `html/finance.html`, sitting with the existing
 donut row/net-worth chart and reusing `static/finance/js/charts.js`'s
@@ -174,37 +207,59 @@ how the existing net-worth/cash/investment/debt sections work.
 
 ### A6. File layout, and what's gitignored
 
+Code lives under `backend/finance/`, matching the repo's actual
+convention (`backend/fitness/` for that feature's code, `fitness/` at the
+repo root for its docs only) rather than the `finance/import_csv.py` at
+repo-root sketch this section originally had — corrected once real
+implementation started, 2026-09-06:
+
 ```
 data/finance/                  gitignored — real personal financial data lives only here
-  imports/                     raw CSV exports you drop in (never committed)
-  accounts.json                filename/account_id -> label/kind mapping
-  finance.db                   SQLite store built by import_csv.py
-  spending-summary.json        generated cache, served by the new route
+  imports/                     timestamped audit copy of every uploaded CSV
+  finance.db                   SQLite store (accounts, transactions)
+  spending-summary.json        (Phase 2, not built yet) generated cache
 
-finance/                       tracked — code + docs, no real data
+backend/finance/                tracked — code, no real data, mirrors backend/fitness/'s layout
+  db.py                          connect() / init_schema() / ensure_database(), range-replace load
+  csv_schema.sql                 DDL for accounts + transactions (A3) — separate from finance/schema.sql,
+                                  which is Part B's Plaid-oriented DDL and unrelated to this
+  import_csv.py                  CSV parsing + range-replace load; also a CLI entry point
+  tests/test_import_csv.py       19 tests: parsing, idempotency, range-replace, the real upload path
+  (summary.py, Phase 2, not built yet)
+
+finance/                       tracked — docs + the Part B (Plaid) schema reference only, no code
   ARCHITECTURE.md              (this file)
   README.md
-  import_csv.py                 CSV parsing + range-replace load into finance.db
-  summary.py                     builds spending-summary.json from finance.db
-  routes.py                      GET /finance/spending-summary.json (extends the existing Part B plan)
+  schema.sql                    Part B's Plaid-oriented DDL (unused, deferred)
+
+backend/server.py               gains POST /finance/import (handle_finance_import) and a
+                                 finance_db.ensure_database() call at startup
 
 static/finance/
   finance-dashboard.json        unchanged — existing sample balance/net-worth data
-  js/dashboard.js                gains renderSpendingSection()
-  js/charts.js                   donut/trend renderers reused as-is where possible
+  js/import.js                   new — wires the "Import CSV Export" button (A4)
+  css/dashboard.css              gains .fin-import-* rules for that button/status line
+  js/dashboard.js, js/charts.js  unchanged so far — Phase 2/3 (A5) is what touches these
 ```
 
-`.gitignore` gets one new line: `data/finance/` — mirrors the existing
-`data/fitness/` entry, same reasoning (real personal data, never committed).
+`.gitignore` has `data/finance/` — mirrors the existing `data/fitness/`
+entry, same reasoning (real personal data, never committed).
 
 ### A7. Phased plan
 
-1. **Phase 1 — storage + import.** `data/finance/imports/` convention,
-   `accounts.json`, the schema from A3, `finance/import_csv.py` (stdlib
-   `csv` + `sqlite3`), tested against the two sample exports already
-   reviewed.
-2. **Phase 2 — summary + route.** `finance/summary.py` (category totals,
-   monthly trend, top merchants) writing `spending-summary.json`;
+1. **Phase 1 — storage + import. Built 2026-09-06.** `backend/finance/`
+   (`db.py`, `csv_schema.sql`, `import_csv.py`), the range-replace schema
+   from A3, `POST /finance/import`, and the dashboard's "Import CSV
+   Export" button (A4) — the trigger decision in A8 folded the original
+   Phase 4 upload-form idea into Phase 1. Verified against both sample
+   exports: parses correctly, re-import is idempotent, a second file's
+   date range doesn't touch the first's rows, cross-origin POSTs are
+   rejected. 19 tests in `backend/finance/tests/test_import_csv.py`, plus
+   the existing 40 (`backend/tests`) + 26 (`backend/fitness/tests`) still
+   pass.
+2. **Phase 2 — summary + route.** `backend/finance/summary.py` (category
+   totals, monthly trend, top merchants, computed over *all* rows
+   regardless of `status` per A8) writing `spending-summary.json`;
    `GET /finance/spending-summary.json` wired into `backend/server.py`.
 3. **Phase 3 — dashboard.** The Spending section on `html/finance.html`
    (category donut + monthly bar chart + top-merchants list), `dashboard.js`
@@ -212,25 +267,29 @@ static/finance/
 4. **Phase 4 — stretch, later.** Fold in chequing income/cashback/bill-pay
    rows for a full income-vs-expense cash-flow view (excluding the CC
    payment transfer rows, per A2, to avoid double counting); support more
-   than one credit card; a CSV upload form on the dashboard itself instead
-   of hand-copying into `data/finance/imports/` (would need the no-auth gap
-   considered first, same caveat as Part B §6, since this would be a public
-   write endpoint).
+   than one credit card (needs a real answer to A8's still-open question);
+   a proper auth gate in front of the upload endpoint (and the rest of the
+   app), since A4's same-origin check is a basic guard, not real auth.
 
 ### A8. Open questions
 
-- **Import trigger**: CLI-only (`python3 finance/import_csv.py`) for now,
-  matching `service_now/sync.py`'s pattern — or do you want a button/upload
-  form on the dashboard itself sooner than Phase 4?
+Two settled 2026-09-06, two still open:
+
+- ~~**Import trigger**~~ — **decided: a button/upload form on the
+  dashboard**, built in Phase 1 rather than deferred to Phase 4. See A4.
+- ~~**Pending purchases**~~ — **decided: count immediately**, same as
+  `Completed`. `status` is still stored on every row (so a future UI could
+  filter by it if that ever turns out to matter), but nothing in
+  `import_csv.py` filters on it, and Phase 2's summary queries should
+  follow the same rule rather than re-litigating it.
 - **Multiple cards later**: since neither export file names or contains a
   stable card/institution identifier, how should a second card's export be
-  told apart from the first? (Proposal: you pick the target `account_id`
-  when you run the import, e.g. `import_csv.py --account main-credit-card
+  told apart from the first? Still just the fixed `main-credit-card`
+  account today (A2). (Proposal, unchanged: a CLI/route flag to pick the
+  target account, e.g. `import_csv.py --account second-card
   path/to/export.csv`, until there's a reason to automate it.)
-- **Pending purchases**: count toward "Spending by Category" immediately, or
-  only once `status = Completed`?
-- **Default window** for the category donut: current calendar month
-  (proposed above), trailing 30 days, or a picker on the dashboard?
+- **Default window** for the category donut (Phase 3): current calendar
+  month, trailing 30 days, or a picker on the dashboard?
 
 ---
 

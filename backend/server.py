@@ -75,6 +75,14 @@ import users as fitness_users
 import finance_prices
 import tasks_db
 
+# CSV-import finance storage (see finance/ARCHITECTURE.md Part A). Same
+# flat-import-into-sys.path convention as backend/fitness/ above.
+FINANCE_DIR = os.path.join(BASE_DIR, 'backend', 'finance')
+if FINANCE_DIR not in sys.path:
+    sys.path.insert(0, FINANCE_DIR)
+import db as finance_db
+import import_csv as finance_import_csv
+
 FITNESS_PAGES = (
     'steps', 'heart-rate', 'sleep', 'activity', 'spo2', 'hrv',
     'breathing-rate', 'temperature', 'weight',
@@ -454,7 +462,40 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             return self.handle_update_tasks()
         if parsed.path == '/tasks/delete':
             return self.handle_delete_task()
+        if parsed.path == '/finance/import':
+            return self.handle_finance_import(parsed)
         self.send_error(404, 'Not found')
+
+    def handle_finance_import(self, parsed):
+        """POST /finance/import?filename=<name>.csv, raw CSV bytes as the
+        request body (not multipart - the dashboard's upload form sends the
+        File object directly as fetch()'s body, so there's no multipart
+        parser to write). See finance/ARCHITECTURE.md Part A4."""
+        if not self.check_same_origin():
+            return self.send_error(403, 'Cross-origin request rejected')
+
+        length = int(self.headers.get('Content-Length', 0))
+        if length == 0:
+            return self.send_json_error(400, 'No file content received')
+        if length > finance_import_csv.MAX_IMPORT_BYTES:
+            return self.send_json_error(400, 'File too large (5MB max)')
+
+        raw = self.rfile.read(length)
+        try:
+            text = raw.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            return self.send_json_error(400, 'File must be UTF-8 (or plain ASCII) encoded CSV')
+
+        filename = parse_qs(parsed.query).get('filename', ['upload.csv'])[0]
+
+        try:
+            summary = finance_import_csv.import_uploaded_file(filename, text)
+        except finance_import_csv.ImportFormatError as exc:
+            return self.send_json_error(400, str(exc))
+        except ValueError as exc:
+            return self.send_json_error(400, f'Could not parse CSV: {exc}')
+
+        self.send_json(200, {'status': 'ok', **summary})
 
     def handle_new_task(self):
         length = int(self.headers.get('Content-Length', 0))
@@ -835,6 +876,7 @@ def main():
     # table. Importing existing data is a separate, explicit step:
     # `python3 backend/tasks_db.py migrate` (see DATABASE-MIGRATION.md).
     tasks_db.ensure_database()
+    finance_db.ensure_database()
     with TaskServer(('', PORT), TaskHandler) as httpd:
         print('Serving at http://localhost:%d' % PORT)
         httpd.serve_forever()

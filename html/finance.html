@@ -28,6 +28,12 @@
 
       <p class="fin-banner" id="fin-sample-note"></p>
 
+      <div class="fin-import-bar">
+        <button class="fin-import-button" id="fin-import-button" type="button">Import CSV Export</button>
+        <input type="file" id="fin-import-input" accept=".csv" hidden>
+        <span class="fin-import-status" id="fin-import-status"></span>
+      </div>
+
       <div class="fin-stat-row">
         <div class="fin-stat">
           <div class="fin-stat-label">Net Worth</div>
@@ -156,8 +162,10 @@
   <script type="module">
     import { initTickerBar } from "/static/finance/js/ticker.js";
     import { initFinanceDashboard } from "/static/finance/js/dashboard.js";
+    import { initFinanceImport } from "/static/finance/js/import.js";
     initTickerBar();
     initFinanceDashboard();
+    initFinanceImport();
   </script>
 </body>
 </html>
