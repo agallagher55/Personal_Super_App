@@ -91,3 +91,41 @@ def last_imported_at(conn):
     imported" indicator (finance/ARCHITECTURE.md) shows."""
     row = conn.execute('SELECT MAX(imported_at) AS latest FROM transactions').fetchone()
     return row['latest']
+
+
+def transaction_exists(conn, transaction_id):
+    row = conn.execute('SELECT 1 FROM transactions WHERE id = ?', (transaction_id,)).fetchone()
+    return row is not None
+
+
+def set_transaction_category_override(conn, transaction_id, category, updated_at):
+    """The "one-time" fix (see csv_schema.sql): recolors exactly this one
+    transaction. `category` empty/None removes the override, reverting to
+    whatever transactions_effective would otherwise resolve to (a merchant
+    override if one exists, else the original stored category)."""
+    if category:
+        conn.execute(
+            '''INSERT INTO transaction_category_overrides (transaction_id, category, updated_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(transaction_id) DO UPDATE SET
+                 category = excluded.category, updated_at = excluded.updated_at''',
+            (transaction_id, category, updated_at),
+        )
+    else:
+        conn.execute('DELETE FROM transaction_category_overrides WHERE transaction_id = ?', (transaction_id,))
+
+
+def set_merchant_category_override(conn, description, category, updated_at):
+    """The "permanent" fix (see csv_schema.sql): recolors every transaction,
+    past and future, whose description exactly matches. `category`
+    empty/None removes the override."""
+    if category:
+        conn.execute(
+            '''INSERT INTO merchant_category_overrides (description, category, updated_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(description) DO UPDATE SET
+                 category = excluded.category, updated_at = excluded.updated_at''',
+            (description, category, updated_at),
+        )
+    else:
+        conn.execute('DELETE FROM merchant_category_overrides WHERE description = ?', (description,))

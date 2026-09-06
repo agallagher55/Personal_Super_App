@@ -38,7 +38,7 @@ import secrets
 import sys
 import uuid
 import http.server
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.parse import parse_qs, urlparse
 
 PORT = int(os.environ.get('PORT', 8000))
@@ -57,6 +57,8 @@ PRIORITIES = ('low', 'medium', 'high')
 WORK_SECTION_ID = 'own-tasks'
 WORK_TYPES = ('new-feature', 'schema-change')
 ENVIRONMENTS = ('dev', 'qa', 'prod')
+
+MAX_CATEGORY_LENGTH = 60  # finance category override names (see finance/ARCHITECTURE.md)
 
 # The ported Personal Health app (see fitness/ARCHITECTURE.md) lives at
 # backend/fitness/ as its own flat-import module set (config.py, auth.py,
@@ -264,6 +266,22 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             finally:
                 conn.close()
             self.send_json(200, {'lastImportedAt': last_imported_at})
+            return
+        if path == '/finance/merchant-transactions.json':
+            query = parse_qs(parsed.query)
+            merchant = query.get('merchant', [''])[0]
+            window = query.get('window', [finance_summary.DEFAULT_WINDOW])[0]
+            if not merchant:
+                return self.send_json_error(400, 'Missing merchant')
+            today = date.today()
+            start = finance_summary.window_start(window, today)
+            end = today.isoformat()
+            conn = finance_db.connect()
+            try:
+                transactions = finance_summary.merchant_transactions(conn, merchant, start, end)
+            finally:
+                conn.close()
+            self.send_json(200, {'merchant': merchant, 'transactions': transactions})
             return
         if path.startswith('/tasks/'):
             slug = path[len('/tasks/'):]
@@ -493,7 +511,78 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             return self.handle_delete_task()
         if parsed.path == '/finance/import':
             return self.handle_finance_import(parsed)
+        if parsed.path == '/finance/categories/transaction':
+            return self.handle_set_transaction_category()
+        if parsed.path == '/finance/categories/merchant':
+            return self.handle_set_merchant_category()
         self.send_error(404, 'Not found')
+
+    def _read_json_body(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length)
+        try:
+            payload = json.loads(body)
+        except ValueError:
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def handle_set_transaction_category(self):
+        """POST /finance/categories/transaction {transaction_id, category} -
+        the "one-time" fix (finance/ARCHITECTURE.md "Editing categories").
+        category "" (or omitted) removes the override, reverting to
+        whatever transactions_effective would otherwise resolve to."""
+        if not self.check_same_origin():
+            return self.send_error(403, 'Cross-origin request rejected')
+
+        payload = self._read_json_body()
+        if payload is None:
+            return self.send_json_error(400, 'Invalid JSON body')
+
+        transaction_id = payload.get('transaction_id')
+        category = (payload.get('category') or '').strip()
+        if not transaction_id:
+            return self.send_json_error(400, 'Missing transaction_id')
+        if len(category) > MAX_CATEGORY_LENGTH:
+            return self.send_json_error(400, f'Category must be {MAX_CATEGORY_LENGTH} characters or fewer')
+
+        conn = finance_db.connect()
+        try:
+            if not finance_db.transaction_exists(conn, transaction_id):
+                return self.send_json_error(404, 'No transaction found with that id')
+            with conn:
+                finance_db.set_transaction_category_override(conn, transaction_id, category, now_iso())
+        finally:
+            conn.close()
+
+        self.send_json(200, {'status': 'ok', 'transaction_id': transaction_id, 'category': category or None})
+
+    def handle_set_merchant_category(self):
+        """POST /finance/categories/merchant {description, category} - the
+        "permanent" fix: applies to every transaction (past and future)
+        whose description matches exactly. category "" (or omitted)
+        removes the override."""
+        if not self.check_same_origin():
+            return self.send_error(403, 'Cross-origin request rejected')
+
+        payload = self._read_json_body()
+        if payload is None:
+            return self.send_json_error(400, 'Invalid JSON body')
+
+        description = payload.get('description')
+        category = (payload.get('category') or '').strip()
+        if not description:
+            return self.send_json_error(400, 'Missing description')
+        if len(category) > MAX_CATEGORY_LENGTH:
+            return self.send_json_error(400, f'Category must be {MAX_CATEGORY_LENGTH} characters or fewer')
+
+        conn = finance_db.connect()
+        try:
+            with conn:
+                finance_db.set_merchant_category_override(conn, description, category, now_iso())
+        finally:
+            conn.close()
+
+        self.send_json(200, {'status': 'ok', 'description': description, 'category': category or None})
 
     def handle_finance_import(self, parsed):
         """POST /finance/import?filename=<name>.csv, raw CSV bytes as the

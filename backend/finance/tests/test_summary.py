@@ -232,5 +232,127 @@ class TestBuildSummary(SummaryTestCase):
         self.assertEqual(result['topMerchants'], [])
 
 
+class TestCategoryOverrides(SummaryTestCase):
+    """Editing categories (finance/ARCHITECTURE.md): a one-time
+    (transaction_category_overrides) and a permanent (merchant_category_overrides)
+    fix, both resolved through the transactions_effective view."""
+
+    def test_transaction_override_recolors_just_that_row(self):
+        text = (
+            CREDIT_CARD_HEADER
+            + cc_row('2026-09-01', 'Purchase', 'Tim Hortons', -6.26, 'Coffee')
+            + cc_row('2026-09-02', 'Purchase', 'Tim Hortons', -7.98, 'Coffee')
+        )
+        import_csv.import_csv_text(self.conn, 'cc.csv', text)
+
+        tx_id = 'main-credit-card:2026-09-01:0'
+        finance_db.set_transaction_category_override(self.conn, tx_id, 'Food', '2026-09-06T00:00:00Z')
+
+        result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [
+            {'category': 'Coffee', 'total': 7.98},
+            {'category': 'Food', 'total': 6.26},
+        ])
+
+    def test_merchant_override_recolors_every_matching_row_past_and_future(self):
+        # "Past": already imported before the override is set.
+        import_csv.import_csv_text(
+            self.conn, 'cc.csv',
+            CREDIT_CARD_HEADER + cc_row('2026-08-01', 'Purchase', 'Tim Hortons', -6.26, 'Coffee'),
+        )
+        finance_db.set_merchant_category_override(self.conn, 'Tim Hortons', 'Food', '2026-09-06T00:00:00Z')
+        # "Future": imported after the override already exists.
+        import_csv.import_csv_text(
+            self.conn, 'cc2.csv',
+            CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'Tim Hortons', -7.98, 'Coffee'),
+        )
+
+        result = summary.category_breakdown(self.conn, '2026-08-01', '2026-09-30')
+        self.assertEqual(result, [{'category': 'Food', 'total': 14.24}])
+
+    def test_transaction_override_takes_precedence_over_merchant_override(self):
+        text = CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'Tim Hortons', -6.26, 'Coffee')
+        import_csv.import_csv_text(self.conn, 'cc.csv', text)
+
+        finance_db.set_merchant_category_override(self.conn, 'Tim Hortons', 'Food', '2026-09-06T00:00:00Z')
+        finance_db.set_transaction_category_override(
+            self.conn, 'main-credit-card:2026-09-01:0', 'Gifts', '2026-09-06T00:00:00Z'
+        )
+
+        result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [{'category': 'Gifts', 'total': 6.26}])
+
+    def test_removing_a_transaction_override_falls_back_to_merchant_override(self):
+        text = CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'Tim Hortons', -6.26, 'Coffee')
+        import_csv.import_csv_text(self.conn, 'cc.csv', text)
+        tx_id = 'main-credit-card:2026-09-01:0'
+
+        finance_db.set_merchant_category_override(self.conn, 'Tim Hortons', 'Food', '2026-09-06T00:00:00Z')
+        finance_db.set_transaction_category_override(self.conn, tx_id, 'Gifts', '2026-09-06T00:00:00Z')
+        finance_db.set_transaction_category_override(self.conn, tx_id, '', '2026-09-06T00:00:00Z')  # revert
+
+        result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [{'category': 'Food', 'total': 6.26}])
+
+    def test_removing_a_merchant_override_falls_back_to_original_category(self):
+        text = CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'Tim Hortons', -6.26, 'Coffee')
+        import_csv.import_csv_text(self.conn, 'cc.csv', text)
+
+        finance_db.set_merchant_category_override(self.conn, 'Tim Hortons', 'Food', '2026-09-06T00:00:00Z')
+        finance_db.set_merchant_category_override(self.conn, 'Tim Hortons', '', '2026-09-06T00:00:00Z')  # revert
+
+        result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [{'category': 'Coffee', 'total': 6.26}])
+
+    def test_top_merchants_category_filter_uses_the_effective_category(self):
+        text = (
+            CREDIT_CARD_HEADER
+            + cc_row('2026-09-01', 'Purchase', 'Tim Hortons', -6.26, 'Coffee')
+            + cc_row('2026-09-02', 'Purchase', 'Starbucks', -5.00, 'Coffee')
+        )
+        import_csv.import_csv_text(self.conn, 'cc.csv', text)
+        finance_db.set_merchant_category_override(self.conn, 'Tim Hortons', 'Food', '2026-09-06T00:00:00Z')
+
+        coffee = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30', category='Coffee')
+        self.assertEqual(coffee, [{'merchant': 'Starbucks', 'total': 5.0, 'count': 1}])
+
+        food = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30', category='Food')
+        self.assertEqual(food, [{'merchant': 'Tim Hortons', 'total': 6.26, 'count': 1}])
+
+    def test_merchant_transactions_returns_effective_category(self):
+        text = (
+            CREDIT_CARD_HEADER
+            + cc_row('2026-09-01', 'Purchase', 'Tim Hortons', -6.26, 'Coffee')
+            + cc_row('2026-09-02', 'Purchase', 'Tim Hortons', -7.98, 'Coffee')
+        )
+        import_csv.import_csv_text(self.conn, 'cc.csv', text)
+        finance_db.set_transaction_category_override(
+            self.conn, 'main-credit-card:2026-09-01:0', 'Food', '2026-09-06T00:00:00Z'
+        )
+
+        result = summary.merchant_transactions(self.conn, 'Tim Hortons', '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [
+            {'id': 'main-credit-card:2026-09-02:0', 'date': '2026-09-02', 'amount': -7.98, 'category': 'Coffee'},
+            {'id': 'main-credit-card:2026-09-01:0', 'date': '2026-09-01', 'amount': -6.26, 'category': 'Food'},
+        ])
+
+    def test_range_replace_reimport_keeps_the_transaction_override(self):
+        # The whole reason overrides aren't a foreign key with ON DELETE
+        # CASCADE (csv_schema.sql): a range-replace re-import deletes and
+        # re-inserts every row in the file's date range, and re-uploading
+        # the *same* file regenerates the *same* deterministic ids - the
+        # override should still apply after that happens.
+        text = CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'Tim Hortons', -6.26, 'Coffee')
+        import_csv.import_csv_text(self.conn, 'cc.csv', text)
+        finance_db.set_transaction_category_override(
+            self.conn, 'main-credit-card:2026-09-01:0', 'Food', '2026-09-06T00:00:00Z'
+        )
+
+        import_csv.import_csv_text(self.conn, 'cc.csv', text)  # re-upload the identical file
+
+        result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [{'category': 'Food', 'total': 6.26}])
+
+
 if __name__ == '__main__':
     unittest.main()

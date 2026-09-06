@@ -40,7 +40,9 @@ function el(tag, className, html) {
 // Plaid's merchant_name/name/official_name/institution_name - strings that
 // originate outside the app. Escaping here now means that data source swap
 // doesn't need a matching audit of every template string.
-function escapeHtml(value) {
+// Exported for spending.js's merchant rows and category-edit dialog, which
+// build their own markup rather than going through renderRow/renderLegend.
+export function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
