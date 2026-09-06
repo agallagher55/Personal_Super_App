@@ -1,19 +1,258 @@
-# Finance — Backend Architecture
+# Finance — Architecture
 
-Plan for turning `/finance` from a static "coming soon" page into a real
-feature: connect bank/investment accounts (Wealthsimple first, any
-Plaid-supported institution after that) and get an ongoing view of income,
-expenses, and investments.
+## Status (as of 2026-09-06)
 
-This is a planning document, not implemented code yet. None of the sync
-layer below is built — `html/finance.html` is currently a static dashboard
-*template*, fetching sample data client-side from `static/finance/finance-dashboard.json`
-(a plain static file, no backend route behind it) scaffolded to match the
-shape this document describes, not the placeholder stub described in
-`architecture_Review.md` §1 anymore. See "Open questions / assumptions" at
-the bottom before starting Phase 1.
+- **Current plan: manual CSV import** (Part A below). Decided 2026-09-06:
+  instead of connecting real accounts through Plaid, the dashboard will be
+  populated from CSV exports pulled by hand from the credit card and bank
+  websites — no Plaid account, no `plaid-python`/`cryptography` dependency,
+  no production-approval process, right now.
+- **Deferred: Plaid-based live sync** (Part B below). This was the original
+  plan for this file and is kept in full further down, unstarted and
+  unimplemented, in case account-linking is revisited later. Nothing in Part
+  B has changed; only its position in this document has, to make clear it's
+  not the current work.
 
-## 1. Decisions already made
+---
+
+## Part A — CSV import (current plan)
+
+### A1. Why CSV import instead of Plaid, for now
+
+Plaid needs a developer application, a sandbox→production review, and (per
+Part B §6) an auth gate in front of the whole app before it's safe to point
+at real accounts. CSV export is available today, free, and needs none of
+that — every bank/card site already offers "export transactions." The
+tradeoff is manual effort (you have to go pull a fresh export yourself
+periodically, there's no live sync) and messier source data (free-text
+merchant names, no stable transaction IDs) — acceptable for "see my spending
+in the dashboard now," revisit Part B if that stops being enough.
+
+### A2. What the exports actually contain
+
+Reviewed two sample exports (2026-09-06 pull, covering ~Jun–Sep 2026):
+
+**Credit card export** — `transaction_date, transaction_type, status,
+merchant, amount, currency, notes, category`
+
+- `transaction_type`: `Purchase` | `Payment` | `Refund`
+- `status`: `Completed` | `Pending`
+- `category` is already assigned by the card issuer (`Coffee`,
+  `Restaurants`, `Groceries`, `Bars and nightlife`, `Subscriptions`, etc.) —
+  usable as-is, no categorizer needs to be built.
+- `Payment` rows (positive amount, `category = Uncategorized`) are the
+  card's own bill being paid off — a transfer, not spend. Excluded from
+  spending totals by filtering on `transaction_type = Purchase`.
+- `Refund` rows (e.g. an Airbnb refund under `Hotels`) net back against
+  that category's spend.
+- No account/institution identifier anywhere in the file — one credit card
+  assumed for now; see A8 for what changes if a second card is added later.
+- `currency` is `CAD` on every row.
+
+**Bank activity export** — `effective_date, effective_time, settlement_date,
+account_id, account_type, activity_type, activity_sub_type, description,
+direction, symbol, name, currency, quantity, unit_price, commission,
+net_cash_amount`
+
+- One chequing account (`account_id` present, `account_type = Chequing`).
+- `activity_type`: `MoneyMovement` (e-transfers, direct deposit, bill
+  payments, pre-authorized debits, P2P, EFT), `BonusPayment` (cashback,
+  ATM-fee reimbursements, giveaways), `Interest`.
+- `symbol` / `quantity` / `unit_price` / `commission` are present in the
+  header but empty in every row here — this export format is shared with a
+  brokerage/investment activity export; those columns would populate for an
+  investment account, unused today.
+- Several rows are the chequing-side mirror of the credit card's `Payment`
+  rows (`activity_sub_type = TRANSFER`, description `Credit card payment`,
+  amount matching a CC `Payment` row) — same money movement seen from the
+  other account. Not needed for the spending-by-category chart (that's
+  driven entirely by the CC file's own `Purchase` rows, see A5), but worth
+  naming here since a future income/cash-flow view would need to exclude
+  these to avoid double-counting.
+- `currency` is `CAD` on every row.
+
+Net effect: **the credit card export alone is enough to build the spending
+graphic** — it's already categorized and self-contained. The bank export is
+useful for a broader income/cash-flow picture later, not required for A5.
+
+### A3. Data storage
+
+New, CSV-oriented tables (no Plaid fields — `access_token`, sync cursors,
+etc. don't apply here and stay entirely in Part B):
+
+```sql
+CREATE TABLE IF NOT EXISTS accounts (
+  id          TEXT PRIMARY KEY,   -- human-assigned, e.g. 'main-credit-card', 'ws-chequing'
+  label       TEXT NOT NULL,
+  institution TEXT,
+  kind        TEXT NOT NULL       -- credit_card | chequing | (later) investment
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id            TEXT PRIMARY KEY,   -- account_id + date + in-file row sequence
+  account_id    TEXT NOT NULL REFERENCES accounts(id),
+  date          TEXT NOT NULL,
+  description   TEXT NOT NULL,      -- merchant (CC) or activity description (chequing)
+  amount        REAL NOT NULL,      -- negative = outflow, positive = inflow, CAD
+  activity_type TEXT NOT NULL,      -- Purchase | Payment | Refund | MoneyMovement | BonusPayment | Interest
+  category      TEXT,               -- issuer-provided, null on chequing rows
+  status        TEXT,               -- Completed | Pending, null where not applicable
+  source_file   TEXT NOT NULL,      -- which import file this came from, for audit
+  imported_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(account_id, date);
+CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
+```
+
+**Idempotency / re-import strategy:** neither export has a stable per-row
+transaction ID (the CC file doesn't even have a timestamp, and same-day
+duplicate amounts genuinely happen — e.g. two separate $2.94 McDonald's
+charges in one day), so per-row hashing across imports is fragile. Instead,
+each import is a **range replace**: for the account the file belongs to,
+`DELETE FROM transactions WHERE account_id = ? AND date BETWEEN <min date in
+file> AND <max date in file>`, then insert every row from the file fresh.
+Re-running the same or an overlapping export is then naturally idempotent,
+and there's no cross-file matching heuristic to get wrong.
+
+### A4. Import flow
+
+1. Export CSVs from the card/bank site by hand, save them into
+   `data/finance/imports/` (gitignored — see A6). No enforced filename, but
+   recommend `<account-id>-<export-date>.csv`, e.g.
+   `main-credit-card-2026-09-06.csv`.
+2. Run `python3 finance/import_csv.py` — detects file type by header row
+   (credit card vs. bank activity), resolves the account via a small
+   `data/finance/accounts.json` mapping, and applies the range-replace load
+   from A3 into `data/finance/finance.db` (SQLite, stdlib `sqlite3`, no new
+   dependency — consistent with the rest of this repo).
+3. The same run recomputes `data/finance/spending-summary.json` (A5).
+4. No scheduling for now — this is a manual, on-demand step, the same shape
+   as `service_now/sync.py`'s existing CLI-driven pattern.
+
+### A5. Dashboard integration — the spending graphic
+
+New **Spending** section on `html/finance.html`, sitting with the existing
+donut row/net-worth chart and reusing `static/finance/js/charts.js`'s
+existing renderers rather than introducing a new charting approach:
+
+- **Spending by Category** donut (the graphic asked for) — sums
+  `abs(amount)` for `activity_type = Purchase` rows (netted against
+  `Refund` rows in the same category), grouped by `category`, for the
+  current calendar month by default. `Payment`/`Uncategorized` rows are
+  excluded — they're bill payments, not spend. Visually matches the
+  existing "Asset Allocation" / "Investment Breakdown" donuts already on
+  the page.
+- **Spend by Month** bar chart underneath, same treatment as the existing
+  "Net Worth Over Time" line chart — one bar per month of imported history,
+  so the trend across however many exports you've pulled in is visible at a
+  glance.
+- Small **Top Merchants** list (merchant, total, visit count) below the
+  donut — cheap to compute from the same query, directly answers "where is
+  the money actually going."
+
+New backend route (`backend/server.py` dispatching into
+`finance/routes.py`, same pattern Part B §4/§5 already proposed):
+`GET /finance/spending-summary.json` serves the cached
+`data/finance/spending-summary.json` instantly (no recompute in the request
+path):
+
+```json
+{
+  "asOf": "2026-09-06",
+  "windowStart": "2026-09-01",
+  "windowEnd": "2026-09-06",
+  "byCategory": [{ "category": "Restaurants", "total": 812.44 }],
+  "byMonth": [{ "month": "2026-07", "total": 1893.21 }],
+  "topMerchants": [{ "merchant": "Mcdonalds 40487", "total": 61.71, "count": 21 }]
+}
+```
+
+`dashboard.js` gains a `renderSpendingSection(data)` that fetches this the
+same way it already fetches `finance-dashboard.json` today — no change to
+how the existing net-worth/cash/investment/debt sections work.
+
+### A6. File layout, and what's gitignored
+
+```
+data/finance/                  gitignored — real personal financial data lives only here
+  imports/                     raw CSV exports you drop in (never committed)
+  accounts.json                filename/account_id -> label/kind mapping
+  finance.db                   SQLite store built by import_csv.py
+  spending-summary.json        generated cache, served by the new route
+
+finance/                       tracked — code + docs, no real data
+  ARCHITECTURE.md              (this file)
+  README.md
+  import_csv.py                 CSV parsing + range-replace load into finance.db
+  summary.py                     builds spending-summary.json from finance.db
+  routes.py                      GET /finance/spending-summary.json (extends the existing Part B plan)
+
+static/finance/
+  finance-dashboard.json        unchanged — existing sample balance/net-worth data
+  js/dashboard.js                gains renderSpendingSection()
+  js/charts.js                   donut/trend renderers reused as-is where possible
+```
+
+`.gitignore` gets one new line: `data/finance/` — mirrors the existing
+`data/fitness/` entry, same reasoning (real personal data, never committed).
+
+### A7. Phased plan
+
+1. **Phase 1 — storage + import.** `data/finance/imports/` convention,
+   `accounts.json`, the schema from A3, `finance/import_csv.py` (stdlib
+   `csv` + `sqlite3`), tested against the two sample exports already
+   reviewed.
+2. **Phase 2 — summary + route.** `finance/summary.py` (category totals,
+   monthly trend, top merchants) writing `spending-summary.json`;
+   `GET /finance/spending-summary.json` wired into `backend/server.py`.
+3. **Phase 3 — dashboard.** The Spending section on `html/finance.html`
+   (category donut + monthly bar chart + top-merchants list), `dashboard.js`
+   fetching the new route.
+4. **Phase 4 — stretch, later.** Fold in chequing income/cashback/bill-pay
+   rows for a full income-vs-expense cash-flow view (excluding the CC
+   payment transfer rows, per A2, to avoid double counting); support more
+   than one credit card; a CSV upload form on the dashboard itself instead
+   of hand-copying into `data/finance/imports/` (would need the no-auth gap
+   considered first, same caveat as Part B §6, since this would be a public
+   write endpoint).
+
+### A8. Open questions
+
+- **Import trigger**: CLI-only (`python3 finance/import_csv.py`) for now,
+  matching `service_now/sync.py`'s pattern — or do you want a button/upload
+  form on the dashboard itself sooner than Phase 4?
+- **Multiple cards later**: since neither export file names or contains a
+  stable card/institution identifier, how should a second card's export be
+  told apart from the first? (Proposal: you pick the target `account_id`
+  when you run the import, e.g. `import_csv.py --account main-credit-card
+  path/to/export.csv`, until there's a reason to automate it.)
+- **Pending purchases**: count toward "Spending by Category" immediately, or
+  only once `status = Completed`?
+- **Default window** for the category donut: current calendar month
+  (proposed above), trailing 30 days, or a picker on the dashboard?
+
+---
+
+## Part B — Plaid-based live sync (deferred, not started)
+
+Everything below is the original plan for this document, unchanged except
+for heading numbers (§1–§8 → B1–B8) to avoid colliding with Part A above.
+None of it is implemented; it's kept here for when/if account-linking is
+revisited instead of (or in addition to) CSV import.
+
+This was the plan for turning `/finance` from a static "coming soon" page
+into a real feature: connect bank/investment accounts (Wealthsimple first,
+any Plaid-supported institution after that) and get an ongoing view of
+income, expenses, and investments.
+
+`html/finance.html` is a working dashboard today, fetching sample data
+client-side from `static/finance/finance-dashboard.json` (a plain static
+file, no backend route behind it) scaffolded to match the shape this
+document describes. As of Part A above, the near-term way that page gets
+real data is CSV import, not this section.
+
+### B1. Decisions already made
 
 Confirmed with the user 2026-08-23:
 
@@ -55,15 +294,15 @@ scoped exception to the repo's stdlib-only rule (this will be the first
   signing/pagination/error model isn't worth it.
 - **`cryptography`** — to encrypt Plaid `access_token`s at rest. Python's
   stdlib has no authenticated-encryption primitive suitable for this; this
-  is a hard security requirement, not a convenience dependency (see §6).
+  is a hard security requirement, not a convenience dependency (see B6).
 
-## 2. What Plaid actually gives us
+### B2. What Plaid actually gives us
 
 Confirmed via Plaid's own docs (Feb/Apr 2026): Wealthsimple (Canada) is a
 supported institution for Transactions, Investments, and Auth products.
 One caveat worth designing around: Wealthsimple Items commonly require
 MFA re-authentication roughly every 30 days — the sync layer has to detect
-and surface this (§4), not just silently fail.
+and surface this (B4), not just silently fail.
 
 Plaid's data model, and how it maps onto this app:
 
@@ -85,7 +324,7 @@ Plaid's data model, and how it maps onto this app:
   useful for the expenses picture but scoped to Phase 5, not required for
   a first working version.
 
-## 3. Data model (SQLite)
+### B3. Data model (SQLite)
 
 One file, e.g. `data/finance.db`, on the same persistent disk `render.yaml`
 already mounts over `data/` — no new infrastructure. Concrete DDL lives in
@@ -162,7 +401,7 @@ Design notes:
   value-over-time chart; deliberately deferred to a later phase, noted
   in §7.
 
-## 4. Sync flow
+### B4. Sync flow
 
 **Linking a new institution** (first-time connect, or reconnecting after
 `login_required`):
@@ -207,7 +446,7 @@ Design notes:
 error, and the UI should surface a "Reconnect Wealthsimple" action that
 re-runs the Link flow in update mode for that specific item.
 
-## 5. Proposed folder layout
+### B5. Proposed folder layout
 
 ```
 finance/
@@ -237,7 +476,7 @@ this section originally proposed. The Plaid sync's own frontend calls
 (link-token, item exchange, refresh) extend `dashboard.js` rather than
 introducing a new file, still with no shared frontend framework.
 
-## 6. Security
+### B6. Security
 
 This is the part where "personal task tracker" and "personal finance app
 with real bank data" stop being architecturally equivalent, and it needs
@@ -272,7 +511,7 @@ to be treated that way:
   webhooks are reconsidered later (Phase 6+), that reopens this section —
   Plaid webhook payloads are JWT-signed and must be verified before trust.
 
-## 7. Phased plan
+### B7. Phased plan
 
 1. **Phase 0 — setup.** Create a Plaid developer account (sandbox
    access is instant, free). Add `requirements.txt` with `plaid-python`
@@ -299,7 +538,7 @@ to be treated that way:
    for a portfolio-value-over-time chart, webhook-based push if "poll on
    demand" ever stops feeling live enough.
 
-## 8. Open questions / assumptions
+### B8. Open questions / assumptions
 
 Flagging these rather than silently deciding — happy to keep the defaults
 below and adjust later, just don't want to bake in the wrong one:

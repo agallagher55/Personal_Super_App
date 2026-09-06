@@ -9,3 +9,4 @@ data/fitness/
 data/tasks.db
 data/tasks.db-wal
 data/tasks.db-shm
+data/finance/
