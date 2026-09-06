@@ -13,10 +13,18 @@ import summary  # noqa: E402
 
 
 CREDIT_CARD_HEADER = 'transaction_date,transaction_type,status,merchant,amount,currency,notes,category\n'
+BANK_HEADER = (
+    'effective_date,effective_time,settlement_date,account_id,account_type,activity_type,'
+    'activity_sub_type,description,direction,symbol,name,currency,quantity,unit_price,commission,net_cash_amount\n'
+)
 
 
 def cc_row(date_, txn_type, merchant, amount, category, status='Completed'):
     return f'{date_},{txn_type},{status},{merchant},{amount},CAD,,{category}\n'
+
+
+def bank_row(date_, activity_type, sub_type, description, amount, account_id='WK1WPY033CAD'):
+    return f'{date_},12:00:00,,{account_id},Chequing,{activity_type},{sub_type},{description},,,,CAD,{amount},,,{amount}\n'
 
 
 class SummaryTestCase(unittest.TestCase):
@@ -352,6 +360,75 @@ class TestCategoryOverrides(SummaryTestCase):
 
         result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
         self.assertEqual(result, [{'category': 'Food', 'total': 6.26}])
+
+
+class TestChequingExpenseInSpending(SummaryTestCase):
+    """Chequing expense-type rows (SPEND/AFT_OUT/OBP_OUT/P2P) are folded
+    into Spending alongside credit-card Purchase/Refund rows
+    (finance/ARCHITECTURE.md A5g) - e.g. rent paid by pre-authorized debit
+    should be findable and categorizable the same way a credit-card
+    merchant is, not invisible to every Spending query."""
+
+    def test_uncategorized_by_default_so_excluded_from_the_category_breakdown(self):
+        # Fresh import default (import_csv.py) is 'Uncategorized', same as
+        # the credit card export's own convention - excluded from the donut/
+        # trend until given a real category, same as a credit-card Payment
+        # row already is.
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
+        result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [])
+
+    def test_still_visible_in_top_merchants_while_uncategorized(self):
+        # Top Merchants doesn't filter on category at all - this is how an
+        # uncategorized chequing expense gets found in order to be fixed.
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
+        result = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [{'merchant': 'Rent payment', 'total': 1500.0, 'count': 1}])
+
+    def test_categorized_chequing_expense_appears_in_the_category_breakdown(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
+        finance_db.set_merchant_category_override(self.conn, 'Rent payment', 'Rent', '2026-09-06T00:00:00Z')
+
+        result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [{'category': 'Rent', 'total': 1500.0}])
+
+    def test_categorized_chequing_expense_combines_with_credit_card_in_the_same_category(self):
+        self.load(BANK_HEADER + bank_row('2026-09-02', 'MoneyMovement', 'SPEND', 'Grocery debit', -60.00), 'bank.csv')
+        self.load(CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'Grocery cc', -40.00, 'Groceries'), 'cc.csv')
+        finance_db.set_merchant_category_override(self.conn, 'Grocery debit', 'Groceries', '2026-09-06T00:00:00Z')
+
+        result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [{'category': 'Groceries', 'total': 100.0}])
+
+    def test_appears_in_the_monthly_trend(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
+        finance_db.set_merchant_category_override(self.conn, 'Rent payment', 'Rent', '2026-09-06T00:00:00Z')
+
+        result = summary.monthly_trend(self.conn)
+        self.assertEqual(result, [{'month': '2026-09', 'total': 1500.0}])
+
+    def test_merchant_transactions_finds_chequing_expense_rows(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
+        result = summary.merchant_transactions(self.conn, 'Rent payment', '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [
+            {'id': 'WK1WPY033CAD:2026-09-01:0', 'date': '2026-09-01', 'amount': -1500.0, 'category': 'Uncategorized'},
+        ])
+
+    def test_transfer_type_rows_stay_out_of_spending_entirely(self):
+        # E_TRFOUT/TRANSFER/EFT are neither income nor expense (can't tell
+        # from the CSV alone, summary.py) - must not leak into Spending just
+        # because expense-type chequing rows now do.
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'TRANSFER', 'Credit card payment', -500.00), 'bank.csv')
+        self.assertEqual(summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30'), [])
+        self.assertEqual(summary.top_merchants(self.conn, '2026-09-01', '2026-09-30'), [])
+
+    def test_income_type_rows_stay_out_of_spending(self):
+        # A direct deposit's category defaults to 'Income' (A5d) - must not
+        # show up as a Spending "merchant" now that expense-type chequing
+        # rows are included.
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Direct deposit received', 2000.00), 'bank.csv')
+        self.assertEqual(summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30'), [])
+        self.assertEqual(summary.top_merchants(self.conn, '2026-09-01', '2026-09-30'), [])
 
 
 if __name__ == '__main__':

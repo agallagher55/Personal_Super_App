@@ -34,6 +34,14 @@
   (e.g. a reimbursement deposit that just zeroes out an earlier
   purchase) can be dropped from Cash Flow's totals without touching
   Spending, which still shows it.
+- **Chequing expenses in Spending (A5g) is built.** Spending's category
+  donut, Top Merchants, and monthly chart now include chequing
+  expense-type rows (debit spend, pre-authorized debits, bill payments,
+  P2P sends) alongside credit-card purchases, so something like rent
+  paid by pre-authorized debit can be found and categorized the same
+  way a credit-card merchant already could be. Cash Flow's own totals
+  are untouched - kept on a deliberately separate, narrower query scope
+  so a chequing expense row is never counted twice.
 - **Phase 4b (a second credit card, from a different institution) is
   documented, not built** — see A9. No sample export from that institution
   exists yet to design a parser against, so this is a concrete plan for
@@ -622,6 +630,76 @@ untouched - no stray toggle button, no shared-class collision. 10 new
 tests (`test_db.py`'s `TestCashFlowExclusionSetter`, `test_cash_flow.py`'s
 `TestCashFlowExclusions`).
 
+### A5g. Folding chequing expenses into Spending — built (2026-09-06)
+
+Reported: rent, paid by pre-authorized debit from chequing, wasn't
+findable anywhere in Spending to recategorize. Root cause: Spending's
+`category_breakdown()`/`monthly_trend()`/`top_merchants()`/
+`merchant_transactions()` all scoped to `activity_type IN ('Purchase',
+'Refund')` - credit-card-only values. Every chequing row, income or
+expense alike, failed that check and was invisible to Spending
+entirely; chequing rows only ever fed Cash Flow's lump expense total,
+never a per-category or per-merchant breakdown, and that view has no
+edit affordance.
+
+**Widened, not replaced**: `CHEQUING_EXPENSE_TYPES` (`SPEND`, `AFT_OUT`,
+`OBP_OUT`, `P2P`) now join `Purchase`/`Refund` in Spending's scope.
+Import time also changed to match: expense-type chequing rows now
+default to category `'Uncategorized'` (previously `NULL`) - the same
+label the credit card export uses for its own uncategorized rows
+(Payment), so a fresh import has a real, editable value rather than
+sitting blank. Everything else (e-transfers, `TRANSFER`, `EFT` - the
+"can't tell if it's real money movement" transfer types, A5b) stays
+`NULL` and out of Spending entirely, unchanged.
+
+**Two scopes, kept as two separate SQL constants, not one - this was
+the easy way to introduce a real bug.** Cash Flow's
+`credit_card_expense_total()` already adds its own result to
+`chequing_expense_total()`'s separately-queried chequing rows; if that
+function's query also started matching chequing expense rows (by
+reusing whatever constant Spending widened), every chequing expense
+row would be counted twice - once on each side of Cash Flow's sum. So:
+
+- `_CC_SPEND_CASE`/`_CC_SPEND_FILTER` - unchanged, credit-card-only
+  (`Purchase`/`Refund`). Still what `credit_card_expense_total()`,
+  `cash_flow_by_month()`, and `cash_flow_month_transactions()`'s
+  credit-card side read - Cash Flow's numbers are completely unaffected
+  by this change.
+- `_SPENDING_CASE`/`_SPENDING_FILTER` (new) - credit card plus
+  `CHEQUING_EXPENSE_TYPES`. What `category_breakdown()` and
+  `monthly_trend()` read; `top_merchants()`/`merchant_transactions()`
+  widened their own `activity_type` check the same way.
+
+Top Merchants doesn't filter on category at all (never has - that's
+how an issuer-labeled `Uncategorized` credit-card row was already
+findable there before this change), so an uncategorized chequing
+expense row shows up there immediately, ready for the same pencil-edit
+flow every credit-card merchant already uses - no frontend changes
+needed at all, since `merchant_transactions()`/the override tables
+were always merchant-description-keyed, never assuming a credit-card
+origin.
+
+**A real caveat, not fixed here**: for many chequing activity types the
+CSV's `description` field is just a generic sub-type label (e.g. `SPEND`
+→ "Spend"), not a merchant name - visible in the real sample data. A
+"permanent" fix keyed to that description would recolor every debit
+swipe at once, not one merchant; `AFT_OUT` rows (pre-authorized debits)
+tend to carry the actual payee, which is why rent - the concrete case
+this was built for - works cleanly. Nothing to build differently here;
+it's an inherent limit of what the export provides, same as any two
+identically-described credit-card merchants would already collide.
+
+Verified in a real browser and via the API: imported a bank export with
+an `AFT_OUT` "Rent payment" row; confirmed it appeared in Top Merchants
+(full $1,500, unlabeled) but nowhere in the category donut; set a
+permanent category via the pencil dialog; confirmed it then appeared in
+Spending's donut/legend under "Rent" and the monthly chart; confirmed
+Cash Flow's income/expense/net and monthly chart were byte-for-byte
+identical before and after categorizing (no double count). 12 new tests
+(`test_import_csv.py`'s default-category test, `test_summary.py`'s
+`TestChequingExpenseInSpending`, `test_cash_flow.py`'s
+`TestSpendingWideningDoesNotDoubleCountCashFlow`).
+
 ### A6. File layout, and what's gitignored
 
 Code lives under `backend/finance/`, matching the repo's actual
@@ -646,20 +724,26 @@ backend/finance/                tracked — code, no real data, mirrors backend/
                                   cash_flow_exclusions (A5f) — separate from finance/schema.sql, which is
                                   Part B's Plaid-oriented DDL and unrelated to this
   import_csv.py                  CSV parsing + range-replace load; also a CLI entry point; defaults
-                                  income-type chequing rows to category='Income' (A5d)
+                                  income-type chequing rows to category='Income' (A5d), expense-type
+                                  chequing rows to category='Uncategorized' (A5g)
   summary.py                     category/monthly/top-merchant queries (A5, with an optional category
-                                  filter for A5c, all reading transactions_effective per A5d) +
-                                  cash-flow queries (A5b, excluding cash_flow_exclusions rows per A5f) +
+                                  filter for A5c, all reading transactions_effective per A5d, and
+                                  covering chequing expense rows alongside credit-card ones per A5g) +
+                                  cash-flow queries (A5b, excluding cash_flow_exclusions rows per A5f,
+                                  scoped to credit-card-only via the separate _CC_SPEND_CASE/_CC_SPEND_FILTER
+                                  constants per A5g so Spending's widened scope can't double-count them) +
                                   merchant_transactions() (A5d) + cash_flow_month_transactions()
                                   (A5e, annotating excluded/reason per A5f rather than filtering them)
-  tests/test_import_csv.py       23 tests: parsing, idempotency, range-replace, the real upload path,
-                                  the activity_sub_type extraction fix (A5b), the default Income category (A5d)
-  tests/test_summary.py          30 tests: netting, window filtering, exclusions, empty-database
+  tests/test_import_csv.py       24 tests: parsing, idempotency, range-replace, the real upload path,
+                                  the activity_sub_type extraction fix (A5b), the default Income category
+                                  (A5d), the default Uncategorized category for expense types (A5g)
+  tests/test_summary.py          38 tests: netting, window filtering, exclusions, empty-database
                                   handling, the category filter (A5c), category override precedence/revert/
-                                  range-replace survival (A5d)
-  tests/test_cash_flow.py        29 tests: income/expense classification, the negative-expense
+                                  range-replace survival (A5d), chequing expenses in Spending (A5g)
+  tests/test_cash_flow.py        32 tests: income/expense classification, the negative-expense
                                   regression (A5b), empty-database handling, per-month transaction
-                                  listing for both income and expense (A5e), the exclusion mechanism (A5f)
+                                  listing for both income and expense (A5e), the exclusion mechanism (A5f),
+                                  the widened Spending scope not double-counting Cash Flow (A5g)
   tests/test_db.py               12 tests: last_imported_at() (A5c), transaction_exists() and the
                                   category override setters (A5d), the cash-flow exclusion setter (A5f)
 

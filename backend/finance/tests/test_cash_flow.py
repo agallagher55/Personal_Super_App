@@ -355,5 +355,44 @@ class TestCashFlowExclusions(CashFlowTestCase):
         self.assertEqual(result['net'], 2000.0)
 
 
+class TestSpendingWideningDoesNotDoubleCountCashFlow(CashFlowTestCase):
+    """Spending's category_breakdown/monthly_trend/top_merchants now
+    include chequing expense-type rows (finance/ARCHITECTURE.md A5g,
+    summary._SPENDING_CASE/_SPENDING_FILTER) - Cash Flow's own totals must
+    keep using the narrower, credit-card-only _CC_SPEND_CASE/_CC_SPEND_FILTER
+    for their credit-card side, or a chequing expense row would be counted
+    once via chequing_expense_total() and again via credit_card_expense_total()."""
+
+    def test_categorizing_a_chequing_expense_row_does_not_change_its_total(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
+        before = summary.chequing_expense_total(self.conn, '2026-09-01', '2026-09-30')
+
+        finance_db.set_merchant_category_override(self.conn, 'Rent payment', 'Rent', '2026-09-06T00:00:00Z')
+        after = summary.chequing_expense_total(self.conn, '2026-09-01', '2026-09-30')
+
+        self.assertEqual(before, 1500.0)
+        self.assertEqual(after, 1500.0)
+
+    def test_credit_card_expense_total_is_unaffected_by_a_categorized_chequing_row(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
+        self.load(CC_HEADER + cc_row('2026-09-02', 'Purchase', 'Cafe', -5.00, 'Coffee'), 'cc.csv')
+        finance_db.set_merchant_category_override(self.conn, 'Rent payment', 'Rent', '2026-09-06T00:00:00Z')
+
+        total = summary.credit_card_expense_total(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(total, 5.0)
+
+    def test_cash_flow_by_month_matches_the_uncategorized_total(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
+        self.load(CC_HEADER + cc_row('2026-09-02', 'Purchase', 'Cafe', -5.00, 'Coffee'), 'cc.csv')
+
+        before = summary.cash_flow_by_month(self.conn)
+        finance_db.set_merchant_category_override(self.conn, 'Rent payment', 'Rent', '2026-09-06T00:00:00Z')
+        after = summary.cash_flow_by_month(self.conn)
+
+        expected = [{'month': '2026-09', 'income': 0.0, 'expense': 1505.0}]
+        self.assertEqual(before, expected)
+        self.assertEqual(after, expected)
+
+
 if __name__ == '__main__':
     unittest.main()
