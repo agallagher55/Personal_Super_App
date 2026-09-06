@@ -313,3 +313,132 @@ export function drawDonut(container, slices, { label }) {
   container.innerHTML = "";
   container.appendChild(svg);
 }
+
+/**
+ * Draws a month-by-month bar chart (e.g. spend per month, see
+ * static/finance/js/spending.js) on `canvas`, with the same hover
+ * crosshair/tooltip convention as drawNetWorthChart above - reuses that
+ * function's axis/resize/theme-redraw scaffolding, just bars instead of a
+ * line. `points` is [{ month: "YYYY-MM", total: number }, ...]; `colorVar`
+ * is the CSS custom property for the bar fill.
+ */
+export function drawMonthlyBarChart(canvas, tooltipEl, points, { colorVar = "--ink" } = {}) {
+  const ctx = canvas.getContext("2d");
+
+  let barColor, gridColor, mutedColor;
+  function readThemeColors() {
+    barColor = themeColor(colorVar);
+    gridColor = themeColor("--line");
+    mutedColor = themeColor("--ink-soft");
+  }
+  readThemeColors();
+
+  const padding = { top: 14, right: 10, bottom: 22, left: 60 };
+
+  const values = points.map((p) => p.total);
+  const maxVal = Math.max(...values, 0);
+  const { max: yMax, step: tickStep } = niceAxis(0, maxVal || 1, 4);
+  const yRange = yMax || 1;
+  const tickCount = Math.round(yMax / tickStep);
+
+  let cssWidth, cssHeight, innerH, barWidth, xFor, yFor;
+
+  function measure() {
+    const dpr = window.devicePixelRatio || 1;
+    cssWidth = canvas.clientWidth || canvas.width;
+    cssHeight = canvas.clientHeight || canvas.height;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const innerW = cssWidth - padding.left - padding.right;
+    innerH = cssHeight - padding.top - padding.bottom;
+    const slot = points.length > 0 ? innerW / points.length : innerW;
+    barWidth = Math.max(slot * 0.55, 4);
+    xFor = (i) => padding.left + slot * i + slot / 2;
+    yFor = (v) => padding.top + innerH - (v / yRange) * innerH;
+  }
+
+  function drawFrame(hoverIndex) {
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.fillStyle = mutedColor;
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    for (let s = 0; s <= tickCount; s++) {
+      const v = s * tickStep;
+      const y = yFor(v);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(cssWidth - padding.right, y);
+      ctx.stroke();
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(formatCad(v), padding.left - 8, y);
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    points.forEach((p, i) => {
+      ctx.fillText(formatMonth(p.month), xFor(i), cssHeight - 6);
+    });
+
+    points.forEach((p, i) => {
+      const x = xFor(i);
+      const yTop = yFor(p.total);
+      ctx.globalAlpha = hoverIndex == null || i === hoverIndex ? 1 : 0.7;
+      ctx.fillStyle = barColor;
+      ctx.fillRect(x - barWidth / 2, yTop, barWidth, padding.top + innerH - yTop);
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function render() {
+    measure();
+    drawFrame(null);
+  }
+
+  render();
+
+  const themeObserver = new MutationObserver(() => {
+    readThemeColors();
+    render();
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  let resizeTimer = null;
+  const resizeObserver = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 100);
+  });
+  resizeObserver.observe(canvas);
+
+  if (!tooltipEl) return;
+
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    let nearest = 0;
+    let nearestDist = Infinity;
+    points.forEach((_, i) => {
+      const d = Math.abs(xFor(i) - mx);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = i;
+      }
+    });
+    drawFrame(nearest);
+    const p = points[nearest];
+    const year = p.month.slice(0, 4);
+    tooltipEl.textContent = `${formatMonth(p.month)} ${year} — ${formatCad(p.total)}`;
+    tooltipEl.style.left = `${xFor(nearest)}px`;
+    tooltipEl.style.top = `${yFor(p.total)}px`;
+    tooltipEl.classList.add("show");
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    drawFrame(null);
+    tooltipEl.classList.remove("show");
+  });
+}

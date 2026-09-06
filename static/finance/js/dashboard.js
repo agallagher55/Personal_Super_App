@@ -72,8 +72,9 @@ function buildSymbolColors(investmentAccounts) {
 
 // One row: label, dollar amount, and a bar showing what % of `total` this
 // row makes up. Shared by every section - cash accounts, holdings, debt
-// lines, and lines of credit all render through this.
-function renderRow(container, { label, sublabel, value, total, colorVar, meta }) {
+// lines, and lines of credit all render through this, and static/finance/js/spending.js
+// reuses it for the Top Merchants list rather than duplicating the markup.
+export function renderRow(container, { label, sublabel, value, total, colorVar, meta }) {
   const row = el("div", "fin-row");
   const percent = pct(value, total);
   row.innerHTML = `
@@ -250,7 +251,9 @@ function renderLinesOfCredit(linesOfCredit) {
   renderSectionTotal("fin-loc-limit-total", limitTotal);
 }
 
-function renderLegend(containerId, slices, total, { compact = false } = {}) {
+// Exported for spending.js's category-breakdown legend - same markup, no
+// reason to duplicate it.
+export function renderLegend(containerId, slices, total, { compact = false } = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = "";

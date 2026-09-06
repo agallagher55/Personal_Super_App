@@ -78,6 +78,46 @@
   border-color: var(--status-red);
 }
 
+/* --- CSV import bar (finance/ARCHITECTURE.md Part A) --- */
+
+.fin-import-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.fin-import-button {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.fin-import-button:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
+.fin-import-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.fin-import-status {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.fin-import-status-error {
+  color: var(--status-red);
+}
+
 /* --- Summary strip: net worth / assets / debt stat tiles --- */
 
 .fin-stat-row {
@@ -126,6 +166,71 @@
 
 .fin-chart-row {
   margin-bottom: 8px;
+}
+
+.fin-spending-row {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* --- Spending block header (finance/ARCHITECTURE.md Part A5) --- */
+
+.fin-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 30px 0 12px;
+}
+
+.fin-block-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--ink);
+}
+
+.fin-spending-window {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.fin-bar-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.fin-empty-note {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin: 0;
+}
+
+.fin-chart-wrap .fin-empty-note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+}
+
+/* The explicit `display: flex` above would otherwise beat the browser's
+   default `[hidden] { display: none }` UA rule - author styles always
+   win over UA styles regardless of specificity, so `hidden` alone
+   wouldn't hide this element without restating it here. */
+.fin-chart-wrap .fin-empty-note[hidden] {
+  display: none;
 }
 
 .fin-overview-card {

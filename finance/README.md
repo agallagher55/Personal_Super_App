@@ -9,20 +9,34 @@ It's backed by a static seed JSON file scaffolded to the shape
 [`ARCHITECTURE.md`](ARCHITECTURE.md) describes, not by real connected
 accounts yet.
 
-This folder's actual content is the plan for that next step: connecting
-real financial accounts (Wealthsimple first, any Plaid-supported
-bank/investment institution after that) via [Plaid](https://plaid.com),
-so the dashboard reflects live synced data instead of that static seed
-file. Nothing in that sync layer is implemented yet — see
-[`ARCHITECTURE.md`](ARCHITECTURE.md) for the full plan (data model, sync
-flow, security requirements, phased build order) and
-[`schema.sql`](schema.sql) for the concrete SQLite DDL it describes.
+**Current plan (decided 2026-09-06):** instead of connecting real accounts
+through Plaid, the dashboard gets populated from CSV exports pulled by hand
+from the credit card and bank sites — see **Part A** of
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for the full plan (what the exports
+contain, the import/storage design, and a new "Spending by Category" +
+"Spend by Month" section this adds to the dashboard).
 
-Short version: `plaid-python` handles talking to Plaid, `cryptography`
-encrypts stored access tokens, everything else stays consistent with the
-rest of this repo — stdlib `http.server`, one Render service, no build
-step. The one hard prerequisite called out in the architecture doc: this
+**Phases 1-3 are built** (`backend/finance/`): `/finance` has an "Import
+CSV Export" button that uploads a credit card or bank activity export and
+range-replace loads it into `data/finance/finance.db`, and a "Spending"
+block (category donut, top merchants, a spend-by-month chart, and a
+This month/30 days/90 days/All time window selector) reading from
+`GET /finance/spending-summary.json`. Phase 4 (a second credit card, a
+real auth gate, folding in chequing income for a full cash-flow view)
+isn't started.
+
+Plaid-based live account linking (Wealthsimple first, any Plaid-supported
+institution after that) is kept as **Part B** of `ARCHITECTURE.md`,
+deferred rather than dropped, in case account-linking is revisited later.
+[`schema.sql`](schema.sql) is that original Plaid-oriented DDL; the
+CSV-import schema is simpler and lives inline in Part A of the
+architecture doc for now (no accounts synced, no access tokens to store).
+
+The one hard prerequisite called out for the Plaid path specifically: this
 app has no authentication today, which is fine for a task list and not
-fine for real bank data, so a minimal auth gate (§6/Phase 5 of
-`ARCHITECTURE.md`) has to land before `PLAID_ENV` ever points at
-production instead of sandbox.
+fine for real bank data, so a minimal auth gate (§B6/Phase 5) has to land
+before `PLAID_ENV` ever points at production instead of sandbox. CSV import
+doesn't need that gate to get started, since there's no live credential
+being stored — though real transaction data will exist in
+`data/finance/` on disk once import lands, so that directory is gitignored
+(see Part A §A6) the same way `data/fitness/` already is.
