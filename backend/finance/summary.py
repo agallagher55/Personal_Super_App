@@ -87,7 +87,19 @@ def monthly_trend(conn, months=MONTHS_OF_TREND):
     return trend[-months:]
 
 
-def top_merchants(conn, start, end, limit=TOP_MERCHANTS_LIMIT):
+def top_merchants(conn, start, end, limit=TOP_MERCHANTS_LIMIT, category=None):
+    if category:
+        rows = conn.execute(
+            '''SELECT description AS merchant, SUM(-amount) AS total, COUNT(*) AS count
+               FROM transactions
+               WHERE activity_type = 'Purchase' AND date >= ? AND date <= ? AND category = ?
+               GROUP BY description
+               ORDER BY total DESC
+               LIMIT ?''',
+            (start, end, category, limit),
+        ).fetchall()
+        return [{'merchant': r['merchant'], 'total': round(r['total'], 2), 'count': r['count']} for r in rows]
+
     rows = conn.execute(
         '''SELECT description AS merchant, SUM(-amount) AS total, COUNT(*) AS count
            FROM transactions
@@ -100,7 +112,11 @@ def top_merchants(conn, start, end, limit=TOP_MERCHANTS_LIMIT):
     return [{'merchant': r['merchant'], 'total': round(r['total'], 2), 'count': r['count']} for r in rows]
 
 
-def build_summary(conn, window=DEFAULT_WINDOW, today=None):
+def build_summary(conn, window=DEFAULT_WINDOW, today=None, category=None):
+    """`category`, when given, narrows topMerchants to just that category
+    (the dashboard's click-a-category-to-filter-merchants interaction) -
+    byCategory/byMonth are unaffected, so the donut/legend stay showing the
+    whole picture while only the merchants list drills down."""
     if window not in WINDOWS:
         window = DEFAULT_WINDOW
     today = today or date.today()
@@ -112,9 +128,10 @@ def build_summary(conn, window=DEFAULT_WINDOW, today=None):
         'window': window,
         'windowStart': start,
         'windowEnd': end,
+        'categoryFilter': category,
         'byCategory': category_breakdown(conn, start, end),
         'byMonth': monthly_trend(conn),
-        'topMerchants': top_merchants(conn, start, end),
+        'topMerchants': top_merchants(conn, start, end, category=category),
     }
 
 

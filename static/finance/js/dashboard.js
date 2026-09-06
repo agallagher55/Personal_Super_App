@@ -253,7 +253,10 @@ function renderLinesOfCredit(linesOfCredit) {
 
 // Exported for spending.js's category-breakdown legend - same markup, no
 // reason to duplicate it.
-export function renderLegend(containerId, slices, total, { compact = false } = {}) {
+// `onClick(slice)`, if given, makes every row clickable (pointer cursor +
+// a click listener) - used by spending.js's click-a-category-to-filter-
+// merchants interaction; every other call site omits it and is unchanged.
+export function renderLegend(containerId, slices, total, { compact = false, onClick } = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = "";
@@ -270,6 +273,11 @@ export function renderLegend(containerId, slices, total, { compact = false } = {
       <span class="fin-legend-pct">${pct(slice.value, total).toFixed(1)}%</span>
     `
     );
+    row.dataset.label = slice.label;
+    if (onClick) {
+      row.style.cursor = "pointer";
+      row.addEventListener("click", () => onClick(slice));
+    }
     container.appendChild(row);
   }
 }

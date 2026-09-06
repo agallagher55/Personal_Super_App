@@ -261,9 +261,13 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
  * per-account holdings donuts) - only the slices and `label` differ.
  * `label` is this chart's accessible name (aria-label) - every call site
  * must pass one distinct to that chart, since screen readers otherwise
- * can't tell the donuts apart.
+ * can't tell the donuts apart. `onSliceClick(slice)`, if given, makes
+ * every segment clickable (pointer cursor + a click listener) - used by
+ * static/finance/js/spending.js's click-a-category-to-filter-merchants
+ * interaction; every other call site simply omits it and gets today's
+ * hover-only behavior unchanged.
  */
-export function drawDonut(container, slices, { label }) {
+export function drawDonut(container, slices, { label, onSliceClick }) {
   const total = slices.reduce((s, x) => s + x.value, 0);
   const radius = 54;
   const thickness = 22;
@@ -300,11 +304,17 @@ export function drawDonut(container, slices, { label }) {
     seg.setAttribute("stroke-dashoffset", String(-offset));
     seg.setAttribute("transform", "rotate(-90 70 70)");
     seg.classList.add("donut-seg");
+    seg.dataset.label = slice.label;
 
     const title = document.createElementNS(svgNS, "title");
     const pct = (slice.value / total) * 100;
     title.textContent = `${slice.label}: ${formatCad(slice.value)} (${pct.toFixed(1)}%)`;
     seg.appendChild(title);
+
+    if (onSliceClick) {
+      seg.style.cursor = "pointer";
+      seg.addEventListener("click", () => onSliceClick(slice));
+    }
 
     svg.appendChild(seg);
     offset += length;

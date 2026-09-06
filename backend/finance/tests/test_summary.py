@@ -176,6 +176,23 @@ class TestTopMerchants(SummaryTestCase):
         result = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30')
         self.assertEqual(result, [])
 
+    def test_category_filter_narrows_to_just_that_category(self):
+        text = (
+            CREDIT_CARD_HEADER
+            + cc_row('2026-09-01', 'Purchase', 'Mcdonalds', -3.00, 'Restaurants')
+            + cc_row('2026-09-02', 'Purchase', 'Starbucks', -6.00, 'Coffee')
+            + cc_row('2026-09-03', 'Purchase', 'Dollarama', -2.00, 'Other shopping')
+        )
+        self.load(text)
+        result = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30', category='Coffee')
+        self.assertEqual(result, [{'merchant': 'Starbucks', 'total': 6.0, 'count': 1}])
+
+    def test_category_filter_with_no_matches_returns_empty(self):
+        text = CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'Mcdonalds', -3.00, 'Restaurants')
+        self.load(text)
+        result = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30', category='Coffee')
+        self.assertEqual(result, [])
+
 
 class TestBuildSummary(SummaryTestCase):
 
@@ -186,9 +203,23 @@ class TestBuildSummary(SummaryTestCase):
         self.assertEqual(result['window'], 'month')
         self.assertEqual(result['windowStart'], '2026-09-01')
         self.assertEqual(result['windowEnd'], '2026-09-06')
+        self.assertIsNone(result['categoryFilter'])
         self.assertEqual(result['byCategory'], [{'category': 'Coffee', 'total': 5.0}])
         self.assertEqual(result['byMonth'], [{'month': '2026-09', 'total': 5.0}])
         self.assertEqual(result['topMerchants'], [{'merchant': 'Cafe', 'total': 5.0, 'count': 1}])
+
+    def test_category_narrows_merchants_but_not_the_category_breakdown(self):
+        text = (
+            CREDIT_CARD_HEADER
+            + cc_row('2026-09-01', 'Purchase', 'Cafe', -5.00, 'Coffee')
+            + cc_row('2026-09-02', 'Purchase', 'Diner', -20.00, 'Restaurants')
+        )
+        self.load(text)
+        result = summary.build_summary(self.conn, 'month', today=date(2026, 9, 6), category='Coffee')
+        self.assertEqual(result['categoryFilter'], 'Coffee')
+        self.assertEqual(result['topMerchants'], [{'merchant': 'Cafe', 'total': 5.0, 'count': 1}])
+        # byCategory keeps showing the whole picture - only merchants drills down
+        self.assertEqual(len(result['byCategory']), 2)
 
     def test_unknown_window_falls_back_without_raising(self):
         result = summary.build_summary(self.conn, 'not-a-real-window', today=date(2026, 9, 6))

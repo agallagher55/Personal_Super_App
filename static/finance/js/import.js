@@ -6,6 +6,7 @@
 // parser needed on either side.
 
 const IMPORT_URL = "/finance/import";
+const LAST_IMPORTED_URL = "/finance/last-imported.json";
 
 function formatDate(iso) {
   const d = new Date(`${iso}T00:00:00`);
@@ -13,11 +14,31 @@ function formatDate(iso) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+async function refreshLastImported() {
+  const el = document.getElementById("fin-last-imported");
+  if (!el) return;
+  try {
+    const res = await fetch(LAST_IMPORTED_URL);
+    const data = await res.json();
+    el.textContent = data.lastImportedAt ? `Data last imported ${formatDateTime(data.lastImportedAt)}` : "No data imported yet";
+  } catch (err) {
+    console.warn("finance import: failed to load last-imported timestamp", err);
+  }
+}
+
 export function initFinanceImport() {
   const input = document.getElementById("fin-import-input");
   const button = document.getElementById("fin-import-button");
   const status = document.getElementById("fin-import-status");
   if (!input || !button || !status) return;
+
+  refreshLastImported();
 
   button.addEventListener("click", () => input.click());
 
@@ -40,6 +61,7 @@ export function initFinanceImport() {
       status.textContent =
         `Imported ${data.rows_imported} row${data.rows_imported === 1 ? "" : "s"} into "${data.account_id}" ` +
         `(${formatDate(data.date_start)} – ${formatDate(data.date_end)}).`;
+      refreshLastImported();
     } catch (err) {
       status.classList.add("fin-import-status-error");
       status.textContent = `Import failed: ${err.message}`;

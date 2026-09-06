@@ -238,10 +238,12 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(status, body)
             return
         if path == '/finance/spending-summary.json':
-            window = parse_qs(parsed.query).get('window', [finance_summary.DEFAULT_WINDOW])[0]
+            query = parse_qs(parsed.query)
+            window = query.get('window', [finance_summary.DEFAULT_WINDOW])[0]
+            category = query.get('category', [None])[0]
             conn = finance_db.connect()
             try:
-                summary = finance_summary.build_summary(conn, window)
+                summary = finance_summary.build_summary(conn, window, category=category)
             finally:
                 conn.close()
             self.send_json(200, summary)
@@ -254,6 +256,14 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             finally:
                 conn.close()
             self.send_json(200, cash_flow)
+            return
+        if path == '/finance/last-imported.json':
+            conn = finance_db.connect()
+            try:
+                last_imported_at = finance_db.last_imported_at(conn)
+            finally:
+                conn.close()
+            self.send_json(200, {'lastImportedAt': last_imported_at})
             return
         if path.startswith('/tasks/'):
             slug = path[len('/tasks/'):]

@@ -83,3 +83,11 @@ def replace_transactions_in_range(conn, account_id, date_start, date_end, rows):
 def account_transaction_count(conn, account_id):
     row = conn.execute('SELECT COUNT(*) AS n FROM transactions WHERE account_id = ?', (account_id,)).fetchone()
     return row['n']
+
+
+def last_imported_at(conn):
+    """The most recent imported_at across every transaction row, or None
+    if nothing has been imported yet - what the dashboard's "data last
+    imported" indicator (finance/ARCHITECTURE.md) shows."""
+    row = conn.execute('SELECT MAX(imported_at) AS latest FROM transactions').fetchone()
+    return row['latest']

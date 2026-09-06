@@ -5,9 +5,10 @@ assets, debt), three donuts (asset allocation, investment breakdown,
 portfolio by stock/ETF), a net-worth trend chart, five collapsible
 sections (cash, investments, bitcoin, debt, lines of credit), and a
 7-ticker watchlist sidebar proxied server-side (`backend/finance_prices.py`).
-It's backed by a static seed JSON file scaffolded to the shape
-[`ARCHITECTURE.md`](ARCHITECTURE.md) describes, not by real connected
-accounts yet.
+**All of that is still backed by a static seed JSON file
+(`static/finance/finance-dashboard.json`) — hardcoded sample data, not
+real connected accounts.** Only the Spending and Cash Flow sections below
+read real data.
 
 **Current plan (decided 2026-09-06):** instead of connecting real accounts
 through Plaid, the dashboard gets populated from CSV exports pulled by hand
@@ -18,16 +19,17 @@ contain, the import/storage design, and a new "Spending by Category" +
 
 **Phases 1-3 and 4a are built** (`backend/finance/`): `/finance` has an
 "Import CSV Export" button that uploads a credit card or bank activity
-export and range-replace loads it into `data/finance/finance.db`, a
-"Spending" block (category donut, top merchants, a spend-by-month chart),
-and a "Cash Flow" block (income/expense/net stat tiles, a monthly
-income-vs-expense chart) folding in chequing income alongside credit-card
-spend — both with their own This month/30 days/90 days/All time window
-selector. **Phase 4b (a second credit card, from a different institution)
-is documented but not built** — see `ARCHITECTURE.md` §A9 for the concrete
-plan; it's blocked on having a real sample export from that institution,
-not on a decision. **Not started**: a real auth gate in front of the
-upload/route endpoints.
+export and range-replace loads it into `data/finance/finance.db` (a "data
+last imported" timestamp next to the button confirms it landed), a
+"Spending" block (category donut — click a category to filter Top
+Merchants down to it — a spend-by-month chart), and a "Cash Flow" block
+(income/expense/net stat tiles, a monthly income-vs-expense chart) folding
+in chequing income alongside credit-card spend — both with their own This
+month/30 days/90 days/All time window selector. **Phase 4b (a second
+credit card, from a different institution) is documented but not built**
+— see `ARCHITECTURE.md` §A9 for the concrete plan; it's blocked on having
+a real sample export from that institution, not on a decision. **Not
+started**: a real auth gate in front of the upload/route endpoints.
 
 Plaid-based live account linking (Wealthsimple first, any Plaid-supported
 institution after that) is kept as **Part B** of `ARCHITECTURE.md`,

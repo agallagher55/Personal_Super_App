@@ -13,6 +13,13 @@ const SUMMARY_URL = "/finance/spending-summary.json";
 // to stocks) rather than defining a second one for spending categories.
 const CATEGORY_COLOR_SLOTS = 12;
 
+// Which window is currently selected, and which category (if any) the
+// Top Merchants list is drilled down to - reset to no category whenever
+// the window changes, so switching time ranges never leaves a stale
+// filter pointing at data outside the new window.
+let currentWindow = "month";
+let selectedCategory = null;
+
 function cad(value, opts = {}) {
   return value.toLocaleString("en-CA", {
     style: "currency",
@@ -38,6 +45,35 @@ function categoryColors(byCategory) {
   return colors;
 }
 
+// Clicking a category (donut segment or legend row) filters Top Merchants
+// down to it; clicking the same category again clears the filter. Only
+// the merchants list is re-fetched - byCategory/byMonth don't depend on
+// the category filter, so the donut/legend stay showing the whole
+// picture and only get restyled (selected/dimmed), not rebuilt.
+function handleCategoryClick(slice) {
+  selectedCategory = selectedCategory === slice.label ? null : slice.label;
+  applySelectionHighlight();
+  loadAndRenderMerchants();
+}
+
+function applySelectionHighlight() {
+  document.querySelectorAll("#fin-spending-legend .fin-legend-row").forEach((row) => {
+    const isSelected = !!selectedCategory && row.dataset.label === selectedCategory;
+    row.classList.toggle("fin-legend-row-selected", isSelected);
+    row.classList.toggle("fin-legend-row-dimmed", !!selectedCategory && !isSelected);
+  });
+  document.querySelectorAll("#fin-spending-donut .donut-seg").forEach((seg) => {
+    const isSelected = !!selectedCategory && seg.dataset.label === selectedCategory;
+    seg.classList.toggle("donut-seg-selected", isSelected);
+    seg.classList.toggle("donut-seg-dimmed", !!selectedCategory && !isSelected);
+  });
+
+  const filterBar = document.getElementById("fin-merchants-filter");
+  const filterLabel = document.getElementById("fin-filter-chip-label");
+  if (filterBar) filterBar.hidden = !selectedCategory;
+  if (filterLabel) filterLabel.textContent = selectedCategory || "";
+}
+
 function renderCategoryDonut(byCategory) {
   const donutEl = document.getElementById("fin-spending-donut");
   const legendEl = document.getElementById("fin-spending-legend");
@@ -55,8 +91,9 @@ function renderCategoryDonut(byCategory) {
 
   const colors = categoryColors(byCategory);
   const slices = byCategory.map((c) => ({ label: c.category, value: c.total, colorVar: colors.get(c.category) }));
-  drawDonut(donutEl, slices, { label: "Spending by category" });
-  renderLegend("fin-spending-legend", slices, total);
+  drawDonut(donutEl, slices, { label: "Spending by category", onSliceClick: handleCategoryClick });
+  renderLegend("fin-spending-legend", slices, total, { onClick: handleCategoryClick });
+  applySelectionHighlight();
 }
 
 function renderTopMerchants(topMerchants) {
@@ -65,7 +102,8 @@ function renderTopMerchants(topMerchants) {
   container.innerHTML = "";
 
   if (topMerchants.length === 0) {
-    container.innerHTML = `<p class="fin-empty-note">No purchases in this window yet.</p>`;
+    const message = selectedCategory ? `No purchases in "${selectedCategory}" for this window.` : "No purchases in this window yet.";
+    container.innerHTML = `<p class="fin-empty-note">${message}</p>`;
     return;
   }
 
@@ -97,16 +135,30 @@ function renderMonthlyChart(byMonth) {
   drawMonthlyBarChart(canvas, tooltip, byMonth, { colorVar: "--status-blue" });
 }
 
-async function loadSummary(window_) {
-  const res = await fetch(`${SUMMARY_URL}?window=${encodeURIComponent(window_)}`);
+async function loadSummary(window_, category) {
+  const params = new URLSearchParams({ window: window_ });
+  if (category) params.set("category", category);
+  const res = await fetch(`${SUMMARY_URL}?${params}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
+async function loadAndRenderMerchants() {
+  try {
+    const data = await loadSummary(currentWindow, selectedCategory);
+    renderTopMerchants(data.topMerchants);
+  } catch (err) {
+    console.warn("finance spending: failed to load filtered merchants", err);
+  }
+}
+
 async function renderSpending(window_) {
+  currentWindow = window_;
+  selectedCategory = null;
+
   let data;
   try {
-    data = await loadSummary(window_);
+    data = await loadSummary(currentWindow, selectedCategory);
   } catch (err) {
     console.warn("finance spending: failed to load summary", err);
     return;
@@ -121,4 +173,13 @@ export function initFinanceSpending() {
   if (!select) return;
   renderSpending(select.value);
   select.addEventListener("change", () => renderSpending(select.value));
+
+  const clearButton = document.getElementById("fin-merchants-filter-clear");
+  if (clearButton) {
+    clearButton.addEventListener("click", () => {
+      selectedCategory = null;
+      applySelectionHighlight();
+      loadAndRenderMerchants();
+    });
+  }
 }
