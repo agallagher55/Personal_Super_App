@@ -244,6 +244,48 @@ def cash_flow_by_month(conn, months=MONTHS_OF_TREND):
     ]
 
 
+def cash_flow_month_transactions(conn, month, kind):
+    """The individual transactions behind one month's income or expense bar
+    on the Cash Flow chart (finance/ARCHITECTURE.md) - what clicking a bar
+    shows. `month` is 'YYYY-MM'; `kind` is 'income' or 'expense' (anything
+    else falls back to 'income'). `amount` in the response follows the
+    same "positive = contributes to this total" convention the stat tiles
+    use - for expense, a credit-card Refund row (which nets against
+    spend) comes back negative, same as it does in every expense total
+    elsewhere in this module."""
+    if kind != 'expense':
+        rows = conn.execute(
+            f'''SELECT date, description, amount
+                FROM transactions t
+                JOIN accounts a ON a.id = t.account_id
+                WHERE a.kind = 'chequing' AND t.activity_type IN ({_placeholders(CHEQUING_INCOME_TYPES)})
+                  AND substr(t.date, 1, 7) = ?
+                ORDER BY t.date DESC, t.id DESC''',
+            (*CHEQUING_INCOME_TYPES, month),
+        ).fetchall()
+        return [{'date': r['date'], 'description': r['description'], 'amount': round(r['amount'], 2)} for r in rows]
+
+    chequing_rows = conn.execute(
+        f'''SELECT date, description, -amount AS amount
+            FROM transactions t
+            JOIN accounts a ON a.id = t.account_id
+            WHERE a.kind = 'chequing' AND t.activity_type IN ({_placeholders(CHEQUING_EXPENSE_TYPES)})
+              AND substr(t.date, 1, 7) = ?''',
+        (*CHEQUING_EXPENSE_TYPES, month),
+    ).fetchall()
+    cc_rows = conn.execute(
+        f'''SELECT date, description, -amount AS amount
+            FROM transactions_effective
+            WHERE {_SPEND_FILTER} AND substr(date, 1, 7) = ?''',
+        (month,),
+    ).fetchall()
+
+    combined = [{'date': r['date'], 'description': r['description'], 'amount': round(r['amount'], 2)} for r in chequing_rows]
+    combined += [{'date': r['date'], 'description': r['description'], 'amount': round(r['amount'], 2)} for r in cc_rows]
+    combined.sort(key=lambda r: r['date'], reverse=True)
+    return combined
+
+
 def build_cash_flow(conn, window=DEFAULT_WINDOW, today=None):
     if window not in WINDOWS:
         window = DEFAULT_WINDOW

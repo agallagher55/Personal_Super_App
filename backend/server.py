@@ -259,6 +259,19 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 conn.close()
             self.send_json(200, cash_flow)
             return
+        if path == '/finance/cash-flow-transactions.json':
+            query = parse_qs(parsed.query)
+            month = query.get('month', [''])[0]
+            kind = query.get('kind', ['income'])[0]
+            if not month:
+                return self.send_json_error(400, 'Missing month')
+            conn = finance_db.connect()
+            try:
+                transactions = finance_summary.cash_flow_month_transactions(conn, month, kind)
+            finally:
+                conn.close()
+            self.send_json(200, {'month': month, 'kind': kind, 'transactions': transactions})
+            return
         if path == '/finance/last-imported.json':
             conn = finance_db.connect()
             try:

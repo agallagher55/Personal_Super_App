@@ -272,6 +272,17 @@
   </dialog>
   <datalist id="fin-category-options"></datalist>
 
+  <dialog class="fin-category-dialog" id="fin-cashflow-tx-dialog">
+    <form method="dialog" class="fin-category-dialog-form">
+      <div class="fin-category-dialog-header">
+        <h3 id="fin-cashflow-tx-dialog-title"></h3>
+        <button type="submit" class="fin-category-dialog-close" aria-label="Close">&times;</button>
+      </div>
+      <p class="fin-category-dialog-subtitle" id="fin-cashflow-tx-dialog-subtitle"></p>
+      <div id="fin-cashflow-tx-list" class="fin-category-tx-list"></div>
+    </form>
+  </dialog>
+
   <script src="/static/js/theme.js"></script>
   <script type="module">
     import { initTickerBar } from "/static/finance/js/ticker.js";
