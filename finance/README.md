@@ -22,10 +22,13 @@ contain, the import/storage design, and a new "Spending by Category" +
 export and range-replace loads it into `data/finance/finance.db` (a "data
 last imported" timestamp next to the button confirms it landed), a
 "Spending" block (category donut — click a category to filter Top
-Merchants down to it — a spend-by-month chart), and a "Cash Flow" block
-(income/expense/net stat tiles, a monthly income-vs-expense chart) folding
-in chequing income alongside credit-card spend — both with their own This
-month/30 days/90 days/All time window selector. **Phase 4b (a second
+Merchants down to it, and a pencil button on any merchant opens a dialog
+to fix its category, either for just one transaction or permanently — a
+spend-by-month chart), and a "Cash Flow" block (income/expense/net stat
+tiles, a monthly income-vs-expense chart) folding in chequing income
+(direct deposits, cashback, etc. default to category "Income") alongside
+credit-card spend — both with their own This month/30 days/90 days/All
+time window selector. **Phase 4b (a second
 credit card, from a different institution) is documented but not built**
 — see `ARCHITECTURE.md` §A9 for the concrete plan; it's blocked on having
 a real sample export from that institution, not on a decision. **Not

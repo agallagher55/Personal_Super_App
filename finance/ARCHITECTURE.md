@@ -19,6 +19,13 @@
   existing credit-card spend total. A real bug this surfaced (a big refund
   could push the overall expense total negative) was caught in browser
   testing against the real sample data and fixed before landing.
+- **Category click-to-filter (A5c) and category editing (A5d) are
+  built.** Click a category to narrow Top Merchants to it; a pencil
+  button per merchant opens a dialog for a one-time (single transaction)
+  or permanent (that merchant, always) category correction, resolved
+  through a `transactions_effective` view every query reads instead of
+  the raw stored category. Chequing income rows (direct deposits,
+  cashback, etc.) now default to category `'Income'` at import time.
 - **Phase 4b (a second credit card, from a different institution) is
   documented, not built** — see A9. No sample export from that institution
   exists yet to design a parser against, so this is a concrete plan for
@@ -375,6 +382,117 @@ is a test-script race, not a product bug - confirmed by waiting slightly
 longer before reading it). 5 new tests (`test_summary.py`'s category-filter
 cases, `test_db.py`'s `last_imported_at` cases).
 
+### A5d. Editing categories — built (2026-09-06)
+
+Requested explicitly, with two real examples: "Tim Horton's is categorized
+as coffee, but I only buy food there" (fix one merchant's category, always)
+and "lebanese fest is categorized as a donation when it should be
+something closer to restaurants" (same shape of fix). Also requested:
+"there should be an option for a one-time category fix and a permanent
+category fix," and "Direct deposit received should be tagged as income."
+
+**Two independent, precedence-ordered override mechanisms** (`csv_schema.sql`),
+rather than editing `transactions.category` in place - the original
+issuer-provided value is never lost, and a correction survives a
+re-import untouched:
+
+- **One-time fix** (`transaction_category_overrides`, keyed by transaction
+  id): recolors exactly one transaction.
+- **Permanent fix** (`merchant_category_overrides`, keyed by exact
+  `description` match): recolors every transaction with that description,
+  past *and* future - no backfill needed, since it's resolved at query
+  time, not written back onto existing rows.
+- **Precedence**: one-time wins over permanent when both could apply to
+  the same row - a deliberate single-transaction correction is more
+  specific/intentional than a blanket merchant rule. Setting a category to
+  `""` removes that override, falling back to whatever's next (permanent,
+  then the original stored value).
+
+**Resolution happens in one place**: a `transactions_effective` SQL view
+(`COALESCE(one-time, permanent, original)`) that every query in
+`summary.py` reads instead of `transactions.category` directly, so a
+correction is reflected everywhere at once - the Spending donut, Top
+Merchants, the monthly trend, and Cash Flow's credit-card expense total
+all agree, automatically, without each query reimplementing the same
+resolution logic.
+
+**Why not a foreign key with `ON DELETE CASCADE`** on
+`transaction_category_overrides.transaction_id`: a range-replace
+re-import (A3) deletes and re-inserts every transaction row in the
+affected date range, and a cascade would silently wipe the override the
+next time that CSV gets re-uploaded. Left as a plain column instead - the
+override re-applies automatically because the same deterministic id
+(`account_id:date:sequence`) gets regenerated for an unchanged re-export,
+and simply points at nothing if it doesn't. Verified directly: set a
+one-time override, re-import the identical file, confirmed the override
+still applies.
+
+**"Direct deposit received should be tagged as income"**: fixed at the
+source rather than requiring a manual override for something this
+predictable. `import_csv.py`'s bank-activity parser now assigns
+`category = 'Income'` by default to any row whose (already-fixed, per
+A5b) `activity_type` is one of `summary.CHEQUING_INCOME_TYPES` (`AFT_IN`,
+`CASHBACK`, `GIVEAWAY`, `Interest`) - `import_csv.py` imports that tuple
+from `summary.py` rather than keeping a second hardcoded copy that could
+drift out of sync. Every other chequing row (expense types, transfers)
+still gets no category, unchanged. This is purely a label, not a
+classification change: it can never affect Spending's totals, since every
+query there also requires `activity_type IN ('Purchase', 'Refund')`,
+which no chequing row ever satisfies, category or not. Re-importing an
+existing bank export (already the normal flow) picks up the new default
+automatically.
+
+**Dashboard**: a small pencil (&#9998;) button next to each Top Merchants
+row (`.fin-edit-category-btn`) opens a `<dialog>` (native, no positioning
+math, free backdrop/centering) with two sections - a single "Category"
+input + "Save always" for the permanent fix, and a list of that merchant's
+individual transactions in the current window (date, amount, an input
+pre-filled with its current effective category) each with their own
+"Save" for the one-time fix. New `GET
+/finance/merchant-transactions.json?merchant=<description>&window=<...>`
+(`summary.merchant_transactions()`) feeds that list.
+`POST /finance/categories/transaction` and
+`POST /finance/categories/merchant` write the two override tables. Saving
+either one closes the dialog and re-fetches the whole Spending section
+(category may have moved buckets); Cash Flow is untouched by a category
+edit, since its income/expense split is driven by `activity_type`, not
+`category`. A `<datalist>` (`#fin-category-options`, populated from the
+currently-loaded `byCategory` on every render) backs every category input
+so existing category names autocomplete, while still allowing any new
+one to be typed. `dashboard.js`'s `renderRow`/`renderLegend` were not
+reused for the merchant rows - the edit button is Spending-specific, so
+`spending.js` builds that markup directly rather than teaching the shared
+helper about a concept only one caller needs. `escapeHtml` is now
+exported from `dashboard.js` for this and other direct-markup call sites
+to share.
+
+**Two real bugs this caught in browser testing** (not just unit tests),
+same root cause both times, in two elements I'd missed when fixing the
+first instance of it (A5's "Spend by Month" empty state): an explicit
+`display: flex`/`display: block` in `.fin-merchants-filter` and
+`.fin-bar-canvas` was beating the browser's own `[hidden] { display: none
+}` rule, exactly like the earlier `.fin-empty-note` bug - so the
+"Filtered by" chip and the monthly bar canvases stayed visible (chip:
+literally readable on screen with no category selected; canvas: invisible
+since nothing was drawn on it, but still there, still eating hover
+events) even when JS had correctly set `hidden = true`. Both fixed the
+same way: restate `display: none` for the `[hidden]` case. Worth noting
+as a pattern for any *future* explicit `display` on an element this app
+toggles via `.hidden` - grep for `\.hidden\s*=` across `static/finance/js/`
+to find every such element before adding one more.
+
+Verified in a real browser: opened the dialog from a merchant row, made a
+one-time fix on one of two transactions for the same merchant, confirmed
+only that one moved categories and the total split correctly between the
+old and new category; made a permanent fix on the same merchant, confirmed
+both transactions moved; confirmed the fresh-page-load and no-data states
+for the filter chip and both bar canvases are genuinely hidden
+(`getComputedStyle(...).display === 'none'`), not just carrying the
+`hidden` attribute uselessly. 17 new tests across
+`test_db.py` (override setters), `test_summary.py` (precedence, revert,
+range-replace survival, `merchant_transactions`), and `test_import_csv.py`
+(the default `Income` category).
+
 ### A6. File layout, and what's gitignored
 
 Code lives under `backend/finance/`, matching the repo's actual
@@ -386,24 +504,32 @@ implementation started, 2026-09-06:
 ```
 data/finance/                  gitignored — real personal financial data lives only here
   imports/                     timestamped audit copy of every uploaded CSV
-  finance.db                   SQLite store (accounts, transactions)
+  finance.db                   SQLite store (accounts, transactions, transaction_category_overrides,
+                                merchant_category_overrides - A5d)
                                 (no spending-summary.json/cash-flow.json - summary.py queries live, no cache file)
 
 backend/finance/                tracked — code, no real data, mirrors backend/fitness/'s layout
   db.py                          connect() / init_schema() / ensure_database(), range-replace load,
-                                  last_imported_at() (A5c)
-  csv_schema.sql                 DDL for accounts + transactions (A3) — separate from finance/schema.sql,
-                                  which is Part B's Plaid-oriented DDL and unrelated to this
-  import_csv.py                  CSV parsing + range-replace load; also a CLI entry point
+                                  last_imported_at() (A5c), transaction_exists()/set_transaction_category_override()/
+                                  set_merchant_category_override() (A5d)
+  csv_schema.sql                 DDL for accounts + transactions (A3), transaction_category_overrides +
+                                  merchant_category_overrides + the transactions_effective view (A5d) —
+                                  separate from finance/schema.sql, which is Part B's Plaid-oriented DDL
+                                  and unrelated to this
+  import_csv.py                  CSV parsing + range-replace load; also a CLI entry point; defaults
+                                  income-type chequing rows to category='Income' (A5d)
   summary.py                     category/monthly/top-merchant queries (A5, with an optional category
-                                  filter for A5c) + cash-flow queries (A5b)
-  tests/test_import_csv.py       21 tests: parsing, idempotency, range-replace, the real upload path,
-                                  the activity_sub_type extraction fix (A5b)
-  tests/test_summary.py          22 tests: netting, window filtering, exclusions, empty-database
-                                  handling, the category filter (A5c)
+                                  filter for A5c, all reading transactions_effective per A5d) +
+                                  cash-flow queries (A5b) + merchant_transactions() (A5d)
+  tests/test_import_csv.py       23 tests: parsing, idempotency, range-replace, the real upload path,
+                                  the activity_sub_type extraction fix (A5b), the default Income category (A5d)
+  tests/test_summary.py          30 tests: netting, window filtering, exclusions, empty-database
+                                  handling, the category filter (A5c), category override precedence/revert/
+                                  range-replace survival (A5d)
   tests/test_cash_flow.py        15 tests: income/expense classification, the negative-expense
                                   regression (A5b), empty-database handling
-  tests/test_db.py               2 tests: last_imported_at() (A5c)
+  tests/test_db.py               9 tests: last_imported_at() (A5c), transaction_exists() and the
+                                  override setters (A5d)
 
 finance/                       tracked — docs + the Part B (Plaid) schema reference only, no code
   ARCHITECTURE.md              (this file)
@@ -412,8 +538,9 @@ finance/                       tracked — docs + the Part B (Plaid) schema refe
 
 backend/server.py               gains POST /finance/import, GET /finance/spending-summary.json
                                  (now takes &category=, A5c), GET /finance/cash-flow.json,
-                                 GET /finance/last-imported.json (A5c), and a finance_db.ensure_database()
-                                 call at startup
+                                 GET /finance/last-imported.json (A5c), GET /finance/merchant-transactions.json,
+                                 POST /finance/categories/transaction, POST /finance/categories/merchant (A5d),
+                                 and a finance_db.ensure_database() call at startup
 
 static/finance/
   finance-dashboard.json        unchanged — existing sample balance/net-worth data. Cash, Investments,
@@ -424,17 +551,21 @@ static/finance/
   js/import.js                   wires the "Import CSV Export" button (A4) and the "data last imported"
                                   indicator (A5c)
   js/spending.js                 wires the "Spending" section - donut, top merchants (with the category
-                                  click-to-filter, A5c), monthly chart, window select (A5)
+                                  click-to-filter, A5c, and the edit-category dialog, A5d), monthly chart,
+                                  window select (A5)
   js/cashflow.js                 wires the "Cash Flow" section - stat tiles, monthly chart, window select (A5b)
   js/dashboard.js                unchanged except exporting renderRow/renderLegend (with an optional
-                                  onClick, A5c) for spending.js to reuse
+                                  onClick, A5c) and escapeHtml (A5d) for spending.js to reuse
   js/charts.js                   gains drawMonthlyBarChart (A5) and drawIncomeExpenseChart (A5b),
                                   sharing their axis/theme/format helpers; drawDonut gains an optional
                                   onSliceClick (A5c)
   css/dashboard.css               gains .fin-import-*, .fin-block-*, .fin-spending-*, .fin-bar-canvas,
                                   .fin-empty-note, .fin-chart-legend*, .fin-stat-value-negative,
                                   .fin-legend-row-selected/-dimmed, .donut-seg-dimmed, .fin-merchants-filter*,
-                                  .fin-last-imported rules
+                                  .fin-last-imported, .fin-edit-category-btn, .fin-category-dialog* (A5d) rules
+
+html/finance.html               gains the <dialog id="fin-category-dialog"> markup and its
+                                 <datalist id="fin-category-options"> (A5d)
 ```
 
 `.gitignore` has `data/finance/` — mirrors the existing `data/fitness/`

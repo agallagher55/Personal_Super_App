@@ -1,13 +1,17 @@
 // Renders the "Spending" section on /finance from
-// GET /finance/spending-summary.json (finance/ARCHITECTURE.md Part A5).
+// GET /finance/spending-summary.json (finance/ARCHITECTURE.md Part A5),
+// including the "Editing categories" one-time/permanent fix dialog.
 // Self-contained like ticker.js/import.js - fetches its own data and owns
 // its own DOM, no change to dashboard.js's existing net-worth/cash/
-// investment rendering beyond exporting the two row/legend helpers this
+// investment rendering beyond exporting the row/legend/escape helpers this
 // reuses instead of duplicating their markup.
 import { drawDonut, drawMonthlyBarChart } from "./charts.js";
-import { renderRow, renderLegend } from "./dashboard.js";
+import { renderLegend, escapeHtml } from "./dashboard.js";
 
 const SUMMARY_URL = "/finance/spending-summary.json";
+const MERCHANT_TX_URL = "/finance/merchant-transactions.json";
+const SET_TRANSACTION_CATEGORY_URL = "/finance/categories/transaction";
+const SET_MERCHANT_CATEGORY_URL = "/finance/categories/merchant";
 // Reuses dashboard.js's --stock-1..12 identity-color family (already a
 // generic, validated 12-slot categorical palette, not something specific
 // to stocks) rather than defining a second one for spending categories.
@@ -27,6 +31,12 @@ function cad(value, opts = {}) {
     minimumFractionDigits: opts.cents === false ? 0 : 2,
     maximumFractionDigits: opts.cents === false ? 0 : 2,
   });
+}
+
+function formatShortDate(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 // Alphabetical assignment, not by current rank, so a category keeps the
@@ -74,6 +84,12 @@ function applySelectionHighlight() {
   if (filterLabel) filterLabel.textContent = selectedCategory || "";
 }
 
+function populateCategoryOptions(byCategory) {
+  const datalist = document.getElementById("fin-category-options");
+  if (!datalist) return;
+  datalist.innerHTML = byCategory.map((c) => `<option value="${escapeHtml(c.category)}"></option>`).join("");
+}
+
 function renderCategoryDonut(byCategory) {
   const donutEl = document.getElementById("fin-spending-donut");
   const legendEl = document.getElementById("fin-spending-legend");
@@ -96,6 +112,10 @@ function renderCategoryDonut(byCategory) {
   applySelectionHighlight();
 }
 
+// Top Merchants rows are built directly here rather than through
+// dashboard.js's shared renderRow(), since these need an "edit category"
+// button the other renderRow callers (Cash, Debt, Investments, LOC) have
+// no use for - keeps that shared helper generic.
 function renderTopMerchants(topMerchants) {
   const container = document.getElementById("fin-spending-merchants");
   if (!container) return;
@@ -109,13 +129,23 @@ function renderTopMerchants(topMerchants) {
 
   const maxTotal = Math.max(...topMerchants.map((m) => m.total));
   for (const merchant of topMerchants) {
-    renderRow(container, {
-      label: merchant.merchant,
-      value: merchant.total,
-      total: maxTotal,
-      colorVar: "--status-blue",
-      meta: `${merchant.count} visit${merchant.count === 1 ? "" : "s"}`,
-    });
+    const pct = maxTotal > 0 ? (merchant.total / maxTotal) * 100 : 0;
+    const row = document.createElement("div");
+    row.className = "fin-row";
+    row.innerHTML = `
+      <div class="fin-row-top">
+        <span class="fin-row-label">${escapeHtml(merchant.merchant)}
+          <button class="fin-edit-category-btn" type="button" aria-label="Edit category for ${escapeHtml(merchant.merchant)}">&#9998;</button>
+        </span>
+        <span class="fin-row-value">${cad(merchant.total)}</span>
+      </div>
+      <div class="fin-row-bar-track">
+        <div class="fin-row-bar-fill" style="width:${pct.toFixed(1)}%; background:var(--status-blue)"></div>
+      </div>
+      <div class="fin-row-pct">${merchant.count} visit${merchant.count === 1 ? "" : "s"}</div>
+    `;
+    row.querySelector(".fin-edit-category-btn").addEventListener("click", () => openCategoryEditor(merchant.merchant));
+    container.appendChild(row);
   }
 }
 
@@ -166,6 +196,104 @@ async function renderSpending(window_) {
   renderCategoryDonut(data.byCategory);
   renderTopMerchants(data.topMerchants);
   renderMonthlyChart(data.byMonth);
+  populateCategoryOptions(data.byCategory);
+}
+
+// --- Editing categories (one-time fix per transaction, permanent fix per
+// merchant) - finance/ARCHITECTURE.md "Editing categories" ---------------
+
+function setDialogStatus(message, isError) {
+  const el = document.getElementById("fin-category-dialog-status");
+  if (!el) return;
+  el.hidden = !message;
+  el.textContent = message || "";
+  el.classList.toggle("fin-category-dialog-status-error", !!isError);
+}
+
+function renderTransactionEditRows(container, transactions) {
+  container.innerHTML = "";
+  if (transactions.length === 0) {
+    container.innerHTML = `<p class="fin-empty-note">No individual transactions in this window.</p>`;
+    return;
+  }
+  for (const tx of transactions) {
+    const row = document.createElement("div");
+    row.className = "fin-category-tx-row";
+    row.innerHTML = `
+      <span class="fin-category-tx-date">${formatShortDate(tx.date)}</span>
+      <span class="fin-category-tx-amount">${cad(tx.amount)}</span>
+      <input type="text" class="fin-category-tx-input" list="fin-category-options" value="${escapeHtml(tx.category || "")}">
+      <button type="button" class="fin-category-tx-save">Save</button>
+    `;
+    row.querySelector(".fin-category-tx-save").addEventListener("click", () => {
+      const input = row.querySelector(".fin-category-tx-input");
+      saveTransactionCategory(tx.id, input.value.trim());
+    });
+    container.appendChild(row);
+  }
+}
+
+async function openCategoryEditor(merchant) {
+  const dialog = document.getElementById("fin-category-dialog");
+  if (!dialog) return;
+
+  dialog.dataset.merchant = merchant;
+  document.getElementById("fin-category-dialog-merchant").textContent = merchant;
+  document.getElementById("fin-category-dialog-permanent-input").value = "";
+  setDialogStatus("", false);
+  const txList = document.getElementById("fin-category-dialog-transactions");
+  txList.innerHTML = `<p class="fin-empty-note">Loading…</p>`;
+  dialog.showModal();
+
+  try {
+    const params = new URLSearchParams({ merchant, window: currentWindow });
+    const res = await fetch(`${MERCHANT_TX_URL}?${params}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderTransactionEditRows(txList, data.transactions);
+  } catch (err) {
+    txList.innerHTML = `<p class="fin-empty-note">Couldn't load transactions (${err.message}).</p>`;
+  }
+}
+
+async function saveTransactionCategory(transactionId, category) {
+  setDialogStatus("Saving…", false);
+  try {
+    const res = await fetch(SET_TRANSACTION_CATEGORY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transaction_id: transactionId, category }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    document.getElementById("fin-category-dialog").close();
+    renderSpending(currentWindow);
+  } catch (err) {
+    setDialogStatus(`Couldn't save: ${err.message}`, true);
+  }
+}
+
+async function savePermanentCategory() {
+  const dialog = document.getElementById("fin-category-dialog");
+  const merchant = dialog?.dataset.merchant;
+  const input = document.getElementById("fin-category-dialog-permanent-input");
+  const category = input.value.trim();
+  if (!merchant || !category) return;
+
+  setDialogStatus("Saving…", false);
+  try {
+    const res = await fetch(SET_MERCHANT_CATEGORY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: merchant, category }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    dialog.close();
+    renderSpending(currentWindow);
+  } catch (err) {
+    setDialogStatus(`Couldn't save: ${err.message}`, true);
+  }
 }
 
 export function initFinanceSpending() {
@@ -182,4 +310,7 @@ export function initFinanceSpending() {
       loadAndRenderMerchants();
     });
   }
+
+  const permanentSaveButton = document.getElementById("fin-category-dialog-permanent-save");
+  if (permanentSaveButton) permanentSaveButton.addEventListener("click", savePermanentCategory);
 }

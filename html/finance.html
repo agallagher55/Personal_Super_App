@@ -247,6 +247,31 @@
     </aside>
   </div>
 
+  <dialog class="fin-category-dialog" id="fin-category-dialog">
+    <form method="dialog" class="fin-category-dialog-form">
+      <div class="fin-category-dialog-header">
+        <h3>Edit category &mdash; <span id="fin-category-dialog-merchant"></span></h3>
+        <button type="submit" class="fin-category-dialog-close" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="fin-category-dialog-section">
+        <div class="fin-category-dialog-section-title">This merchant, always (past and future)</div>
+        <div class="fin-category-dialog-permanent-row">
+          <input type="text" id="fin-category-dialog-permanent-input" list="fin-category-options" placeholder="Category">
+          <button type="button" id="fin-category-dialog-permanent-save">Save always</button>
+        </div>
+      </div>
+
+      <div class="fin-category-dialog-section">
+        <div class="fin-category-dialog-section-title">Or fix a single transaction</div>
+        <div id="fin-category-dialog-transactions" class="fin-category-tx-list"></div>
+      </div>
+
+      <p class="fin-category-dialog-status" id="fin-category-dialog-status" hidden></p>
+    </form>
+  </dialog>
+  <datalist id="fin-category-options"></datalist>
+
   <script src="/static/js/theme.js"></script>
   <script type="module">
     import { initTickerBar } from "/static/finance/js/ticker.js";

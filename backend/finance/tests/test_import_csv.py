@@ -113,6 +113,24 @@ class TestParseCsvText(unittest.TestCase):
         interest_row = next(r for r in rows if 'Interest received' in r['description'])
         self.assertEqual(interest_row['activity_type'], 'Interest')
 
+    def test_income_type_rows_default_to_the_income_category(self):
+        # "Direct deposit received should be tagged as income" - AFT_IN,
+        # CASHBACK, GIVEAWAY, and Interest rows (summary.CHEQUING_INCOME_TYPES)
+        # get a real 'Income' category by default, rather than sitting
+        # blank like every other chequing row.
+        _, _, _, _, rows = import_csv.parse_csv_text(BANK_ACTIVITY_CSV)
+        by_description = {r['description']: r for r in rows}
+        self.assertEqual(by_description['Direct deposit received']['category'], 'Income')
+        self.assertEqual(by_description['Cash back - Credit card']['category'], 'Income')
+        interest_row = next(r for r in rows if 'Interest received' in r['description'])
+        self.assertEqual(interest_row['category'], 'Income')
+
+    def test_non_income_chequing_rows_have_no_default_category(self):
+        _, _, _, _, rows = import_csv.parse_csv_text(BANK_ACTIVITY_CSV)
+        by_description = {r['description']: r for r in rows}
+        self.assertIsNone(by_description['Interac e-Transfer® Out']['category'])
+        self.assertIsNone(by_description['Credit card payment']['category'])
+
     def test_unrecognized_header_raises(self):
         with self.assertRaises(import_csv.ImportFormatError):
             import_csv.parse_csv_text('foo,bar\n1,2\n')

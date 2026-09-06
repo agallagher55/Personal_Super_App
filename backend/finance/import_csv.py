@@ -14,6 +14,7 @@ import os
 from datetime import datetime, timezone
 
 import db as finance_db
+import summary as finance_summary
 
 CREDIT_CARD_HEADER = {
     'transaction_date', 'transaction_type', 'status', 'merchant',
@@ -92,7 +93,17 @@ def _rows_from_bank_activity(rows_in):
             'description': row['description'].strip(),
             'amount': float(row['net_cash_amount']),
             'activity_type': activity_type,
-            'category': None,
+            # Income rows (direct deposits, cashback, interest, ...) get a
+            # real 'Income' category by default, rather than sitting blank
+            # like every other chequing row, so a transaction listing has
+            # something meaningful to show for them - see ARCHITECTURE.md's
+            # "Editing categories" section. This is purely a label: it can
+            # never leak into Spending's totals, since every query there
+            # also requires activity_type IN ('Purchase', 'Refund'), which
+            # no chequing row ever satisfies. Uses summary.py's
+            # CHEQUING_INCOME_TYPES as the one source of truth for "what
+            # counts as income," rather than a second hardcoded list here.
+            'category': 'Income' if activity_type in finance_summary.CHEQUING_INCOME_TYPES else None,
             'status': None,
         })
     return rows
