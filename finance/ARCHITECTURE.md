@@ -15,7 +15,8 @@
   window selector) on `/finance` are all live.
 - **Phase 4a (Cash Flow — chequing income folded in) is built** — see A5b.
   A separate "Cash Flow" block (income/expense/net stat tiles + a monthly
-  income-vs-expense chart) reads chequing income/expense alongside the
+  income-vs-expense chart, click a bar to see that month's underlying
+  transactions per A5e) reads chequing income/expense alongside the
   existing credit-card spend total. A real bug this surfaced (a big refund
   could push the overall expense total negative) was caught in browser
   testing against the real sample data and fixed before landing.
@@ -493,6 +494,52 @@ for the filter chip and both bar canvases are genuinely hidden
 range-replace survival, `merchant_transactions`), and `test_import_csv.py`
 (the default `Income` category).
 
+### A5e. Click a Cash Flow bar to see its transactions — built (2026-09-06)
+
+Requested: "I want to be able to click on the income bars and see what
+transactions are contributing to this." Built symmetrically for expense
+bars too, not just income - leaving expense non-interactive while income
+was clickable would read as a bug (hover already shows both), and the
+marginal cost of supporting both was small once one side needed the
+click-detection logic anyway.
+
+**`summary.cash_flow_month_transactions(conn, month, kind)`** (`kind`:
+`'income'` or `'expense'`) is the new query behind
+`GET /finance/cash-flow-transactions.json?month=<YYYY-MM>&kind=<...>`:
+
+- `income` — chequing rows for that month whose `activity_type` is one of
+  `CHEQUING_INCOME_TYPES`, same set A5b's totals already use.
+- `expense` — **combines two sources**, same as the expense total does:
+  chequing expense-type rows for that month, plus credit-card
+  Purchase/Refund rows for that month (via `transactions_effective`, so a
+  category correction from A5d is reflected here too, even though this
+  view doesn't group by category at all). Every row's `amount` follows
+  the same "positive contributes to the total, negative reduces it" sign
+  convention as the aggregate totals - a credit-card Refund row shows up
+  as a negative amount in the expense list, consistent with how it nets
+  against spend everywhere else.
+
+**Chart**: `drawIncomeExpenseChart` (`charts.js`) gained an optional
+`onBarClick(month, kind)` - reuses the existing nearest-month hit-testing
+already built for the hover tooltip, then compares the click's x position
+against that month's center to decide which of the pair (income, left of
+center; expense, right of center) was clicked, matching the same split
+`drawFrame` already uses to place the two bars. `cashflow.js` wires this
+to a dialog reusing the `.fin-category-dialog` shell from A5d (same
+backdrop/centering/close-button styling, a new `#fin-cashflow-tx-dialog`
+instance) with a read-only transaction list - no edit inputs, since fixing
+a category is already A5d's job via the Spending merchant dialog, not
+something this view needs to duplicate.
+
+Verified in a real browser: clicked an income bar, confirmed the dialog
+showed exactly the one cashback transaction for that month with the
+correct total in the subtitle; clicked an expense bar, confirmed it
+listed every credit-card purchase for that month (the sample chequing
+data had no debit-card spend in that particular month, so this
+incidentally exercised the "chequing side is empty, only credit-card
+rows contribute" path); confirmed the dialog closes correctly. 7 new
+tests in `test_cash_flow.py` (`TestCashFlowMonthTransactions`).
+
 ### A6. File layout, and what's gitignored
 
 Code lives under `backend/finance/`, matching the repo's actual
@@ -520,14 +567,16 @@ backend/finance/                tracked — code, no real data, mirrors backend/
                                   income-type chequing rows to category='Income' (A5d)
   summary.py                     category/monthly/top-merchant queries (A5, with an optional category
                                   filter for A5c, all reading transactions_effective per A5d) +
-                                  cash-flow queries (A5b) + merchant_transactions() (A5d)
+                                  cash-flow queries (A5b) + merchant_transactions() (A5d) +
+                                  cash_flow_month_transactions() (A5e)
   tests/test_import_csv.py       23 tests: parsing, idempotency, range-replace, the real upload path,
                                   the activity_sub_type extraction fix (A5b), the default Income category (A5d)
   tests/test_summary.py          30 tests: netting, window filtering, exclusions, empty-database
                                   handling, the category filter (A5c), category override precedence/revert/
                                   range-replace survival (A5d)
-  tests/test_cash_flow.py        15 tests: income/expense classification, the negative-expense
-                                  regression (A5b), empty-database handling
+  tests/test_cash_flow.py        22 tests: income/expense classification, the negative-expense
+                                  regression (A5b), empty-database handling, per-month transaction
+                                  listing for both income and expense (A5e)
   tests/test_db.py               9 tests: last_imported_at() (A5c), transaction_exists() and the
                                   override setters (A5d)
 
@@ -540,7 +589,8 @@ backend/server.py               gains POST /finance/import, GET /finance/spendin
                                  (now takes &category=, A5c), GET /finance/cash-flow.json,
                                  GET /finance/last-imported.json (A5c), GET /finance/merchant-transactions.json,
                                  POST /finance/categories/transaction, POST /finance/categories/merchant (A5d),
-                                 and a finance_db.ensure_database() call at startup
+                                 GET /finance/cash-flow-transactions.json (A5e), and a
+                                 finance_db.ensure_database() call at startup
 
 static/finance/
   finance-dashboard.json        unchanged — existing sample balance/net-worth data. Cash, Investments,
@@ -553,19 +603,22 @@ static/finance/
   js/spending.js                 wires the "Spending" section - donut, top merchants (with the category
                                   click-to-filter, A5c, and the edit-category dialog, A5d), monthly chart,
                                   window select (A5)
-  js/cashflow.js                 wires the "Cash Flow" section - stat tiles, monthly chart, window select (A5b)
+  js/cashflow.js                 wires the "Cash Flow" section - stat tiles, monthly chart, window select
+                                  (A5b), and the click-a-bar-to-see-its-transactions dialog (A5e)
   js/dashboard.js                unchanged except exporting renderRow/renderLegend (with an optional
-                                  onClick, A5c) and escapeHtml (A5d) for spending.js to reuse
-  js/charts.js                   gains drawMonthlyBarChart (A5) and drawIncomeExpenseChart (A5b),
-                                  sharing their axis/theme/format helpers; drawDonut gains an optional
-                                  onSliceClick (A5c)
+                                  onClick, A5c) and escapeHtml (A5d, reused by A5e's dialog too) for
+                                  spending.js/cashflow.js to reuse
+  js/charts.js                   gains drawMonthlyBarChart (A5) and drawIncomeExpenseChart (A5b);
+                                  drawDonut gains an optional onSliceClick (A5c), drawIncomeExpenseChart
+                                  gains an optional onBarClick (A5e); all share the file's axis/theme/format helpers
   css/dashboard.css               gains .fin-import-*, .fin-block-*, .fin-spending-*, .fin-bar-canvas,
                                   .fin-empty-note, .fin-chart-legend*, .fin-stat-value-negative,
                                   .fin-legend-row-selected/-dimmed, .donut-seg-dimmed, .fin-merchants-filter*,
-                                  .fin-last-imported, .fin-edit-category-btn, .fin-category-dialog* (A5d) rules
+                                  .fin-last-imported, .fin-edit-category-btn, .fin-category-dialog* (A5d),
+                                  .fin-category-tx-description, .fin-category-dialog-subtitle (A5e) rules
 
-html/finance.html               gains the <dialog id="fin-category-dialog"> markup and its
-                                 <datalist id="fin-category-options"> (A5d)
+html/finance.html               gains the <dialog id="fin-category-dialog"> + <datalist id="fin-category-options">
+                                 markup (A5d), and <dialog id="fin-cashflow-tx-dialog"> (A5e)
 ```
 
 `.gitignore` has `data/finance/` — mirrors the existing `data/fitness/`

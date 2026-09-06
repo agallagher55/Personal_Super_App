@@ -201,5 +201,63 @@ class TestBuildCashFlow(CashFlowTestCase):
         self.assertEqual(result['byMonth'], [])
 
 
+class TestCashFlowMonthTransactions(CashFlowTestCase):
+    """What clicking a bar on the Income vs Expense chart shows."""
+
+    def test_income_lists_only_that_months_income_rows(self):
+        self.load(
+            BANK_HEADER
+            + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Direct deposit received', 2000.00)
+            + bank_row('2026-09-02', 'BonusPayment', 'CASHBACK', 'Cash back', 5.50)
+            + bank_row('2026-08-01', 'MoneyMovement', 'AFT_IN', 'Earlier deposit', 900.00),
+            'bank.csv',
+        )
+        result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'income')
+        self.assertEqual(result, [
+            {'date': '2026-09-02', 'description': 'Cash back', 'amount': 5.5},
+            {'date': '2026-09-01', 'description': 'Direct deposit received', 'amount': 2000.0},
+        ])
+
+    def test_income_excludes_expense_and_transfer_rows(self):
+        self.load(
+            BANK_HEADER
+            + bank_row('2026-09-01', 'MoneyMovement', 'SPEND', 'Spend', -50.00)
+            + bank_row('2026-09-02', 'MoneyMovement', 'TRANSFER', 'Credit card payment', -100.00),
+            'bank.csv',
+        )
+        result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'income')
+        self.assertEqual(result, [])
+
+    def test_expense_combines_chequing_and_credit_card_rows(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'SPEND', 'Debit spend', -50.00), 'bank.csv')
+        self.load(CC_HEADER + cc_row('2026-09-02', 'Purchase', 'Cafe', -10.00, 'Coffee'), 'cc.csv')
+
+        result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'expense')
+        self.assertEqual(result, [
+            {'date': '2026-09-02', 'description': 'Cafe', 'amount': 10.0},
+            {'date': '2026-09-01', 'description': 'Debit spend', 'amount': 50.0},
+        ])
+
+    def test_expense_shows_a_refund_as_negative(self):
+        self.load(CC_HEADER + cc_row('2026-09-01', 'Refund', 'Airbnb Refund', 50.00, 'Hotels'), 'cc.csv')
+        result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'expense')
+        self.assertEqual(result, [{'date': '2026-09-01', 'description': 'Airbnb Refund', 'amount': -50.0}])
+
+    def test_expense_excludes_the_credit_card_payment_transfer(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'TRANSFER', 'Credit card payment', -1896.62), 'bank.csv')
+        result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'expense')
+        self.assertEqual(result, [])
+
+    def test_no_transactions_in_month_returns_empty_list(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Deposit', 2000.00), 'bank.csv')
+        result = summary.cash_flow_month_transactions(self.conn, '2026-01', 'income')
+        self.assertEqual(result, [])
+
+    def test_unknown_kind_falls_back_to_income(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Deposit', 2000.00), 'bank.csv')
+        result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'not-a-real-kind')
+        self.assertEqual(result, [{'date': '2026-09-01', 'description': 'Deposit', 'amount': 2000.0}])
+
+
 if __name__ == '__main__':
     unittest.main()

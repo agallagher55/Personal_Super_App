@@ -460,8 +460,12 @@ export function drawMonthlyBarChart(canvas, tooltipEl, points, { colorVar = "--i
  * `canvas`, reusing the same axis/theme/resize/hover scaffolding as
  * drawMonthlyBarChart above. `points` is
  * [{ month: "YYYY-MM", income: number, expense: number }, ...].
+ * `onBarClick(month, kind)`, if given, makes every bar clickable (pointer
+ * cursor + a click listener - `kind` is "income" or "expense" depending on
+ * which of the pair was clicked) - used by static/finance/js/cashflow.js's
+ * click-a-bar-to-see-its-transactions interaction.
  */
-export function drawIncomeExpenseChart(canvas, tooltipEl, points, { incomeColorVar = "--status-green", expenseColorVar = "--status-red" } = {}) {
+export function drawIncomeExpenseChart(canvas, tooltipEl, points, { incomeColorVar = "--status-green", expenseColorVar = "--status-red", onBarClick } = {}) {
   const ctx = canvas.getContext("2d");
 
   let incomeColor, expenseColor, gridColor, mutedColor;
@@ -559,6 +563,27 @@ export function drawIncomeExpenseChart(canvas, tooltipEl, points, { incomeColorV
     resizeTimer = setTimeout(render, 100);
   });
   resizeObserver.observe(canvas);
+
+  if (onBarClick) {
+    canvas.style.cursor = "pointer";
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      let nearest = 0;
+      let nearestDist = Infinity;
+      points.forEach((_, i) => {
+        const d = Math.abs(xForGroup(i) - mx);
+        if (d < nearestDist) {
+          nearestDist = d;
+          nearest = i;
+        }
+      });
+      // Which of the pair was clicked: left of center = income bar, right
+      // of center = expense bar (matches the fillRect split in drawFrame).
+      const kind = mx < xForGroup(nearest) ? "income" : "expense";
+      onBarClick(points[nearest].month, kind);
+    });
+  }
 
   if (!tooltipEl) return;
 
