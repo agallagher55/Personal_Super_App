@@ -81,3 +81,28 @@ SELECT
 FROM transactions t
 LEFT JOIN transaction_category_overrides tco ON tco.transaction_id = t.id
 LEFT JOIN merchant_category_overrides mco ON mco.description = t.description;
+
+-- Cash Flow exclusions (finance/ARCHITECTURE.md A5f): marks a specific
+-- transaction as not real income/expense - e.g. a benefits reimbursement
+-- deposit that just zeroes out an earlier purchase, so counting it as
+-- income overstates take-home money. Deliberately its own table, not a
+-- third case bolted onto the category-override tables above: "does this
+-- count toward Cash Flow" is a different question from "what Spending
+-- category is this," and a transaction can need one answer changed
+-- without the other (the reimbursed purchase itself may still belong in
+-- Spending's "where did my money go," even though the reimbursement
+-- shouldn't count as income).
+--
+-- Always keyed by transaction id, never by description, unlike
+-- merchant_category_overrides - every direct deposit shares the identical
+-- generic description "Direct deposit received," so a description-keyed
+-- rule would incorrectly exclude real paycheck deposits too. Same
+-- reasoning as transaction_category_overrides for skipping
+-- ON DELETE CASCADE: a range-replace re-import regenerates the same
+-- deterministic id for an unchanged re-export, so the exclusion sticks
+-- naturally; a cascade would wipe it the moment that CSV is re-uploaded.
+CREATE TABLE IF NOT EXISTS cash_flow_exclusions (
+  transaction_id TEXT PRIMARY KEY,
+  reason         TEXT,
+  created_at     TEXT NOT NULL
+);

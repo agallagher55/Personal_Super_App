@@ -27,6 +27,13 @@
   through a `transactions_effective` view every query reads instead of
   the raw stored category. Chequing income rows (direct deposits,
   cashback, etc.) now default to category `'Income'` at import time.
+- **Click-a-bar-for-transactions (A5e) and Cash Flow exclusions (A5f)
+  are built.** Clicking an income or expense bar on the monthly chart
+  lists that month's underlying transactions; each one now has an
+  Exclude/Include toggle so a transaction that isn't real income/expense
+  (e.g. a reimbursement deposit that just zeroes out an earlier
+  purchase) can be dropped from Cash Flow's totals without touching
+  Spending, which still shows it.
 - **Phase 4b (a second credit card, from a different institution) is
   documented, not built** — see A9. No sample export from that institution
   exists yet to design a parser against, so this is a concrete plan for
@@ -540,6 +547,81 @@ incidentally exercised the "chequing side is empty, only credit-card
 rows contribute" path); confirmed the dialog closes correctly. 7 new
 tests in `test_cash_flow.py` (`TestCashFlowMonthTransactions`).
 
+### A5f. Excluding a transaction from Cash Flow — built (2026-09-06)
+
+Requested from a concrete example: a $320 "Direct deposit received" on
+Aug 25 was a benefits reimbursement, not real income - it just zeroes
+out a purchase made earlier, so counting it as income overstates
+take-home money. Two questions: can the export itself identify these,
+and can they be removed from the Cash Flow numbers.
+
+**No, the export can't identify these.** A reimbursement deposit and a
+paycheck deposit are indistinguishable from the CSV alone - both are
+just `activity_sub_type=AFT_IN`, description "Direct deposit received",
+with only date and amount to go on. There's no reimbursement flag, no
+counterparty field, nothing to key an automatic rule off of. This has
+to be a manual, per-transaction decision.
+
+That ruled out reusing A5d's `merchant_category_overrides` ("permanent,"
+description-keyed) for this: **every** direct deposit shares that exact
+same generic description, so a description-keyed rule would silently
+exclude real paycheck deposits too, not just the one reimbursement.
+Needed a transaction-id-keyed mechanism instead - the same shape as
+A5d's "one-time" override, but a separate table, because "does this
+count toward Cash Flow" is a different question from "what Spending
+category is this," and a transaction can need one answer changed
+without the other. (The reimbursed purchase itself is still legitimate
+to show in Spending's "where did my money go" - only the reimbursement
+side of it shouldn't count as income.)
+
+**`cash_flow_exclusions(transaction_id, reason, created_at)`**
+(`csv_schema.sql`) - same "no `ON DELETE CASCADE`" reasoning as every
+other override table here: a range-replace re-import regenerates the
+same deterministic id for an unchanged re-export, so the exclusion
+sticks naturally; a cascade would wipe it the instant that CSV is
+re-uploaded. `db.set_cash_flow_exclusion(conn, transaction_id,
+is_excluded, reason, created_at)` mirrors `set_transaction_category_override`'s
+upsert-or-delete shape exactly.
+
+**Scope, deliberately narrow**: the exclusion affects only Cash Flow's
+own queries - `chequing_income_total`, `chequing_expense_total`,
+`credit_card_expense_total`, and `cash_flow_by_month` all gained a
+`LEFT JOIN cash_flow_exclusions ... WHERE transaction_id IS NULL`. It
+does **not** touch `category_breakdown`, `monthly_trend`, or
+`top_merchants` - Spending shows every transaction regardless of Cash
+Flow exclusion, since a reimbursed purchase still happened.
+
+**`cash_flow_month_transactions`** (A5e's per-bar transaction list)
+changed shape: instead of filtering excluded rows out, it now returns
+every matching transaction annotated with `excluded`/`reason`, plus the
+route (`GET /finance/cash-flow-transactions.json`) computes and returns
+a `total` field itself (summing only non-excluded rows) - keeping "what
+counts" defined in exactly one place on the backend, rather than
+trusting the frontend to reimplement the same filter.
+
+**`POST /finance/cash-flow-exclusions`** `{transaction_id, excluded}` -
+validates the transaction exists (reusing `transaction_exists`), then
+calls the setter above.
+
+**Frontend**: each row in `#fin-cashflow-tx-dialog` now has an
+Exclude/Include toggle button. Unlike A5d's category dialog (which
+closes on save), this dialog **stays open** after a toggle - re-fetches
+that same month/kind in place and refreshes the stat tiles/chart in the
+background, so several transactions can be reviewed in one sitting
+without losing your place. Excluded rows get dimmed + struck-through
+styling (`.fin-cashflow-tx-row-excluded`).
+
+Verified in a real browser: opened an expense month's dialog, clicked
+"Exclude" on one transaction, confirmed the subtitle total dropped by
+exactly that transaction's amount and the row got the excluded
+styling; clicked "Include" and confirmed the total was restored;
+confirmed the dialog stayed open both times and the underlying stat
+tile updated after closing; confirmed the income-side dialog also has
+the toggle, and that A5d's (unrelated) category-edit dialog was
+untouched - no stray toggle button, no shared-class collision. 10 new
+tests (`test_db.py`'s `TestCashFlowExclusionSetter`, `test_cash_flow.py`'s
+`TestCashFlowExclusions`).
+
 ### A6. File layout, and what's gitignored
 
 Code lives under `backend/finance/`, matching the repo's actual
@@ -552,33 +634,34 @@ implementation started, 2026-09-06:
 data/finance/                  gitignored — real personal financial data lives only here
   imports/                     timestamped audit copy of every uploaded CSV
   finance.db                   SQLite store (accounts, transactions, transaction_category_overrides,
-                                merchant_category_overrides - A5d)
+                                merchant_category_overrides - A5d, cash_flow_exclusions - A5f)
                                 (no spending-summary.json/cash-flow.json - summary.py queries live, no cache file)
 
 backend/finance/                tracked — code, no real data, mirrors backend/fitness/'s layout
   db.py                          connect() / init_schema() / ensure_database(), range-replace load,
                                   last_imported_at() (A5c), transaction_exists()/set_transaction_category_override()/
-                                  set_merchant_category_override() (A5d)
+                                  set_merchant_category_override() (A5d), set_cash_flow_exclusion() (A5f)
   csv_schema.sql                 DDL for accounts + transactions (A3), transaction_category_overrides +
-                                  merchant_category_overrides + the transactions_effective view (A5d) —
-                                  separate from finance/schema.sql, which is Part B's Plaid-oriented DDL
-                                  and unrelated to this
+                                  merchant_category_overrides + the transactions_effective view (A5d),
+                                  cash_flow_exclusions (A5f) — separate from finance/schema.sql, which is
+                                  Part B's Plaid-oriented DDL and unrelated to this
   import_csv.py                  CSV parsing + range-replace load; also a CLI entry point; defaults
                                   income-type chequing rows to category='Income' (A5d)
   summary.py                     category/monthly/top-merchant queries (A5, with an optional category
                                   filter for A5c, all reading transactions_effective per A5d) +
-                                  cash-flow queries (A5b) + merchant_transactions() (A5d) +
-                                  cash_flow_month_transactions() (A5e)
+                                  cash-flow queries (A5b, excluding cash_flow_exclusions rows per A5f) +
+                                  merchant_transactions() (A5d) + cash_flow_month_transactions()
+                                  (A5e, annotating excluded/reason per A5f rather than filtering them)
   tests/test_import_csv.py       23 tests: parsing, idempotency, range-replace, the real upload path,
                                   the activity_sub_type extraction fix (A5b), the default Income category (A5d)
   tests/test_summary.py          30 tests: netting, window filtering, exclusions, empty-database
                                   handling, the category filter (A5c), category override precedence/revert/
                                   range-replace survival (A5d)
-  tests/test_cash_flow.py        22 tests: income/expense classification, the negative-expense
+  tests/test_cash_flow.py        29 tests: income/expense classification, the negative-expense
                                   regression (A5b), empty-database handling, per-month transaction
-                                  listing for both income and expense (A5e)
-  tests/test_db.py               9 tests: last_imported_at() (A5c), transaction_exists() and the
-                                  override setters (A5d)
+                                  listing for both income and expense (A5e), the exclusion mechanism (A5f)
+  tests/test_db.py               12 tests: last_imported_at() (A5c), transaction_exists() and the
+                                  category override setters (A5d), the cash-flow exclusion setter (A5f)
 
 finance/                       tracked — docs + the Part B (Plaid) schema reference only, no code
   ARCHITECTURE.md              (this file)
@@ -589,7 +672,8 @@ backend/server.py               gains POST /finance/import, GET /finance/spendin
                                  (now takes &category=, A5c), GET /finance/cash-flow.json,
                                  GET /finance/last-imported.json (A5c), GET /finance/merchant-transactions.json,
                                  POST /finance/categories/transaction, POST /finance/categories/merchant (A5d),
-                                 GET /finance/cash-flow-transactions.json (A5e), and a
+                                 GET /finance/cash-flow-transactions.json (A5e, now also returning a
+                                 non-excluded `total`, A5f), POST /finance/cash-flow-exclusions (A5f), and a
                                  finance_db.ensure_database() call at startup
 
 static/finance/
@@ -604,9 +688,11 @@ static/finance/
                                   click-to-filter, A5c, and the edit-category dialog, A5d), monthly chart,
                                   window select (A5)
   js/cashflow.js                 wires the "Cash Flow" section - stat tiles, monthly chart, window select
-                                  (A5b), and the click-a-bar-to-see-its-transactions dialog (A5e)
+                                  (A5b), the click-a-bar-to-see-its-transactions dialog (A5e), and its
+                                  per-row Exclude/Include toggle (A5f, which keeps the dialog open and
+                                  refreshes the stat tiles/chart in the background rather than closing)
   js/dashboard.js                unchanged except exporting renderRow/renderLegend (with an optional
-                                  onClick, A5c) and escapeHtml (A5d, reused by A5e's dialog too) for
+                                  onClick, A5c) and escapeHtml (A5d, reused by A5e/A5f's dialog too) for
                                   spending.js/cashflow.js to reuse
   js/charts.js                   gains drawMonthlyBarChart (A5) and drawIncomeExpenseChart (A5b);
                                   drawDonut gains an optional onSliceClick (A5c), drawIncomeExpenseChart
@@ -615,7 +701,8 @@ static/finance/
                                   .fin-empty-note, .fin-chart-legend*, .fin-stat-value-negative,
                                   .fin-legend-row-selected/-dimmed, .donut-seg-dimmed, .fin-merchants-filter*,
                                   .fin-last-imported, .fin-edit-category-btn, .fin-category-dialog* (A5d),
-                                  .fin-category-tx-description, .fin-category-dialog-subtitle (A5e) rules
+                                  .fin-category-tx-description, .fin-category-dialog-subtitle (A5e),
+                                  .fin-cashflow-tx-row-excluded, .fin-cashflow-tx-toggle (A5f) rules
 
 html/finance.html               gains the <dialog id="fin-category-dialog"> + <datalist id="fin-category-options">
                                  markup (A5d), and <dialog id="fin-cashflow-tx-dialog"> (A5e)

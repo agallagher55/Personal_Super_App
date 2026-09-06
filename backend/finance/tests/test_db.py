@@ -116,5 +116,42 @@ class TestCategoryOverrideSetters(unittest.TestCase):
         self.assertIsNone(row)
 
 
+class TestCashFlowExclusionSetter(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.db_path = os.path.join(self.tmp_dir.name, 'finance.db')
+        self.conn = finance_db.connect(self.db_path)
+        finance_db.init_schema(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_excluding_a_transaction_inserts_a_row(self):
+        finance_db.set_cash_flow_exclusion(self.conn, 'tx1', True, 'Reimbursement', '2026-09-06T00:00:00Z')
+        row = self.conn.execute(
+            'SELECT reason FROM cash_flow_exclusions WHERE transaction_id = ?', ('tx1',)
+        ).fetchone()
+        self.assertEqual(row['reason'], 'Reimbursement')
+
+    def test_excluding_twice_updates_not_duplicates(self):
+        finance_db.set_cash_flow_exclusion(self.conn, 'tx1', True, 'First reason', '2026-09-06T00:00:00Z')
+        finance_db.set_cash_flow_exclusion(self.conn, 'tx1', True, 'Second reason', '2026-09-07T00:00:00Z')
+        rows = self.conn.execute(
+            'SELECT reason FROM cash_flow_exclusions WHERE transaction_id = ?', ('tx1',)
+        ).fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['reason'], 'Second reason')
+
+    def test_unexcluding_removes_the_row(self):
+        finance_db.set_cash_flow_exclusion(self.conn, 'tx1', True, 'Reimbursement', '2026-09-06T00:00:00Z')
+        finance_db.set_cash_flow_exclusion(self.conn, 'tx1', False, None, '2026-09-06T00:00:00Z')
+        row = self.conn.execute(
+            'SELECT * FROM cash_flow_exclusions WHERE transaction_id = ?', ('tx1',)
+        ).fetchone()
+        self.assertIsNone(row)
+
+
 if __name__ == '__main__':
     unittest.main()

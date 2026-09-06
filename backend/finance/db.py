@@ -129,3 +129,19 @@ def set_merchant_category_override(conn, description, category, updated_at):
         )
     else:
         conn.execute('DELETE FROM merchant_category_overrides WHERE description = ?', (description,))
+
+
+def set_cash_flow_exclusion(conn, transaction_id, is_excluded, reason, created_at):
+    """Marks (or unmarks) one transaction as excluded from Cash Flow's
+    income/expense totals (see csv_schema.sql's cash_flow_exclusions).
+    `is_excluded=False` removes the exclusion."""
+    if is_excluded:
+        conn.execute(
+            '''INSERT INTO cash_flow_exclusions (transaction_id, reason, created_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(transaction_id) DO UPDATE SET
+                 reason = excluded.reason, created_at = excluded.created_at''',
+            (transaction_id, reason, created_at),
+        )
+    else:
+        conn.execute('DELETE FROM cash_flow_exclusions WHERE transaction_id = ?', (transaction_id,))

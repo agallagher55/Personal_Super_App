@@ -270,7 +270,12 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 transactions = finance_summary.cash_flow_month_transactions(conn, month, kind)
             finally:
                 conn.close()
-            self.send_json(200, {'month': month, 'kind': kind, 'transactions': transactions})
+            # Excluded rows (see /finance/cash-flow-exclusions) still show in
+            # the list so the dialog can toggle them back on, but they don't
+            # count toward the total - summing here (rather than in the
+            # frontend) keeps "what counts" defined in exactly one place.
+            total = round(sum(t['amount'] for t in transactions if not t['excluded']), 2)
+            self.send_json(200, {'month': month, 'kind': kind, 'transactions': transactions, 'total': total})
             return
         if path == '/finance/last-imported.json':
             conn = finance_db.connect()
@@ -528,6 +533,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             return self.handle_set_transaction_category()
         if parsed.path == '/finance/categories/merchant':
             return self.handle_set_merchant_category()
+        if parsed.path == '/finance/cash-flow-exclusions':
+            return self.handle_set_cash_flow_exclusion()
         self.send_error(404, 'Not found')
 
     def _read_json_body(self):
@@ -596,6 +603,35 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             conn.close()
 
         self.send_json(200, {'status': 'ok', 'description': description, 'category': category or None})
+
+    def handle_set_cash_flow_exclusion(self):
+        """POST /finance/cash-flow-exclusions {transaction_id, excluded} -
+        marks (or unmarks) one transaction as excluded from Cash Flow's
+        income/expense totals (finance/ARCHITECTURE.md A5f), e.g. a
+        reimbursement deposit that just zeroes out an earlier purchase.
+        Does not affect Spending at all - see summary.py."""
+        if not self.check_same_origin():
+            return self.send_error(403, 'Cross-origin request rejected')
+
+        payload = self._read_json_body()
+        if payload is None:
+            return self.send_json_error(400, 'Invalid JSON body')
+
+        transaction_id = payload.get('transaction_id')
+        excluded = bool(payload.get('excluded'))
+        if not transaction_id:
+            return self.send_json_error(400, 'Missing transaction_id')
+
+        conn = finance_db.connect()
+        try:
+            if not finance_db.transaction_exists(conn, transaction_id):
+                return self.send_json_error(404, 'No transaction found with that id')
+            with conn:
+                finance_db.set_cash_flow_exclusion(conn, transaction_id, excluded, None, now_iso())
+        finally:
+            conn.close()
+
+        self.send_json(200, {'status': 'ok', 'transaction_id': transaction_id, 'excluded': excluded})
 
     def handle_finance_import(self, parsed):
         """POST /finance/import?filename=<name>.csv, raw CSV bytes as the
