@@ -65,6 +65,62 @@ CARD_STATEMENT_TEXT = (
     "Disclosures These services are offered by Shakepay Financial Inc."
 )
 
+# Same statements as above, but with the column-boundary spaces missing
+# the way some pypdf versions/platforms actually extract them (observed:
+# ArcGIS Pro's bundled Python environment) - "09:14:06Transfer",
+# "Card purchaseRAMBLERS", "+5.006.73". See _insert_missing_spaces's
+# docstring for why this happens and why the fix is keyword/format
+# targeted rather than a blanket case-transition heuristic.
+ACCOUNT_STATEMENT_TEXT_GLUED = (
+    "Alexander Gallagher 1338 Hollis Street Halifax Account type Shaketag "
+    "Personal - Order Execution Only @gallagher55 "
+    "Balance summary (as of 2026-09-01 00:00 EDT) Cash (CAD) 18.22 1.00 18.22 18.22 "
+    "Monthly account statement 2026-08-01 to 2026-08-31 All figures are in $CAD unless "
+    "otherwise specified Shakepay Inc. 500 Place d'Armes, Suite 1800, Montreal, QC Canada "
+    "H2Y 2W2 support@shakepay.com Page 1 of 18 "
+    "Cash transactions (CAD) Date/time (EST)TransactionDescription Debit (CA$)Credit (CA$)Balance (CA$) "
+    "2026-08-01Starting balance 1.73 "
+    "2026-08-02 13:41:17Receive cash via Shakepay@rearea +5.006.73 "
+    "2026-08-05 06:50:50Send cash via Shakepay@rearea -10.00 19.73 "
+    "2026-08-07 16:29:06Interac e-Transferagallagher55@gmail.com +79.0080.27 "
+    "2026-08-03 09:14:06TransferTransfer from Shakepay Inc. to Shakepay Financial "
+    "Inc. for Card purchase-7.33 36.40 "
+    "2026-08-03 09:14:10Round upBought 0.00002993 BTC @ CA$89,208.15 -2.67 33.73 "
+    "2026-08-31Closing balance 18.22 "
+    "Monthly account statement 2026-08-01 to 2026-08-31 All figures are in $CAD unless "
+    "otherwise specified Shakepay Inc. 500 Place d'Armes, Suite 1800, Montreal, QC Canada "
+    "H2Y 2W2 support@shakepay.com Page 2 of 18 "
+    "US Dollar (USD) transactions Date/time (EST)TransactionDescription Debit (US$)"
+    "Credit (US$)Balance (US$) No account activity "
+    "Crypto transactions Date/time (EST)TransactionDescription DebitCreditMarket value "
+    "(CA$)**Original cost (CA$)*** "
+    "2026-08-01Starting balanceBTC 0.00716192 BTC 631.91700.23 ETH 0 ETH0.000.00 "
+    "2026-08-01 08:06:46Shakepay rewardShakingSats +0.0000001 BTC 0.010.00 "
+    "2026-08-05 10:31:00Shakepay InterestInterest payout on CAD balance +0.00000003 BTC 0.000.00 "
+    "2026-08-03 09:14:10Round upBought @ CA$89,208.15 +0.00002993 BTC 3.262.63 "
+    "2026-08-09 16:01:14Receive Bitcoin Bitcoin address bc1q6lwcmm8cw5dp3vxssqvxspgtns3xeancp6hup3 "
+    "+0.00021993 BTC 23.9819.97 "
+    "2026-08-31Closing balanceBTC 0.64866807 BTC 70,748.3857,412.60 ETH 0 ETH0.000.00 "
+    "Monthly account statement 2026-08-01 to 2026-08-31 All figures are in $CAD unless "
+    "otherwise specified Shakepay Inc. 500 Place d'Armes, Suite 1800, Montreal, QC Canada "
+    "H2Y 2W2 support@shakepay.com Page 18 of 18 "
+    "Audit Notice Our annual account audit is being conducted as of August 31, 2026."
+)
+
+CARD_STATEMENT_TEXT_GLUED = (
+    "Alexander Gallagher 1338 Hollis Street Halifax Account type Shaketag Personal @gallagher55 "
+    "Card transactions Date/time (EST)TransactionDescription DebitCredit "
+    "2026-08-03 09:14:06TransferTransfer from Shakepay Inc. to Shakepay Financial Inc. for "
+    "Card purchase+$7.33 "
+    "2026-08-03 09:14:06Card purchaseRAMBLERS -$7.33 "
+    "Monthly account statement 2026-08-01 to 2026-08-31 All figures are in $CAD unless "
+    "otherwise specified Shakepay Financial Inc. 2004 Sherwood Drive, Sherwood, AB, T8A 1K6 "
+    "support@shakepay.com Page 1 of 6 "
+    "Bill payments Date/time (EST)TransactionDescription DebitCredit No account activity "
+    "Pre-authorized debits Date/time (EST)TransactionDescription DebitCredit No account activity "
+    "Disclosures These services are offered by Shakepay Financial Inc."
+)
+
 UNRECOGNIZED_TEXT = "This is not a Shakepay statement at all."
 
 
@@ -163,6 +219,65 @@ class TestParseStatementText(unittest.TestCase):
         _, _, _, unparsed, _ = import_shakepay.parse_statement_text(text)
         self.assertEqual(len(unparsed), 1)
         self.assertIn('Some Unrecognized Line Shape', unparsed[0])
+
+
+class TestGluedTextIsRecoveredCorrectly(unittest.TestCase):
+    """Regression tests for the pypdf-version-dependent missing-space bug
+    (see _insert_missing_spaces) - each assertion mirrors one from
+    TestParseStatementText above, run against the glued fixtures instead
+    of the cleanly-spaced ones, to prove the two produce identical rows."""
+
+    def test_account_statement_has_zero_unparsed_lines(self):
+        _, _, _, unparsed, _ = import_shakepay.parse_statement_text(ACCOUNT_STATEMENT_TEXT_GLUED)
+        self.assertEqual(unparsed, [])
+
+    def test_card_statement_has_zero_unparsed_lines(self):
+        _, _, _, unparsed, _ = import_shakepay.parse_statement_text(CARD_STATEMENT_TEXT_GLUED)
+        self.assertEqual(unparsed, [])
+
+    def test_glued_and_clean_account_statements_produce_identical_rows(self):
+        _, period_a, rows_a, _, stats_a = import_shakepay.parse_statement_text(ACCOUNT_STATEMENT_TEXT)
+        _, period_b, rows_b, _, stats_b = import_shakepay.parse_statement_text(ACCOUNT_STATEMENT_TEXT_GLUED)
+        self.assertEqual(period_a, period_b)
+        self.assertEqual(rows_a, rows_b)
+        self.assertEqual(stats_a, stats_b)
+
+    def test_glued_and_clean_card_statements_produce_identical_rows(self):
+        _, period_a, rows_a, _, stats_a = import_shakepay.parse_statement_text(CARD_STATEMENT_TEXT)
+        _, period_b, rows_b, _, stats_b = import_shakepay.parse_statement_text(CARD_STATEMENT_TEXT_GLUED)
+        self.assertEqual(period_a, period_b)
+        self.assertEqual(rows_a, rows_b)
+        self.assertEqual(stats_a, stats_b)
+
+    def test_glued_card_purchase_keeps_bare_merchant_name(self):
+        # "Card purchaseRAMBLERS" must recover to merchant "RAMBLERS", not
+        # "purchaseRAMBLERS" or anything with the keyword still attached.
+        _, _, rows_by_account, _, _ = import_shakepay.parse_statement_text(CARD_STATEMENT_TEXT_GLUED)
+        self.assertEqual(rows_by_account['shakepay-card'][0]['description'], 'RAMBLERS')
+
+    def test_mixed_case_merchant_name_is_not_corrupted(self):
+        # The fix must be keyword/format-targeted, not a general
+        # lower-to-upper-case boundary rule - a rule like that would
+        # wrongly split "McDonalds" into "Mc Donalds".
+        text = CARD_STATEMENT_TEXT_GLUED.replace(
+            '2026-08-03 09:14:06Card purchaseRAMBLERS -$7.33',
+            '2026-08-03 09:14:06Card purchaseMcDonalds 40487 -$1.14',
+        )
+        _, _, rows_by_account, unparsed, _ = import_shakepay.parse_statement_text(text)
+        self.assertEqual(unparsed, [])
+        self.assertEqual(rows_by_account['shakepay-card'][0]['description'], 'McDonalds 40487')
+
+    def test_btc_quantity_decimal_places_are_not_split(self):
+        # A naive "insert a space after any 2-decimal number" rule would
+        # wrongly break an 8-decimal BTC quantity like 0.00002993 after
+        # its first two decimal digits ("0.00 002993"). Confirm the BTC
+        # quantity survives intact and the row still carries the right
+        # CAD amount.
+        _, _, rows_by_account, unparsed, _ = import_shakepay.parse_statement_text(ACCOUNT_STATEMENT_TEXT_GLUED)
+        self.assertEqual(unparsed, [])
+        roundup = next(r for r in rows_by_account['shakepay-cash'] if r['activity_type'] == 'ROUNDUP_BUY')
+        self.assertIn('0.00002993 BTC', roundup['description'])
+        self.assertEqual(roundup['amount'], -2.67)
 
 
 class TestImportShakepayText(unittest.TestCase):
