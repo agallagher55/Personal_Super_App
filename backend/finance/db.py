@@ -15,7 +15,7 @@ SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csv_sche
 
 # Bumped whenever a one-time migration is added below; tracked per
 # database in PRAGMA user_version so each migration runs exactly once.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 ID_DIGEST_LENGTH = 12
 
@@ -57,6 +57,9 @@ def migrate(conn):
 
     if version < 2:
         _add_networth_account_columns(conn)
+
+    if version < 3:
+        _add_transaction_btc_quantity_column(conn)
 
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is
@@ -150,6 +153,19 @@ def _add_networth_account_columns(conn):
     conn.commit()
 
 
+def _add_transaction_btc_quantity_column(conn):
+    """Migration 3: adds transactions.btc_quantity, nullable, for the
+    monthly-BTC-accumulated-from-round-ups figure (finance/README.md).
+    Only import_shakepay.py's ROUNDUP_BUY rows ever populate it; every
+    other row (CAD-only, or a pre-existing row from before this column
+    existed) simply has NULL here, same "check what's actually there"
+    reasoning as _add_networth_account_columns above."""
+    existing = {row[1] for row in conn.execute('PRAGMA table_info(transactions)')}
+    if 'btc_quantity' not in existing:
+        conn.execute('ALTER TABLE transactions ADD COLUMN btc_quantity REAL')
+    conn.commit()
+
+
 def ensure_database(path=None):
     """Create the database and its schema if they don't exist yet. Called
     once at server startup, same pattern as tasks_db.ensure_database()."""
@@ -193,8 +209,8 @@ def replace_transactions_in_range(conn, account_id, date_start, date_end, rows):
     )
     conn.executemany(
         '''INSERT INTO transactions
-           (id, account_id, date, description, amount, activity_type, category, status, source_file, imported_at)
-           VALUES (:id, :account_id, :date, :description, :amount, :activity_type, :category, :status, :source_file, :imported_at)''',
+           (id, account_id, date, description, amount, activity_type, category, status, btc_quantity, source_file, imported_at)
+           VALUES (:id, :account_id, :date, :description, :amount, :activity_type, :category, :status, :btc_quantity, :source_file, :imported_at)''',
         rows,
     )
 

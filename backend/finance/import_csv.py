@@ -32,6 +32,12 @@ BANK_ACTIVITY_HEADER = {
 # there's a reason - and a way - to support more.
 DEFAULT_CREDIT_CARD_ACCOUNT = 'main-credit-card'
 DEFAULT_CREDIT_CARD_LABEL = 'Credit Card'
+# Confirmed 2026-09-07 (finance/README.md, "each source differentiated
+# by colour"): main-credit-card is the Wealthsimple card - setting this
+# lets summary.monthly_trend_by_source() group Spend by Month by source
+# without a schema change (accounts.institution already exists, just
+# wasn't populated for CSV-imported accounts until now).
+DEFAULT_CREDIT_CARD_INSTITUTION = 'Wealthsimple'
 
 MAX_IMPORT_BYTES = 5 * 1024 * 1024  # generous for a personal export
 
@@ -173,6 +179,7 @@ def _assign_ids(account_id, rows, source_file, imported_at):
             'account_id': account_id,
             'source_file': source_file,
             'imported_at': imported_at,
+            'btc_quantity': row.get('btc_quantity'),  # only import_shakepay.py's ROUNDUP_BUY rows set this
             **row,
         })
     return out
@@ -187,8 +194,9 @@ def import_csv_text(conn, source_file, text):
     dated_rows = _assign_ids(account_id, rows, source_file, imported_at)
     dates = [r['date'] for r in dated_rows]
 
+    institution = DEFAULT_CREDIT_CARD_INSTITUTION if kind == 'credit_card' else None
     with conn:
-        finance_db.upsert_account(conn, account_id, account_label, None, account_kind)
+        finance_db.upsert_account(conn, account_id, account_label, institution, account_kind)
         finance_db.replace_transactions_in_range(conn, account_id, min(dates), max(dates), dated_rows)
 
     return {
@@ -226,18 +234,47 @@ def import_uploaded_file(filename, text):
         conn.close()
 
 
+def _resolve_csv_paths(args):
+    """Each arg is either a CSV file or a directory of them (e.g. a
+    standing data/finance/wealthsimple/ folder you save every export
+    into) - directories are expanded to their *.csv files (non-recursive,
+    case-insensitive extension, sorted for a stable run order), same
+    convention as import_shakepay._resolve_pdf_paths."""
+    paths = []
+    for arg in args:
+        if os.path.isdir(arg):
+            csvs = sorted(
+                os.path.join(arg, name) for name in os.listdir(arg)
+                if name.lower().endswith('.csv')
+            )
+            if not csvs:
+                print(f'{arg}: no .csv files found, skipping')
+            paths.extend(csvs)
+        else:
+            paths.append(arg)
+    return paths
+
+
 def main():
     import sys
-    if len(sys.argv) != 2:
-        print('usage: python3 backend/finance/import_csv.py <path-to-csv>')
+    if len(sys.argv) < 2:
+        print('usage: python3 backend/finance/import_csv.py <path-to-csv | a directory of them> [...]')
         raise SystemExit(1)
 
-    path = sys.argv[1]
-    with open(path, 'r', encoding='utf-8-sig') as f:
-        text = f.read()
+    paths = _resolve_csv_paths(sys.argv[1:])
+    if not paths:
+        print('No CSVs to import.')
+        raise SystemExit(1)
 
-    summary = import_uploaded_file(os.path.basename(path), text)
-    print(summary)
+    for path in paths:
+        with open(path, 'r', encoding='utf-8-sig') as f:
+            text = f.read()
+        try:
+            summary = import_uploaded_file(os.path.basename(path), text)
+        except ImportFormatError as error:
+            print(f'{path}: {error}')
+            continue
+        print(f'{path}: {summary}')
 
 
 if __name__ == '__main__':

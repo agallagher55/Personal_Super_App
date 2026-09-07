@@ -183,6 +183,7 @@ class TestImportCsvText(ImportDbTestCase):
 
         account = self.conn.execute('SELECT * FROM accounts WHERE id = ?', ('main-credit-card',)).fetchone()
         self.assertEqual(account['label'], 'Credit Card')
+        self.assertEqual(account['institution'], 'Wealthsimple')
         self.assertEqual(account['kind'], 'credit_card')
 
     def test_imports_bank_activity_rows_under_their_own_account_id(self):
@@ -343,6 +344,37 @@ class TestImportUploadedFile(unittest.TestCase):
             self.assertEqual(count, 5)
         finally:
             conn.close()
+
+
+class TestResolveCsvPaths(unittest.TestCase):
+
+    def test_plain_file_args_pass_through_unchanged(self):
+        self.assertEqual(import_csv._resolve_csv_paths(['a.csv', 'b.csv']), ['a.csv', 'b.csv'])
+
+    def test_directory_expands_to_its_csvs_sorted(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            for name in ('activities-2026-09-07.csv', 'activities-2026-09-06.csv', 'notes.txt', 'export.CSV'):
+                Path(tmp_dir, name).touch()
+            self.assertEqual(
+                import_csv._resolve_csv_paths([tmp_dir]),
+                [
+                    os.path.join(tmp_dir, 'activities-2026-09-06.csv'),
+                    os.path.join(tmp_dir, 'activities-2026-09-07.csv'),
+                    os.path.join(tmp_dir, 'export.CSV'),
+                ],
+            )
+
+    def test_empty_directory_contributes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self.assertEqual(import_csv._resolve_csv_paths([tmp_dir]), [])
+
+    def test_mixes_files_and_directories(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            Path(tmp_dir, 'bank.csv').touch()
+            self.assertEqual(
+                import_csv._resolve_csv_paths(['explicit.csv', tmp_dir]),
+                ['explicit.csv', os.path.join(tmp_dir, 'bank.csv')],
+            )
 
 
 if __name__ == '__main__':

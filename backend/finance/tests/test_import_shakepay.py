@@ -368,6 +368,27 @@ class TestImportShakepayText(unittest.TestCase):
         self.assertEqual(cash_flow['income'], 0.0)
         self.assertEqual(cash_flow['expense'], 10.0)
 
+    def test_roundup_row_stores_its_btc_quantity(self):
+        import_shakepay.import_shakepay_text(self.conn, 'acct.pdf', ACCOUNT_STATEMENT_TEXT)
+        row = self.conn.execute(
+            "SELECT btc_quantity FROM transactions WHERE activity_type = 'ROUNDUP_BUY'"
+        ).fetchone()
+        self.assertEqual(row['btc_quantity'], 0.00002993)
+
+    def test_non_roundup_rows_have_no_btc_quantity(self):
+        import_shakepay.import_shakepay_text(self.conn, 'acct.pdf', ACCOUNT_STATEMENT_TEXT)
+        rows = self.conn.execute(
+            "SELECT btc_quantity FROM transactions WHERE activity_type != 'ROUNDUP_BUY'"
+        ).fetchall()
+        self.assertTrue(all(r['btc_quantity'] is None for r in rows))
+
+    def test_roundup_btc_appears_in_the_monthly_accumulation_figure(self):
+        import summary as finance_summary
+
+        import_shakepay.import_shakepay_text(self.conn, 'acct.pdf', ACCOUNT_STATEMENT_TEXT)
+        result = finance_summary.btc_accumulated_by_month(self.conn)
+        self.assertEqual(result, [{'month': '2026-08', 'btcQuantity': 0.00002993}])
+
 
 class TestResolvePdfPaths(unittest.TestCase):
 

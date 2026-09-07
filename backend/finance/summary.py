@@ -134,6 +134,35 @@ def monthly_trend(conn, months=MONTHS_OF_TREND):
     return trend[-months:]
 
 
+def monthly_trend_by_source(conn, months=MONTHS_OF_TREND):
+    """Same figure as monthly_trend(), broken down by which account each
+    row came from - what the Spend by Month chart's colour-per-source
+    stacked bars read (finance/README.md). `source` is
+    accounts.institution when set (e.g. "Shakepay" - already shared
+    across all three shakepay-* accounts, so they merge into one
+    series, per import_shakepay.py's ACCOUNTS table) falling back to the
+    account's own label otherwise (e.g. bank chequing accounts, which
+    import_csv.py doesn't set an institution for)."""
+    rows = conn.execute(
+        f'''SELECT substr(t.date, 1, 7) AS month,
+                   COALESCE(a.institution, a.label) AS source,
+                   {_SPENDING_CASE} AS total
+            FROM transactions_effective t
+            JOIN accounts a ON a.id = t.account_id
+            WHERE {_SPENDING_FILTER}
+            GROUP BY month, source
+            HAVING total > 0
+            ORDER BY month'''
+    ).fetchall()
+
+    by_month = {}
+    for r in rows:
+        by_month.setdefault(r['month'], {})[r['source']] = round(r['total'], 2)
+
+    months_sorted = sorted(by_month)[-months:]
+    return [{'month': m, 'bySource': by_month[m]} for m in months_sorted]
+
+
 def top_merchants(conn, start, end, limit=TOP_MERCHANTS_LIMIT, category=None):
     if category:
         rows = conn.execute(
@@ -176,6 +205,26 @@ def merchant_transactions(conn, description, start, end):
     return [{'id': r['id'], 'date': r['date'], 'amount': round(r['amount'], 2), 'category': r['category']} for r in rows]
 
 
+def btc_accumulated_by_month(conn, months=MONTHS_OF_TREND):
+    """BTC bought via Shakepay's round-up-your-purchase feature, per
+    month (finance/README.md) - transactions.btc_quantity, set only on
+    import_shakepay.py's ROUNDUP_BUY rows. Round-ups aren't spend or
+    income (they convert CAD you already have into BTC you keep - see
+    import_shakepay.py's module docstring), so this is independent of
+    _SPENDING_FILTER/category entirely - a round-up counts here whether
+    or not its (nonexistent) category has ever been set. Same
+    all-history-then-slice shape as monthly_trend()."""
+    rows = conn.execute(
+        '''SELECT substr(date, 1, 7) AS month, SUM(btc_quantity) AS btc
+           FROM transactions
+           WHERE activity_type = 'ROUNDUP_BUY' AND btc_quantity IS NOT NULL
+           GROUP BY month
+           ORDER BY month'''
+    ).fetchall()
+    trend = [{'month': r['month'], 'btcQuantity': round(r['btc'], 8)} for r in rows]
+    return trend[-months:]
+
+
 def build_summary(conn, window=DEFAULT_WINDOW, today=None, category=None):
     """`category`, when given, narrows topMerchants to just that category
     (the dashboard's click-a-category-to-filter-merchants interaction) -
@@ -195,6 +244,7 @@ def build_summary(conn, window=DEFAULT_WINDOW, today=None, category=None):
         'categoryFilter': category,
         'byCategory': category_breakdown(conn, start, end),
         'byMonth': monthly_trend(conn),
+        'byMonthBySource': monthly_trend_by_source(conn),
         'topMerchants': top_merchants(conn, start, end, category=category),
     }
 

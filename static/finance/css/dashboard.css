@@ -596,6 +596,25 @@
   gap: 10px;
 }
 
+/* Spend by Month's colour-per-source legend (finance/README.md) sits
+   below a wide chart rather than beside a donut, so a compact row that
+   wraps reads better here than the default vertical list. */
+.fin-legend-horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 10px;
+  justify-content: center;
+}
+
+.fin-legend-horizontal .fin-legend-row {
+  flex: 0 0 auto;
+}
+
+.fin-legend-horizontal .fin-legend-label {
+  white-space: nowrap;
+}
+
 .fin-legend-row {
   display: flex;
   align-items: center;

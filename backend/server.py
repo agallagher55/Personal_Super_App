@@ -281,6 +281,14 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             by_type = finance_summary.cash_flow_income_by_type(transactions) if kind != 'expense' else []
             self.send_json(200, {'month': month, 'kind': kind, 'transactions': transactions, 'total': total, 'byType': by_type})
             return
+        if path == '/finance/shakepay-btc-by-month.json':
+            conn = finance_db.connect()
+            try:
+                by_month = finance_summary.btc_accumulated_by_month(conn)
+            finally:
+                conn.close()
+            self.send_json(200, {'byMonth': by_month})
+            return
         if path == '/finance/last-imported.json':
             conn = finance_db.connect()
             try:
