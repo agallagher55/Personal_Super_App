@@ -412,6 +412,23 @@
   color: var(--ink);
 }
 
+/* Spend by Month's per-transaction dialog only (finance/README.md's
+   click-a-bar-to-see-its-transactions) - the source dot sits inline before
+   the description text here, same .fin-source-dot as Top Merchants. */
+.fin-category-tx-description .fin-source-dot {
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+.fin-category-tx-category {
+  flex: 0 0 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
 /* --- Cash Flow exclusions (finance/ARCHITECTURE.md A5f) --- */
 
 .fin-cashflow-tx-row-excluded .fin-category-tx-date,
@@ -844,6 +861,25 @@
   font-size: 10.5px;
   color: var(--ink-soft);
   margin-top: 4px;
+}
+
+/* Which source (Shakepay, Wealthsimple, ...) a Top Merchants row or a
+   Spend by Month transaction came from - a small identity-color dot (same
+   --stock-N colors the chart itself stacks by, see spending.js's
+   currentSourceColors) plus the source's name, so it reads without a
+   hover, not just as a title-attribute tooltip. */
+.fin-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fin-source-dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
 }
 
 .fin-account-grid {

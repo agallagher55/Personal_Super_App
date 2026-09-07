@@ -209,8 +209,25 @@ class TestTopMerchants(SummaryTestCase):
         self.load(text)
         result = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30')
         self.assertEqual(result, [
-            {'merchant': 'Mcdonalds', 'total': 7.0, 'count': 2},
-            {'merchant': 'Starbucks', 'total': 6.0, 'count': 1},
+            {'merchant': 'Mcdonalds', 'total': 7.0, 'count': 2, 'sources': ['Wealthsimple']},
+            {'merchant': 'Starbucks', 'total': 6.0, 'count': 1, 'sources': ['Wealthsimple']},
+        ])
+
+    def test_merchant_shared_across_sources_merges_into_one_row(self):
+        text = (
+            CREDIT_CARD_HEADER
+            + cc_row('2026-09-01', 'Purchase', 'Interac e-Transfer fee', -1.50, 'Bills and utilities')
+        )
+        self.load(text)
+        self.load(
+            BANK_HEADER + bank_row('2026-09-02', 'MoneyMovement', 'SPEND', 'Interac e-Transfer fee', -1.50),
+            'bank.csv',
+        )
+        finance_db.set_merchant_category_override(self.conn, 'Interac e-Transfer fee', 'Bills and utilities', '2026-09-06T00:00:00Z')
+
+        result = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30')
+        self.assertEqual(result, [
+            {'merchant': 'Interac e-Transfer fee', 'total': 3.0, 'count': 2, 'sources': ['Chequing', 'Wealthsimple']},
         ])
 
     def test_respects_the_limit(self):
@@ -237,13 +254,88 @@ class TestTopMerchants(SummaryTestCase):
         )
         self.load(text)
         result = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30', category='Coffee')
-        self.assertEqual(result, [{'merchant': 'Starbucks', 'total': 6.0, 'count': 1}])
+        self.assertEqual(result, [{'merchant': 'Starbucks', 'total': 6.0, 'count': 1, 'sources': ['Wealthsimple']}])
 
     def test_category_filter_with_no_matches_returns_empty(self):
         text = CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'Mcdonalds', -3.00, 'Restaurants')
         self.load(text)
         result = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30', category='Coffee')
         self.assertEqual(result, [])
+
+
+class TestSpendMonthTransactions(SummaryTestCase):
+    """Backs the Spend by Month chart's click-a-bar-to-see-its-transactions
+    dialog (finance/README.md)."""
+
+    def test_lists_that_months_transactions_newest_first(self):
+        text = (
+            CREDIT_CARD_HEADER
+            + cc_row('2026-09-01', 'Purchase', 'Cafe A', -5.00, 'Coffee')
+            + cc_row('2026-09-15', 'Purchase', 'Cafe B', -7.00, 'Coffee')
+        )
+        self.load(text)
+        result = summary.spend_month_transactions(self.conn, '2026-09')
+        self.assertEqual(result, [
+            {
+                'id': cc_id('2026-09-15', 'Cafe B', -7.00),
+                'date': '2026-09-15',
+                'description': 'Cafe B',
+                'amount': 7.0,
+                'category': 'Coffee',
+                'source': 'Wealthsimple',
+            },
+            {
+                'id': cc_id('2026-09-01', 'Cafe A', -5.00),
+                'date': '2026-09-01',
+                'description': 'Cafe A',
+                'amount': 5.0,
+                'category': 'Coffee',
+                'source': 'Wealthsimple',
+            },
+        ])
+
+    def test_other_months_are_excluded(self):
+        text = (
+            CREDIT_CARD_HEADER
+            + cc_row('2026-08-15', 'Purchase', 'Old', -10.00, 'Coffee')
+            + cc_row('2026-09-15', 'Purchase', 'New', -10.00, 'Coffee')
+        )
+        self.load(text)
+        result = summary.spend_month_transactions(self.conn, '2026-09')
+        self.assertEqual([r['description'] for r in result], ['New'])
+
+    def test_uncategorized_rows_are_excluded_same_as_the_chart_total(self):
+        text = CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Payment', '', 100.00, 'Uncategorized')
+        self.load(text)
+        result = summary.spend_month_transactions(self.conn, '2026-09')
+        self.assertEqual(result, [])
+
+    def test_chequing_expense_rows_show_their_own_label_as_source(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
+        finance_db.set_merchant_category_override(self.conn, 'Rent payment', 'Rent', '2026-09-06T00:00:00Z')
+
+        result = summary.spend_month_transactions(self.conn, '2026-09')
+        self.assertEqual(result, [
+            {
+                'id': bank_id('2026-09-01', 'Rent payment', -1500.0, 'AFT_OUT'),
+                'date': '2026-09-01',
+                'description': 'Rent payment',
+                'amount': 1500.0,
+                'category': 'Rent',
+                'source': 'Chequing',
+            },
+        ])
+
+    def test_amounts_sum_to_the_same_total_as_monthly_trend(self):
+        text = (
+            CREDIT_CARD_HEADER
+            + cc_row('2026-09-01', 'Purchase', 'Cafe A', -5.00, 'Coffee')
+            + cc_row('2026-09-05', 'Refund', 'Cafe A Refund', 2.00, 'Coffee')
+        )
+        self.load(text)
+        result = summary.spend_month_transactions(self.conn, '2026-09')
+        trend = summary.monthly_trend(self.conn)
+        self.assertEqual(round(sum(r['amount'] for r in result), 2), trend[0]['total'])
 
 
 class TestBuildSummary(SummaryTestCase):
@@ -259,7 +351,7 @@ class TestBuildSummary(SummaryTestCase):
         self.assertEqual(result['byCategory'], [{'category': 'Coffee', 'total': 5.0}])
         self.assertEqual(result['byMonth'], [{'month': '2026-09', 'total': 5.0}])
         self.assertEqual(result['byMonthBySource'], [{'month': '2026-09', 'bySource': {'Wealthsimple': 5.0}}])
-        self.assertEqual(result['topMerchants'], [{'merchant': 'Cafe', 'total': 5.0, 'count': 1}])
+        self.assertEqual(result['topMerchants'], [{'merchant': 'Cafe', 'total': 5.0, 'count': 1, 'sources': ['Wealthsimple']}])
 
     def test_category_narrows_merchants_but_not_the_category_breakdown(self):
         text = (
@@ -270,7 +362,7 @@ class TestBuildSummary(SummaryTestCase):
         self.load(text)
         result = summary.build_summary(self.conn, 'month', today=date(2026, 9, 6), category='Coffee')
         self.assertEqual(result['categoryFilter'], 'Coffee')
-        self.assertEqual(result['topMerchants'], [{'merchant': 'Cafe', 'total': 5.0, 'count': 1}])
+        self.assertEqual(result['topMerchants'], [{'merchant': 'Cafe', 'total': 5.0, 'count': 1, 'sources': ['Wealthsimple']}])
         # byCategory keeps showing the whole picture - only merchants drills down
         self.assertEqual(len(result['byCategory']), 2)
 
@@ -367,10 +459,10 @@ class TestCategoryOverrides(SummaryTestCase):
         finance_db.set_merchant_category_override(self.conn, 'Tim Hortons', 'Food', '2026-09-06T00:00:00Z')
 
         coffee = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30', category='Coffee')
-        self.assertEqual(coffee, [{'merchant': 'Starbucks', 'total': 5.0, 'count': 1}])
+        self.assertEqual(coffee, [{'merchant': 'Starbucks', 'total': 5.0, 'count': 1, 'sources': ['Wealthsimple']}])
 
         food = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30', category='Food')
-        self.assertEqual(food, [{'merchant': 'Tim Hortons', 'total': 6.26, 'count': 1}])
+        self.assertEqual(food, [{'merchant': 'Tim Hortons', 'total': 6.26, 'count': 1, 'sources': ['Wealthsimple']}])
 
     def test_merchant_transactions_returns_effective_category(self):
         text = (
@@ -428,7 +520,7 @@ class TestChequingExpenseInSpending(SummaryTestCase):
         # uncategorized chequing expense gets found in order to be fixed.
         self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
         result = summary.top_merchants(self.conn, '2026-09-01', '2026-09-30')
-        self.assertEqual(result, [{'merchant': 'Rent payment', 'total': 1500.0, 'count': 1}])
+        self.assertEqual(result, [{'merchant': 'Rent payment', 'total': 1500.0, 'count': 1, 'sources': ['Chequing']}])
 
     def test_categorized_chequing_expense_appears_in_the_category_breakdown(self):
         self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')

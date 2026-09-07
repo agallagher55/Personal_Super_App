@@ -281,6 +281,18 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             by_type = finance_summary.cash_flow_income_by_type(transactions) if kind != 'expense' else []
             self.send_json(200, {'month': month, 'kind': kind, 'transactions': transactions, 'total': total, 'byType': by_type})
             return
+        if path == '/finance/spend-month-transactions.json':
+            month = parse_qs(parsed.query).get('month', [''])[0]
+            if not month:
+                return self.send_json_error(400, 'Missing month')
+            conn = finance_db.connect()
+            try:
+                transactions = finance_summary.spend_month_transactions(conn, month)
+            finally:
+                conn.close()
+            total = round(sum(t['amount'] for t in transactions), 2)
+            self.send_json(200, {'month': month, 'transactions': transactions, 'total': total})
+            return
         if path == '/finance/shakepay-btc-by-month.json':
             conn = finance_db.connect()
             try:
