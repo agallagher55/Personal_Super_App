@@ -234,5 +234,43 @@ class TestImportShakepayText(unittest.TestCase):
         self.assertEqual(cash_flow['expense'], 10.0)
 
 
+class TestResolvePdfPaths(unittest.TestCase):
+
+    def test_plain_file_args_pass_through_unchanged(self):
+        self.assertEqual(
+            import_shakepay._resolve_pdf_paths(['a.pdf', 'b.pdf']),
+            ['a.pdf', 'b.pdf'],
+        )
+
+    def test_directory_expands_to_its_pdfs_sorted(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            for name in ('shakepay-2026-08 (1).pdf', 'shakepay-2026-08.pdf', 'notes.txt', 'export.CSV'):
+                Path(tmp_dir, name).touch()
+            self.assertEqual(
+                import_shakepay._resolve_pdf_paths([tmp_dir]),
+                [
+                    os.path.join(tmp_dir, 'shakepay-2026-08 (1).pdf'),
+                    os.path.join(tmp_dir, 'shakepay-2026-08.pdf'),
+                ],
+            )
+
+    def test_uppercase_pdf_extension_is_matched(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            Path(tmp_dir, 'STATEMENT.PDF').touch()
+            self.assertEqual(import_shakepay._resolve_pdf_paths([tmp_dir]), [os.path.join(tmp_dir, 'STATEMENT.PDF')])
+
+    def test_empty_directory_contributes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self.assertEqual(import_shakepay._resolve_pdf_paths([tmp_dir]), [])
+
+    def test_mixes_files_and_directories(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            Path(tmp_dir, 'card.pdf').touch()
+            self.assertEqual(
+                import_shakepay._resolve_pdf_paths(['explicit.pdf', tmp_dir]),
+                ['explicit.pdf', os.path.join(tmp_dir, 'card.pdf')],
+            )
+
+
 if __name__ == '__main__':
     unittest.main()

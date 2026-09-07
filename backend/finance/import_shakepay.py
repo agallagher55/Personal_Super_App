@@ -16,6 +16,13 @@ Usage:
                          # cryptography are for finance/ - see
                          # finance/ARCHITECTURE.md section 1
     python3 backend/finance/import_shakepay.py statement1.pdf [statement2.pdf ...]
+    python3 backend/finance/import_shakepay.py data/finance/shakepay/
+
+Any argument that's a directory is expanded to the *.pdf files directly
+inside it (not recursive) - keep a standing folder of every month's two
+downloads (e.g. data/finance/shakepay/, which is already under the
+git-ignored data/finance/) and re-point the command at that folder each
+time rather than naming files by hand.
 
 Shakepay sends two separate PDFs each month for the same account (see
 finance/README.md for the full description of both): the "Shakepay Inc."
@@ -436,15 +443,42 @@ def import_shakepay_pdf(conn, path, save_copy=True):
     return import_shakepay_text(conn, os.path.basename(path), text)
 
 
+def _resolve_pdf_paths(args):
+    """Each arg is either a statement PDF or a directory of them (e.g. a
+    dedicated data/finance/shakepay/ folder you save every month's
+    downloads into) - directories are expanded to their *.pdf files
+    (non-recursive, case-insensitive extension, sorted for a stable,
+    repeatable run order) rather than needing every file named on the
+    command line by hand."""
+    paths = []
+    for arg in args:
+        if os.path.isdir(arg):
+            pdfs = sorted(
+                os.path.join(arg, name) for name in os.listdir(arg)
+                if name.lower().endswith('.pdf')
+            )
+            if not pdfs:
+                print(f'{arg}: no .pdf files found, skipping')
+            paths.extend(pdfs)
+        else:
+            paths.append(arg)
+    return paths
+
+
 def main():
     if len(sys.argv) < 2:
-        print('usage: python3 backend/finance/import_shakepay.py <statement.pdf> [statement2.pdf ...]')
+        print('usage: python3 backend/finance/import_shakepay.py <statement.pdf | a directory of them> [...]')
+        raise SystemExit(1)
+
+    paths = _resolve_pdf_paths(sys.argv[1:])
+    if not paths:
+        print('No PDFs to import.')
         raise SystemExit(1)
 
     conn = finance_db.connect()
     try:
         finance_db.init_schema(conn)
-        for path in sys.argv[1:]:
+        for path in paths:
             summary = import_shakepay_pdf(conn, path)
             print(f"{path}: {summary['statement_type']} statement, "
                   f"{summary['period_start']} to {summary['period_end']}")
