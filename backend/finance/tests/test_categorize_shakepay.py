@@ -43,6 +43,25 @@ class TestGuessCategory(unittest.TestCase):
             ('DAL ATHLETICS - POS 1', 'Fitness'),
             ('096 HRM ON-LINE PARKING S', 'Gas, parking, and tolls'),
             ('AIR-SERV A AN01383', 'Gas, parking, and tolls'),
+            ('UBER CANADA/UBERTRIP', 'Transportation'),
+            ('MASABI *HALIFAX', 'Transportation'),
+            ('METROLINX - GO TRANSIT', 'Transportation'),
+            ('BIRD* PENDING.BIRD.CO', 'Transportation'),
+            ('KUBRA/EZ-PAY', 'Bills & utilities'),
+            ('NOVA SCOTIA PWR/EZ-PAY', 'Bills & utilities'),
+            ('CANADIAN TIRE #44', 'Other shopping'),
+            ('NSLC #2107', 'Other shopping'),
+            ('DURTY NELLYS IRISH PUB', 'Restaurants'),
+            ('SEAHORSE TAVERN', 'Restaurants'),
+            ('Garrison Brewing', 'Restaurants'),
+            # Truncated merchant descriptions (observed real-world limit:
+            # ~25 chars) must still match on their shortened keyword.
+            ('SQ *WEIRD HARBOUR ESPRESS', 'Coffee'),
+            ("TONY'S DONAIR AND PIZZ", 'Restaurants'),
+            # Toast POS always prefixes its own merchant names with
+            # "TST-", regardless of what the venue itself is.
+            ('TST-The Narrows Public', 'Restaurants'),
+            ('TST-Stillwell Beerbar', 'Restaurants'),
         ]
         for description, expected in cases:
             with self.subTest(description=description):
@@ -53,6 +72,14 @@ class TestGuessCategory(unittest.TestCase):
 
     def test_unrecognized_merchant_returns_none(self):
         self.assertIsNone(categorize_shakepay.guess_category('SQ *FIRST - CENTRAL'))
+
+    def test_genuinely_ambiguous_names_are_left_unmatched(self):
+        # Names with no reliable signal at all - correctly not guessed at,
+        # rather than forced into a category that might be wrong.
+        for description in ('ABUNDANT ACES FARM', 'AS YOU LIKE IT', 'PBCDARTMOUTHNS1329',
+                             'OPENAI *CHATGPT SUBSCR', 'SQ *POST-SECURITY CONNECT'):
+            with self.subTest(description=description):
+                self.assertIsNone(categorize_shakepay.guess_category(description))
 
 
 class TestCategorize(unittest.TestCase):
