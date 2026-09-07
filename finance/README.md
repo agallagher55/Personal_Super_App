@@ -24,7 +24,12 @@ last imported" timestamp next to the button confirms it landed), a
 "Spending" block (category donut — click a category to filter Top
 Merchants down to it, and a pencil button on any merchant opens a dialog
 to fix its category, either for just one transaction or permanently — a
-spend-by-month chart) that now covers chequing debit spend (debit
+spend-by-month chart, its bars stacked and coloured by source — e.g.
+Wealthsimple vs. Shakepay, see `summary.monthly_trend_by_source()` — with
+a legend naming which colour is which, below it a Bitcoin-accumulated-
+by-month chart totalling `transactions.btc_quantity` on Shakepay's
+round-up-your-purchase buys specifically, not spend/income of any kind)
+that now covers chequing debit spend (debit
 purchases, pre-authorized debits like rent, bill payments) alongside
 credit-card purchases, and a "Cash Flow" block (income/expense/net stat
 tiles, a monthly income-vs-expense chart where clicking a bar lists the
@@ -39,6 +44,26 @@ credit card, from a different institution) is documented but not built**
 — see `ARCHITECTURE.md` §A9 for the concrete plan; it's blocked on having
 a real sample export from that institution, not on a decision. **Not
 started**: a real auth gate in front of the upload/route endpoints.
+
+`backend/finance/import_csv.py` is the "Import CSV Export" button's
+command-line equivalent — accepts one or more CSV files, or a directory
+of them (expanded to its `*.csv` files, same convention as
+`import_shakepay.py`). On Windows, `backend/wealthsimple-update.bat`
+wraps it, defaulting to `data\finance\wealthsimple\` (double-click, or
+pass a folder as its one argument):
+
+```
+python3 backend/finance/import_csv.py path/to/export.csv
+python3 backend/finance/import_csv.py data/finance/wealthsimple/
+```
+
+Confirmed 2026-09-07: `main-credit-card` is the Wealthsimple card, so
+`import_csv.py` now sets `accounts.institution = 'Wealthsimple'` for it
+(previously left `NULL` for every CSV-imported account) — this, plus
+Shakepay's three accounts already carrying `institution = 'Shakepay'`
+(`import_shakepay.py`), is what Spend by Month's colour-per-source
+grouping keys off. An account with no institution set (e.g. a bank
+chequing account) falls back to grouping under its own label instead.
 
 A live bug found while reviewing the Part C plan below is **fixed**:
 transaction ids

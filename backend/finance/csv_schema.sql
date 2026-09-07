@@ -33,6 +33,11 @@ CREATE TABLE IF NOT EXISTS transactions (
                                      -- at import time (chequing income rows get 'Income' - see
                                      -- import_csv.py); NULL for everything else (chequing expense/transfer rows)
   status        TEXT,               -- Completed | Pending (credit card export only), NULL otherwise
+  btc_quantity  REAL,               -- Shakepay ROUNDUP_BUY rows only (import_shakepay.py) - the BTC bought
+                                     -- by that round-up, for the monthly-accumulated-BTC figure; NULL
+                                     -- for every other row (existing databases get this column via
+                                     -- db.py's migration 3, since CREATE TABLE IF NOT EXISTS is a no-op
+                                     -- against a transactions table that already exists)
   source_file   TEXT NOT NULL,      -- which upload this row came from, for audit
   imported_at   TEXT NOT NULL
 );

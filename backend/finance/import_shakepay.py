@@ -257,7 +257,7 @@ def _split_transactions(section_text):
     return [c.strip() for c in chunks if c.strip()]
 
 
-def _row(date, description, amount, activity_type):
+def _row(date, description, amount, activity_type, btc_quantity=None):
     return {
         'date': date,
         'description': description,
@@ -265,6 +265,7 @@ def _row(date, description, amount, activity_type):
         'activity_type': activity_type,
         'category': import_csv._default_chequing_category(activity_type),
         'status': None,
+        'btc_quantity': btc_quantity,
     }
 
 
@@ -306,7 +307,7 @@ def _parse_cash_section(text):
             elif kind == 'roundup':
                 date, time, btc_qty, btc_price, amount, balance = match.groups()
                 rows.append(_row(date, f'Round up - bought {btc_qty} BTC @ CA${btc_price}',
-                                  _money(amount), 'ROUNDUP_BUY'))
+                                  _money(amount), 'ROUNDUP_BUY', btc_quantity=float(btc_qty)))
             break
         if not matched:
             unparsed.append(chunk)

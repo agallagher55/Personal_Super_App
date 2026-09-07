@@ -5,13 +5,14 @@
 // its own DOM, no change to dashboard.js's existing net-worth/cash/
 // investment rendering beyond exporting the row/legend/escape helpers this
 // reuses instead of duplicating their markup.
-import { drawDonut, drawMonthlyBarChart } from "./charts.js";
+import { drawDonut, drawMonthlyBarChart, drawBtcMonthlyChart } from "./charts.js";
 import { renderLegend, escapeHtml } from "./dashboard.js";
 
 const SUMMARY_URL = "/finance/spending-summary.json";
 const MERCHANT_TX_URL = "/finance/merchant-transactions.json";
 const SET_TRANSACTION_CATEGORY_URL = "/finance/categories/transaction";
 const SET_MERCHANT_CATEGORY_URL = "/finance/categories/merchant";
+const BTC_BY_MONTH_URL = "/finance/shakepay-btc-by-month.json";
 // Reuses dashboard.js's --stock-1..12 identity-color family (already a
 // generic, validated 12-slot categorical palette, not something specific
 // to stocks) rather than defining a second one for spending categories.
@@ -52,6 +53,22 @@ function categoryColors(byCategory) {
   }
   const colors = new Map();
   categories.forEach((cat, i) => colors.set(cat, `--stock-${(i % CATEGORY_COLOR_SLOTS) + 1}`));
+  return colors;
+}
+
+// Same alphabetical-assignment convention as categoryColors above, over
+// every source that appears in any month (not just the most recent one),
+// so a source's color stays the same across the whole chart even if it
+// only shows up in some months.
+function sourceColors(byMonthBySource) {
+  const sources = [...new Set(byMonthBySource.flatMap((m) => Object.keys(m.bySource)))].sort();
+  if (sources.length > CATEGORY_COLOR_SLOTS) {
+    console.warn(
+      `finance spending: ${sources.length} sources exceeds the ${CATEGORY_COLOR_SLOTS} color slots - some will share an identity color.`
+    );
+  }
+  const colors = new Map();
+  sources.forEach((source, i) => colors.set(source, `--stock-${(i % CATEGORY_COLOR_SLOTS) + 1}`));
   return colors;
 }
 
@@ -149,20 +166,41 @@ function renderTopMerchants(topMerchants) {
   }
 }
 
-function renderMonthlyChart(byMonth) {
+// `byMonthBySource` is [{ month, bySource: { sourceLabel: amount } }, ...]
+// (summary.monthly_trend_by_source) - each source (e.g. "Wealthsimple",
+// "Shakepay") gets its own color, stacked into one bar per month, with a
+// legend below naming which color is which source.
+function renderMonthlyChart(byMonthBySource) {
   const canvas = document.getElementById("fin-spend-month-canvas");
   const tooltip = document.getElementById("fin-spend-month-tooltip");
   const empty = document.getElementById("fin-spend-month-empty");
+  const legendEl = document.getElementById("fin-spend-month-legend");
   if (!canvas) return;
 
-  if (byMonth.length === 0) {
+  if (byMonthBySource.length === 0) {
     canvas.hidden = true;
     if (empty) empty.hidden = false;
+    if (legendEl) legendEl.innerHTML = "";
     return;
   }
   canvas.hidden = false;
   if (empty) empty.hidden = true;
-  drawMonthlyBarChart(canvas, tooltip, byMonth, { colorVar: "--status-blue" });
+
+  const colors = sourceColors(byMonthBySource);
+  const series = [...colors.keys()].map((key) => ({ key, colorVar: colors.get(key) }));
+  drawMonthlyBarChart(canvas, tooltip, byMonthBySource, series);
+
+  if (legendEl) {
+    const totals = new Map();
+    for (const month of byMonthBySource) {
+      for (const [source, amount] of Object.entries(month.bySource)) {
+        totals.set(source, (totals.get(source) || 0) + amount);
+      }
+    }
+    const grandTotal = [...totals.values()].reduce((sum, v) => sum + v, 0);
+    const slices = series.map((s) => ({ label: s.key, value: totals.get(s.key) || 0, colorVar: s.colorVar }));
+    renderLegend("fin-spend-month-legend", slices, grandTotal, { compact: true });
+  }
 }
 
 async function loadSummary(window_, category) {
@@ -171,6 +209,35 @@ async function loadSummary(window_, category) {
   const res = await fetch(`${SUMMARY_URL}?${params}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+// Not window-scoped (always the full history, like Spend by Month's own
+// byMonth/byMonthBySource) so this loads once at page load rather than
+// re-fetching on every This month/30 days/... change.
+async function renderBtcAccumulated() {
+  const canvas = document.getElementById("fin-btc-month-canvas");
+  const tooltip = document.getElementById("fin-btc-month-tooltip");
+  const empty = document.getElementById("fin-btc-month-empty");
+  if (!canvas) return;
+
+  let byMonth;
+  try {
+    const res = await fetch(BTC_BY_MONTH_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    ({ byMonth } = await res.json());
+  } catch (err) {
+    console.warn("finance spending: failed to load BTC accumulated by month", err);
+    return;
+  }
+
+  if (byMonth.length === 0) {
+    canvas.hidden = true;
+    if (empty) empty.hidden = false;
+    return;
+  }
+  canvas.hidden = false;
+  if (empty) empty.hidden = true;
+  drawBtcMonthlyChart(canvas, tooltip, byMonth);
 }
 
 async function loadAndRenderMerchants() {
@@ -195,7 +262,7 @@ async function renderSpending(window_) {
   }
   renderCategoryDonut(data.byCategory);
   renderTopMerchants(data.topMerchants);
-  renderMonthlyChart(data.byMonth);
+  renderMonthlyChart(data.byMonthBySource);
   populateCategoryOptions(data.byCategory);
 }
 
@@ -301,6 +368,7 @@ export function initFinanceSpending() {
   if (!select) return;
   renderSpending(select.value);
   select.addEventListener("change", () => renderSpending(select.value));
+  renderBtcAccumulated();
 
   const clearButton = document.getElementById("fin-merchants-filter-clear");
   if (clearButton) {

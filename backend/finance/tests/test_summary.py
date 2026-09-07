@@ -164,6 +164,39 @@ class TestMonthlyTrend(SummaryTestCase):
         self.assertEqual([r['month'] for r in result], ['2026-07', '2026-08', '2026-09'])
 
 
+class TestMonthlyTrendBySource(SummaryTestCase):
+    """Backs the Spend by Month chart's colour-per-source stacked bars
+    (finance/README.md)."""
+
+    def test_credit_card_spend_groups_under_wealthsimple(self):
+        self.load(CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'A', -10.00, 'Coffee'))
+        result = summary.monthly_trend_by_source(self.conn)
+        self.assertEqual(result, [{'month': '2026-09', 'bySource': {'Wealthsimple': 10.0}}])
+
+    def test_chequing_account_with_no_institution_groups_under_its_own_label(self):
+        self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
+        finance_db.set_merchant_category_override(self.conn, 'Rent payment', 'Rent', '2026-09-06T00:00:00Z')
+
+        result = summary.monthly_trend_by_source(self.conn)
+        self.assertEqual(result, [{'month': '2026-09', 'bySource': {'Chequing': 1500.0}}])
+
+    def test_two_sources_in_the_same_month_stay_separate(self):
+        self.load(CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'A', -10.00, 'Coffee'))
+        self.load(BANK_HEADER + bank_row('2026-09-02', 'MoneyMovement', 'SPEND', 'Grocery debit', -60.00), 'bank.csv')
+        finance_db.set_merchant_category_override(self.conn, 'Grocery debit', 'Groceries', '2026-09-06T00:00:00Z')
+
+        result = summary.monthly_trend_by_source(self.conn)
+        self.assertEqual(result, [{'month': '2026-09', 'bySource': {'Wealthsimple': 10.0, 'Chequing': 60.0}}])
+
+    def test_limits_to_the_requested_number_of_months(self):
+        text = CREDIT_CARD_HEADER + ''.join(
+            cc_row(f'2026-{m:02d}-01', 'Purchase', 'X', -1.00, 'Coffee') for m in range(1, 10)
+        )
+        self.load(text)
+        result = summary.monthly_trend_by_source(self.conn, months=3)
+        self.assertEqual([r['month'] for r in result], ['2026-07', '2026-08', '2026-09'])
+
+
 class TestTopMerchants(SummaryTestCase):
 
     def test_sums_and_counts_per_merchant(self):
@@ -225,6 +258,7 @@ class TestBuildSummary(SummaryTestCase):
         self.assertIsNone(result['categoryFilter'])
         self.assertEqual(result['byCategory'], [{'category': 'Coffee', 'total': 5.0}])
         self.assertEqual(result['byMonth'], [{'month': '2026-09', 'total': 5.0}])
+        self.assertEqual(result['byMonthBySource'], [{'month': '2026-09', 'bySource': {'Wealthsimple': 5.0}}])
         self.assertEqual(result['topMerchants'], [{'merchant': 'Cafe', 'total': 5.0, 'count': 1}])
 
     def test_category_narrows_merchants_but_not_the_category_breakdown(self):
