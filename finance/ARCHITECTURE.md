@@ -1180,9 +1180,10 @@ buy/sell history stays out of scope until a real export shows up.
 ### C5. Layer 2 — curated tables
 
 **C5a. `accounts`, extended.** Every financial thing this app tracks
-gets a row here, whether or not it has transaction-level detail (a
-credit card and a chequing account do; a student loan or a line of
-credit only ever has a balance). `kind` stays a plain string, not a
+gets a row here, whether or not it has transaction-level detail. An
+account can have transactions, a balance history, or both, and the same
+card must never be modelled as two rows just because it has both - see
+C5h, which is exactly that case. `kind` stays a plain string, not a
 `CHECK` constraint, matching today's design - a `CHECK` is painful to
 extend in SQLite, and application code is already the source of truth
 for valid values.
@@ -1315,6 +1316,41 @@ correction on top of untouched history" pattern - nothing about them
 needs to change; they simply keep sitting on top of `transactions` as
 they do today.
 
+**C5h. One account, both kinds of detail — decided 2026-09-07.** The
+sample data's `debt.creditCards` lists a `"Wealthsimple"` balance ($210)
+alongside `accounts.main-credit-card` (A9), and these are **the same
+physical card**. So it gets **one** `accounts` row, the existing
+`main-credit-card`, carrying both kinds of detail: its purchases arrive
+as `transactions` from the CSV import, and its statement balance owed
+arrives as `account_balance_snapshots` rows. Not two accounts, and not
+a choice between the two kinds of detail.
+
+This is worth stating as a rule rather than a one-off, because it is
+what C5a's "whether or not it has transaction-level detail" actually
+means in practice. Three shapes all coexist in the same table:
+
+- **Transactions only** — nothing today, but a card whose balance you
+  never bother entering would land here.
+- **Balance only** — the other three cards in `debt.creditCards` (TD,
+  RBC, Tangerine), the student loan, the bills, the lines of credit,
+  the cash accounts. No export, just a number as of a date.
+- **Both** — `main-credit-card`, and the chequing account once its
+  balance starts being entered.
+
+The two kinds of detail answer different questions and never need
+reconciling against each other: the balance is a liability on the net
+worth side, the transactions are spending flow on the Spending/Cash Flow
+side. Paying the card bill moves both (chequing balance down, card
+balance owed down) and correctly leaves net worth unchanged.
+
+The one thing to get right when Phase 1 seeds these accounts: do **not**
+create a new row for the Wealthsimple card. Attach its balance to
+`main-credit-card`, and fill in that row's `institution` while you're
+there — the importer sets it to `NULL` today
+(`upsert_account(..., None, ...)` in `import_csv.py`), since the CSV
+export carries no institution column, so the seed step is the natural
+place for `'Wealthsimple'` to come from.
+
 ### C6. Layer 3 — "current" views
 
 ```sql
@@ -1377,7 +1413,7 @@ snapshot is entered, with no array to hand-edit.
 | Cash | `finance-dashboard.json` → `cashAccounts` | `latest_account_balances`, `accounts.kind IN ('chequing','savings')` |
 | Investments | `...investmentAccounts[].holdings` | `latest_investment_holdings` joined to `accounts`/`securities` |
 | Bitcoin | `...bitcoinHoldings` | `latest_account_balances`, `accounts.kind = 'bitcoin_wallet'` (see C11 on BTC quantity) |
-| Debt | `...debt.{studentLoan,creditCards,bills}` | `latest_account_balances`, `accounts.kind IN ('loan','credit_card','bill')` |
+| Debt | `...debt.{studentLoan,creditCards,bills}` | `latest_account_balances`, `accounts.kind IN ('loan','credit_card','bill')` — the Wealthsimple card resolves to the existing `main-credit-card` account, not a new row (C5h) |
 | Lines of Credit | `...linesOfCredit` | `latest_account_balances` joined to the latest `account_terms_snapshots`, `kind = 'line_of_credit'` |
 | Net Worth Over Time | `...netWorthHistory` (hardcoded array) | the net-worth-by-month query (C6) over `account_balance_snapshots` |
 | Net Worth/Assets/Debt stat tiles | client-side sum of the JSON above (`dashboard.js`) | same client-side sum, now over live `latest_account_balances` |
@@ -1454,7 +1490,10 @@ raw capture from the next import onward.
    it's always been hand-maintained, sample data (A1). Insert one
    `account_balance_snapshots`/`investment_holdings_snapshots` row per
    account/holding, dated as of "today," as the starting point history
-   builds forward from. `netWorthHistory`'s existing monthly array has no
+   builds forward from. Per C5h, the Wealthsimple entry under
+   `debt.creditCards` attaches to the existing `main-credit-card`
+   account rather than creating a second one; the other three cards
+   there are separate, balance-only accounts. `netWorthHistory`'s existing monthly array has no
    real accounts behind it to backfill against and is left as-is,
    unused, once C10's Phase 3 switches the chart to the real query.
    Note this step belongs to Phase 1/2, not to the Phase 4 backfill the
@@ -1483,7 +1522,8 @@ Phase 0 is already done, ahead of the rest, because C9 depends on it.
    columns to the existing table, so this needs real `ALTER TABLE`s at
    version 2. Then `account_balance_snapshots`, `account_terms_snapshots`,
    `import_batches`, and `POST /finance/balance-entries` (C8). Seed from
-   today's sample JSON (C9.4).
+   today's sample JSON (C9.4), folding the Wealthsimple card's balance
+   into the existing `main-credit-card` account per C5h.
 2. **Investment holdings.** `securities`,
    `investment_holdings_snapshots`, `POST /finance/holding-entries`
    (C8). Seed from today's sample JSON.
@@ -1514,20 +1554,13 @@ Phase 0 is already done, ahead of the rest, because C9 depends on it.
   quantity-over-time chart would need either a nullable `quantity`
   column there (crypto-only, NULL otherwise) or a small sibling table.
   Undecided pending whether that chart is actually wanted.
-- **The Wealthsimple credit card may already be double-modeled.**
-  `finance-dashboard.json`'s `debt.creditCards` lists a `"Wealthsimple"`
-  balance ($210) separately from `accounts.main-credit-card` (A9), the
-  same Wealthsimple-issued card Part A's CSV import already tracks
-  transaction-by-transaction. If these are the same physical card, its
-  statement balance owed should be an `account_balance_snapshots` row on
-  the *existing* `main-credit-card` account, not a second `accounts`
-  row. Worth confirming before Phase 1 seeds the debt accounts.
-- **Should a credit card's balance be entered at all, or derived?** Its
-  transactions are already imported, so in principle the balance owed is
-  a running sum. In practice the CSV covers a window rather than all
-  time, so there is no opening balance to sum from. Probably: enter it
-  like any other balance, and treat agreement with the transaction sum
-  as a sanity check rather than a constraint.
+- **Should a credit card's balance be entered at all, or derived?** Now
+  that `main-credit-card` carries both transactions and a balance (C5h),
+  the balance owed is in principle a running sum of its transactions. In
+  practice the CSV covers a window rather than all time, so there is no
+  opening balance to sum from. Leaning: enter it like any other balance,
+  and treat agreement with the transaction sum as a sanity check rather
+  than a constraint.
 - **Multi-currency.** Every export and every sample value today is CAD
   (A1/A2). A USD-denominated holding would need a real
   `iso_currency_code` plus a conversion step rather than the implicit
