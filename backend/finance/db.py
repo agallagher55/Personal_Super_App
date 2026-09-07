@@ -15,7 +15,7 @@ SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csv_sche
 
 # Bumped whenever a one-time migration is added below; tracked per
 # database in PRAGMA user_version so each migration runs exactly once.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 ID_DIGEST_LENGTH = 12
 
@@ -54,6 +54,9 @@ def migrate(conn):
 
     if version < 1:
         _rewrite_positional_transaction_ids(conn)
+
+    if version < 2:
+        _add_networth_account_columns(conn)
 
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is
@@ -131,6 +134,22 @@ def _rewrite_positional_transaction_ids(conn):
     conn.commit()
 
 
+def _add_networth_account_columns(conn):
+    """Migration 2: adds accounts.currency/closed_at for databases created
+    before Part C's net worth tables existed (ARCHITECTURE.md C5a/C10
+    Phase 1). A fresh database's accounts table already has both columns
+    (csv_schema.sql), since CREATE TABLE IF NOT EXISTS is a no-op against
+    a table that already exists but says nothing about its columns - so
+    this checks what's actually there rather than assuming either state.
+    """
+    existing = {row[1] for row in conn.execute('PRAGMA table_info(accounts)')}
+    if 'currency' not in existing:
+        conn.execute("ALTER TABLE accounts ADD COLUMN currency TEXT NOT NULL DEFAULT 'CAD'")
+    if 'closed_at' not in existing:
+        conn.execute('ALTER TABLE accounts ADD COLUMN closed_at TEXT')
+    conn.commit()
+
+
 def ensure_database(path=None):
     """Create the database and its schema if they don't exist yet. Called
     once at server startup, same pattern as tasks_db.ensure_database()."""
@@ -152,6 +171,11 @@ def upsert_account(conn, account_id, label, institution, kind):
              kind = excluded.kind''',
         (account_id, label, institution, kind),
     )
+
+
+def get_account(conn, account_id):
+    row = conn.execute('SELECT * FROM accounts WHERE id = ?', (account_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def replace_transactions_in_range(conn, account_id, date_start, date_end, rows):
@@ -224,6 +248,44 @@ def set_merchant_category_override(conn, description, category, updated_at):
         )
     else:
         conn.execute('DELETE FROM merchant_category_overrides WHERE description = ?', (description,))
+
+
+def create_import_batch(conn, kind, imported_at, source_file=None, file_hash=None,
+                         date_range_start=None, date_range_end=None, row_count=1, notes=None):
+    """One row per fact-producing event - a manual balance/holding entry
+    today, a future net-worth CSV import later (ARCHITECTURE.md C3).
+    Returns the new batch's id."""
+    cursor = conn.execute(
+        '''INSERT INTO import_batches
+           (kind, source_file, file_hash, date_range_start, date_range_end, row_count, imported_at, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+        (kind, source_file, file_hash, date_range_start, date_range_end, row_count, imported_at, notes),
+    )
+    return cursor.lastrowid
+
+
+def insert_balance_snapshot(conn, account_id, as_of_date, balance_cad, source, batch_id, recorded_at):
+    """Appends one account_balance_snapshots row - never an update, per
+    ARCHITECTURE.md C2's append-only rule. `balance_cad` is always a
+    positive magnitude (C5a); `latest_account_balances` is "current"."""
+    cursor = conn.execute(
+        '''INSERT INTO account_balance_snapshots (account_id, as_of_date, balance_cad, source, batch_id, recorded_at)
+           VALUES (?, ?, ?, ?, ?, ?)''',
+        (account_id, as_of_date, balance_cad, source, batch_id, recorded_at),
+    )
+    return cursor.lastrowid
+
+
+def insert_terms_snapshot(conn, account_id, as_of_date, interest_rate, credit_limit, recorded_at):
+    """Appends one account_terms_snapshots row (a line of credit's rate/
+    limit) - only called when a term is actually given, not on every
+    balance update (ARCHITECTURE.md C5d)."""
+    cursor = conn.execute(
+        '''INSERT INTO account_terms_snapshots (account_id, as_of_date, interest_rate, credit_limit, recorded_at)
+           VALUES (?, ?, ?, ?, ?)''',
+        (account_id, as_of_date, interest_rate, credit_limit, recorded_at),
+    )
+    return cursor.lastrowid
 
 
 def set_cash_flow_exclusion(conn, transaction_id, is_excluded, reason, created_at):

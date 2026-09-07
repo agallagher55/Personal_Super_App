@@ -8,7 +8,14 @@ CREATE TABLE IF NOT EXISTS accounts (
   id          TEXT PRIMARY KEY,   -- human-assigned (e.g. 'main-credit-card') or the bank export's own account_id
   label       TEXT NOT NULL,
   institution TEXT,
-  kind        TEXT NOT NULL       -- credit_card | chequing | (later) investment
+  kind        TEXT NOT NULL,      -- credit_card | chequing | savings | investment | bitcoin_wallet |
+                                   -- line_of_credit | loan | bill (net worth kinds, see networth.py -
+                                   -- ARCHITECTURE.md Part C5a)
+  currency    TEXT NOT NULL DEFAULT 'CAD',
+  closed_at   TEXT                -- NULL while open; a closed account stops counting toward net worth
+                                   -- (ARCHITECTURE.md C6) from this date. Existing databases get these two
+                                   -- columns via db.py's migration 2, since CREATE TABLE IF NOT EXISTS is a
+                                   -- no-op against an accounts table that already exists.
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
@@ -106,3 +113,70 @@ CREATE TABLE IF NOT EXISTS cash_flow_exclusions (
   reason         TEXT,
   created_at     TEXT NOT NULL
 );
+
+-- Net worth (finance/ARCHITECTURE.md Part C, Phase 1): Cash, Bitcoin,
+-- Debt, and Lines of Credit, none of which have a CSV/API today (Part
+-- C4c) - only a hand-maintained sample JSON file. Every balance is a
+-- dated, append-only snapshot rather than a mutable column, so
+-- "current" is just "the latest one" (latest_account_balances below)
+-- and history falls out of the same table for free - see networth.py.
+
+-- One row per "event that produced facts" - here, a manual balance
+-- entry (kind = manual_balance/manual_holding); a future CSV import for
+-- one of these sources would get its own kind. Deliberately minimal for
+-- Phase 1 - source_file/file_hash/date_range_* stay unused until a real
+-- import populates them (Part C, C3/C10 Phase 4).
+CREATE TABLE IF NOT EXISTS import_batches (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind              TEXT NOT NULL,
+  source_file       TEXT,
+  file_hash         TEXT,
+  date_range_start  TEXT,
+  date_range_end    TEXT,
+  row_count         INTEGER NOT NULL,
+  imported_at       TEXT NOT NULL,
+  notes             TEXT
+);
+
+CREATE TABLE IF NOT EXISTS account_balance_snapshots (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id    TEXT NOT NULL REFERENCES accounts(id),
+  as_of_date    TEXT NOT NULL,
+  balance_cad   REAL NOT NULL,     -- always a positive magnitude; accounts.kind decides the sign
+                                    -- for net worth math (networth.py's ASSET_KINDS/LIABILITY_KINDS)
+  source        TEXT NOT NULL,     -- 'manual' | 'import' (room for a future Plaid/API source, Part B)
+  batch_id      INTEGER REFERENCES import_batches(id),
+  recorded_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_balance_snapshots_account_date ON account_balance_snapshots(account_id, as_of_date);
+
+-- A line of credit's rate/limit, split from its balance because they
+-- change on a much slower cadence (a rate hike, a new limit) than the
+-- balance does (every statement) - written only when a term changes.
+CREATE TABLE IF NOT EXISTS account_terms_snapshots (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id    TEXT NOT NULL REFERENCES accounts(id),
+  as_of_date    TEXT NOT NULL,
+  interest_rate REAL,
+  credit_limit  REAL,
+  recorded_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_terms_snapshots_account_date ON account_terms_snapshots(account_id, as_of_date);
+
+-- "Current" balance per account - what Cash/Bitcoin/Debt/Lines of
+-- Credit will render (Phase 3). A view, not a cached column, so it can
+-- never drift out of sync with account_balance_snapshots. Ties broken
+-- by recorded_at then id, both descending, so a same-day correction (two
+-- snapshots sharing an as_of_date - C8) always resolves to whichever was
+-- written most recently, deterministically.
+CREATE VIEW IF NOT EXISTS latest_account_balances AS
+SELECT id, account_id, as_of_date, balance_cad, source, batch_id, recorded_at
+FROM (
+  SELECT s.*,
+         ROW_NUMBER() OVER (
+           PARTITION BY account_id
+           ORDER BY as_of_date DESC, recorded_at DESC, id DESC
+         ) AS rn
+  FROM account_balance_snapshots s
+)
+WHERE rn = 1;

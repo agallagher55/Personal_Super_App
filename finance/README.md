@@ -48,14 +48,20 @@ Flow exclusions onto the wrong transaction. Ids are content-derived now,
 and an automatic migration carries existing corrections across — see
 `ARCHITECTURE.md` §A3b.
 
-**Part C** of `ARCHITECTURE.md` is a holistic, documented-but-not-built
-plan (2026-09-07) for an append-only raw/staging capture layer under
-every financial fact this app tracks — not just CSV transactions but
-also Cash/Investments/Bitcoin/Debt/Lines of Credit, still hardcoded
-sample data per the note above — with curated tables translated from
-that raw layer, a manual balance-entry mechanism for everything with no
-CSV/API today, and a plan to backfill today's already-imported CSVs into
-the new layer rather than starting history from zero.
+**Part C** of `ARCHITECTURE.md` is a holistic plan (2026-09-07) for an
+append-only raw/staging capture layer under every financial fact this
+app tracks — not just CSV transactions but also
+Cash/Investments/Bitcoin/Debt/Lines of Credit, still hardcoded sample
+data per the note above. **Phase 1 is built**: `accounts` is extended,
+new snapshot tables (`account_balance_snapshots`, `account_terms_snapshots`)
+give Cash/Bitcoin/Debt/Lines of Credit a real, dated history instead of
+a single mutable number, `POST /finance/balance-entries` is the manual
+entry mechanism for all of it, and the real database has been seeded
+from today's sample values as a starting point. The dashboard itself
+still reads `finance-dashboard.json` for now — that switch is Phase 3.
+Phases 2 (investment holdings) and 4 (a raw layer under CSV
+transactions, plus backfilling today's already-imported CSVs into it)
+remain documented, not built.
 
 Plaid-based live account linking (Wealthsimple first, any Plaid-supported
 institution after that) is kept as **Part B** of `ARCHITECTURE.md`,

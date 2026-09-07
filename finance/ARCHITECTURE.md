@@ -54,17 +54,16 @@
   override and Cash Flow exclusion after it onto the wrong transaction.
   Ids are now derived from row content, with the first
   `PRAGMA user_version` migration carrying existing corrections across.
-- **Full-history raw/staging layer + real net worth tables (Part C) is
-  documented, not built** — see Part C below. Revised 2026-09-07 after a
-  review pass: manual entries no longer get a redundant raw layer, the
-  rollout leads with the visible net worth work instead of the invisible
-  transactions refactor, and the liability sign convention, closed/stale
-  accounts, and the missing migration mechanism are all now pinned down. A holistic plan (requested
-  2026-09-07) for an append-only raw capture layer under every
-  financial fact this app tracks - not just CSV transactions but also
-  Cash/Investments/Bitcoin/Debt/Lines of Credit, all still hardcoded
-  sample data per A1 - plus a manual balance-entry mechanism and a
-  backfill of today's already-imported CSVs into the new layer.
+- **Full-history raw/staging layer + real net worth tables (Part C):
+  Phase 1 (net worth accounts) is built, 2026-09-07** — see Part C's
+  C10 for the phased plan and Phase 1's entry for what landed:
+  `accounts` extended, `import_batches`/`account_balance_snapshots`/
+  `account_terms_snapshots`, `latest_account_balances`,
+  `POST /finance/balance-entries`, and a one-time seed from today's
+  sample JSON - the real database has been seeded. **Phases 2-4
+  (investment holdings, cutting the dashboard over, the transactions raw
+  layer) remain documented, not built.** The dashboard itself still
+  reads `finance-dashboard.json` until Phase 3 lands.
 - **Deferred: Plaid-based live sync** (Part B below). This was the original
   plan for this file and is kept in full further down, unstarted and
   unimplemented, in case account-linking is revisited later. Nothing in Part
@@ -1517,13 +1516,28 @@ Phase 0 is already done, ahead of the rest, because C9 depends on it.
    ids plus the first `PRAGMA user_version` migration. Needed on its own
    merits (it was silently corrupting corrections), and a hard
    prerequisite for C9's replay of overlapping exports.
-1. **Net worth accounts.** `accounts` extended (`currency`, `closed_at`)
-   via a `migrate()` step — `CREATE TABLE IF NOT EXISTS` will *not* add
-   columns to the existing table, so this needs real `ALTER TABLE`s at
-   version 2. Then `account_balance_snapshots`, `account_terms_snapshots`,
-   `import_batches`, and `POST /finance/balance-entries` (C8). Seed from
-   today's sample JSON (C9.4), folding the Wealthsimple card's balance
-   into the existing `main-credit-card` account per C5h.
+1. **Net worth accounts. Built 2026-09-07.** `accounts` extended
+   (`currency`, `closed_at`) via `migrate()`'s version-2 step - checks
+   `PRAGMA table_info(accounts)` before altering, since `CREATE TABLE IF
+   NOT EXISTS` already gives a fresh database both columns and won't add
+   them to an existing table. Then `import_batches`,
+   `account_balance_snapshots`, `account_terms_snapshots`, the
+   `latest_account_balances` view, and `POST /finance/balance-entries`
+   (C8) - all in `backend/finance/networth.py`, kept separate from
+   `summary.py` the same way `import_csv.py` stays separate from it.
+   Seeded from today's sample JSON (C9.4) via
+   `networth.seed_from_sample_json()` (`python3 backend/finance/networth.py
+   seed`): the Wealthsimple credit card folds into the existing
+   `main-credit-card` account (C5h, confirmed 2026-09-07); "Wealthsimple
+   Cash" seeds as its own new account, confirmed the same day to be a
+   different product from the already-imported chequing account
+   (`WK1WPY033CAD`) despite the name similarity - the kind of ambiguity
+   C5h exists to catch, checked and resolved rather than assumed either
+   way. 22 tests in `backend/finance/tests/test_networth.py`; the
+   migration is verified against a copy of the real database, and the
+   real database itself has been seeded. Dashboard sections still read
+   `finance-dashboard.json` until Phase 3 - `latest_account_balances`
+   has real data now, but nothing reads it yet.
 2. **Investment holdings.** `securities`,
    `investment_holdings_snapshots`, `POST /finance/holding-entries`
    (C8). Seed from today's sample JSON.

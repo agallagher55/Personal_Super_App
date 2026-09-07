@@ -167,7 +167,9 @@ class TestPositionalIdMigration(unittest.TestCase):
         self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
         finance_db.init_schema(self.conn)
 
-        self.conn.execute("INSERT INTO accounts VALUES ('main-credit-card', 'Credit Card', NULL, 'credit_card')")
+        self.conn.execute(
+            "INSERT INTO accounts (id, label, institution, kind) VALUES ('main-credit-card', 'Credit Card', NULL, 'credit_card')"
+        )
         self.conn.executemany(
             '''INSERT INTO transactions
                (id, account_id, date, description, amount, activity_type, category, status, source_file, imported_at)

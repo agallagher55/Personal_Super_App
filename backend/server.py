@@ -85,6 +85,7 @@ if FINANCE_DIR not in sys.path:
 import db as finance_db
 import import_csv as finance_import_csv
 import summary as finance_summary
+import networth as finance_networth
 
 FITNESS_PAGES = (
     'steps', 'heart-rate', 'sleep', 'activity', 'spo2', 'hrv',
@@ -538,6 +539,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             return self.handle_set_merchant_category()
         if parsed.path == '/finance/cash-flow-exclusions':
             return self.handle_set_cash_flow_exclusion()
+        if parsed.path == '/finance/balance-entries':
+            return self.handle_record_balance_entry()
         self.send_error(404, 'Not found')
 
     def _read_json_body(self):
@@ -635,6 +638,62 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             conn.close()
 
         self.send_json(200, {'status': 'ok', 'transaction_id': transaction_id, 'excluded': excluded})
+
+    def handle_record_balance_entry(self):
+        """POST /finance/balance-entries {account_id, as_of_date, balance_cad,
+        label?, institution?, kind?, interest_rate?, credit_limit?} - the
+        manual-entry mechanism for Cash/Bitcoin/Debt/Lines of Credit
+        (finance/ARCHITECTURE.md Part C, C8), none of which have a CSV or
+        API today. label/kind are required the first time an account_id
+        is used; an existing account's stored values are kept when
+        they're left out of a later entry."""
+        if not self.check_same_origin():
+            return self.send_error(403, 'Cross-origin request rejected')
+
+        payload = self._read_json_body()
+        if payload is None:
+            return self.send_json_error(400, 'Invalid JSON body')
+
+        account_id = (payload.get('account_id') or '').strip()
+        as_of_date = (payload.get('as_of_date') or '').strip()
+        balance_cad = payload.get('balance_cad')
+        if not account_id:
+            return self.send_json_error(400, 'Missing account_id')
+        if not as_of_date:
+            return self.send_json_error(400, 'Missing as_of_date')
+        if not isinstance(balance_cad, (int, float)) or isinstance(balance_cad, bool):
+            return self.send_json_error(400, 'balance_cad must be a number')
+        if balance_cad < 0:
+            return self.send_json_error(
+                400, 'balance_cad must be a positive magnitude - the account kind decides the sign'
+            )
+
+        conn = finance_db.connect()
+        try:
+            existing = finance_db.get_account(conn, account_id)
+            label = payload.get('label') or (existing['label'] if existing else None)
+            institution = payload['institution'] if 'institution' in payload else (
+                existing['institution'] if existing else None
+            )
+            kind = payload.get('kind') or (existing['kind'] if existing else None)
+            if not label:
+                return self.send_json_error(400, 'Missing label for a new account')
+            if not kind:
+                return self.send_json_error(400, 'Missing kind for a new account')
+            try:
+                finance_networth.net_worth_sign(kind)
+            except finance_networth.UnknownAccountKindError:
+                return self.send_json_error(400, f'Unknown account kind: {kind!r}')
+
+            with conn:
+                batch_id = finance_networth.record_balance(
+                    conn, account_id, label, institution, kind, as_of_date, float(balance_cad),
+                    interest_rate=payload.get('interest_rate'), credit_limit=payload.get('credit_limit'),
+                )
+        finally:
+            conn.close()
+
+        self.send_json(200, {'status': 'ok', 'account_id': account_id, 'batch_id': batch_id})
 
     def handle_finance_import(self, parsed):
         """POST /finance/import?filename=<name>.csv, raw CSV bytes as the
