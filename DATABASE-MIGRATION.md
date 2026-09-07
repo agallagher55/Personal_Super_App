@@ -10,6 +10,18 @@ four places the build deviated from this plan and why. Where this text and
 the code disagree, the code wins; `backend/tasks_schema.sql` is the
 authoritative schema.
 
+**Since diverged (as of 2026-09-07), for finance specifically:** finance
+did not end up reusing this plan's pattern as §2/§7 below expected. It
+decided against Plaid for now (`finance/ARCHITECTURE.md` Part A1) and
+built its own SQLite storage around CSV import instead —
+`backend/finance/` (not a top-level `finance/db.py`), `data/finance/finance.db`
+(not `data/finance.db`), and `backend/finance/csv_schema.sql` (not
+`finance/schema.sql`, the Plaid-oriented DDL this plan pointed at, which
+stays unused). Every "finance... unchanged/still not built" reference
+below describes accurately how things stood on 2026-09-04, before that
+decision — see `finance/ARCHITECTURE.md` Part A for what's actually built,
+and Part C for the newer net-worth tables layered on top of it.
+
 ## Scope, confirmed with the user 2026-09-04
 
 | Decision | Choice | Why |

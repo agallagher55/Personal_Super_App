@@ -1,6 +1,6 @@
 # Finance — Architecture
 
-## Status (as of 2026-09-06)
+## Status (as of 2026-09-07)
 
 - **Current plan: manual CSV import** (Part A below). Decided 2026-09-06:
   instead of connecting real accounts through Plaid, the dashboard is
@@ -42,6 +42,11 @@
   way a credit-card merchant already could be. Cash Flow's own totals
   are untouched - kept on a deliberately separate, narrower query scope
   so a chequing expense row is never counted twice.
+- **Income-by-type breakdown (A5h) is built.** The income dialog's
+  transaction list now has a "By type" summary above it - Deposits,
+  Cashback, Giveaways, and Interest each collapse into one line with a
+  combined total and percentage, instead of listing every matching row
+  individually.
 - **Phase 4b (a second credit card, from a different institution) is
   documented, not built** — see A9. No sample export from that institution
   exists yet to design a parser against, so this is a concrete plan for
@@ -775,6 +780,37 @@ identical before and after categorizing (no double count). 12 new tests
 `TestChequingExpenseInSpending`, `test_cash_flow.py`'s
 `TestSpendingWideningDoesNotDoubleCountCashFlow`).
 
+### A5h. Breaking down Cash Flow income by type — built (2026-09-07)
+
+The click-a-bar dialog (A5e) listed every income row individually - two
+separate "Cash back - Credit card" rows stayed two rows, with no way to
+see a total per income type at a glance.
+
+`summary.py`'s `INCOME_TYPE_LABELS` maps each income row's
+`activity_type` (`AFT_IN`/`CASHBACK`/`GIVEAWAY`/`Interest` -
+`CHEQUING_INCOME_TYPES`, A5b) to a friendly label
+(`Deposits`/`Cashback`/`Giveaways`/`Interest`), attached to each row
+`cash_flow_month_transactions` returns as `type`. A new
+`cash_flow_income_by_type()` aggregates the non-excluded rows per label -
+same "what counts" rule as the dialog's overall total (A5f: excluded
+rows don't count toward it either). `/finance/cash-flow-transactions.json`
+returns this as a `byType` array (income kind only - expense rows carry
+no `type`, so there's nothing to break down there today).
+
+`cashflow.js` renders it as a "By type" legend above the transaction
+list, reusing `dashboard.js`'s `renderLegend` (the same swatch/value/
+percentage row Spending's category legend already uses), assigning
+colors cyclically from the existing `--stock-1..12` family the same way
+`spending.js`'s `categoryColors` does. Hidden when there's nothing to
+show (expense kind, or a load error).
+
+Verified via the API and a real browser (Playwright): seeded a month
+with a direct deposit, two cashback rows, and an interest row; confirmed
+`byType` grouped the two cashback rows into one `Cashback` line with the
+correct combined total and percentage, and that toggling a row's
+exclusion updates the breakdown in place along with the dialog's overall
+total. 3 new tests in `test_cash_flow.py`'s `TestCashFlowIncomeByType`.
+
 ### A6. File layout, and what's gitignored
 
 Code lives under `backend/finance/`, matching the repo's actual
@@ -787,17 +823,26 @@ implementation started, 2026-09-06:
 data/finance/                  gitignored — real personal financial data lives only here
   imports/                     timestamped audit copy of every uploaded CSV
   finance.db                   SQLite store (accounts, transactions, transaction_category_overrides,
-                                merchant_category_overrides - A5d, cash_flow_exclusions - A5f)
+                                merchant_category_overrides - A5d, cash_flow_exclusions - A5f), plus
+                                Part C's net worth tables (import_batches, account_balance_snapshots,
+                                account_terms_snapshots, the latest_account_balances view - Part C Phase 1)
                                 (no spending-summary.json/cash-flow.json - summary.py queries live, no cache file)
 
 backend/finance/                tracked — code, no real data, mirrors backend/fitness/'s layout
   db.py                          connect() / init_schema() / ensure_database(), migrate() +
                                   transaction_id() (A3b), range-replace load,
                                   last_imported_at() (A5c), transaction_exists()/set_transaction_category_override()/
-                                  set_merchant_category_override() (A5d), set_cash_flow_exclusion() (A5f)
+                                  set_merchant_category_override() (A5d), set_cash_flow_exclusion() (A5f),
+                                  get_account()/create_import_batch()/insert_balance_snapshot()/
+                                  insert_terms_snapshot() (Part C Phase 1)
+  networth.py                    net_worth_sign(), record_balance(), latest_balances(),
+                                  seed_from_sample_json() - also a CLI entry point
+                                  (`python3 backend/finance/networth.py seed`) (Part C Phase 1)
   csv_schema.sql                 DDL for accounts + transactions (A3), transaction_category_overrides +
                                   merchant_category_overrides + the transactions_effective view (A5d),
-                                  cash_flow_exclusions (A5f) — separate from finance/schema.sql, which is
+                                  cash_flow_exclusions (A5f), and Part C Phase 1's net worth tables
+                                  (import_batches, account_balance_snapshots, account_terms_snapshots,
+                                  latest_account_balances) — separate from finance/schema.sql, which is
                                   Part B's Plaid-oriented DDL and unrelated to this
   import_csv.py                  CSV parsing + range-replace load; also a CLI entry point; defaults
                                   income-type chequing rows to category='Income' (A5d), expense-type
@@ -810,18 +855,25 @@ backend/finance/                tracked — code, no real data, mirrors backend/
                                   constants per A5g so Spending's widened scope can't double-count them) +
                                   merchant_transactions() (A5d) + cash_flow_month_transactions()
                                   (A5e, annotating excluded/reason per A5f rather than filtering them)
-  tests/test_import_csv.py       24 tests: parsing, idempotency, range-replace, the real upload path,
+  tests/test_import_csv.py       29 tests: parsing, idempotency, range-replace, the real upload path,
                                   the activity_sub_type extraction fix (A5b), the default Income category
-                                  (A5d), the default Uncategorized category for expense types (A5g)
+                                  (A5d), the default Uncategorized category for expense types (A5g),
+                                  content-derived id stability across a re-import (A3b)
   tests/test_summary.py          38 tests: netting, window filtering, exclusions, empty-database
                                   handling, the category filter (A5c), category override precedence/revert/
                                   range-replace survival (A5d), chequing expenses in Spending (A5g)
-  tests/test_cash_flow.py        32 tests: income/expense classification, the negative-expense
+  tests/test_cash_flow.py        35 tests: income/expense classification, the negative-expense
                                   regression (A5b), empty-database handling, per-month transaction
                                   listing for both income and expense (A5e), the exclusion mechanism (A5f),
-                                  the widened Spending scope not double-counting Cash Flow (A5g)
-  tests/test_db.py               12 tests: last_imported_at() (A5c), transaction_exists() and the
-                                  category override setters (A5d), the cash-flow exclusion setter (A5f)
+                                  the widened Spending scope not double-counting Cash Flow (A5g), the
+                                  income-by-type breakdown (A5h)
+  tests/test_db.py               18 tests: last_imported_at() (A5c), transaction_exists() and the
+                                  category override setters (A5d), the cash-flow exclusion setter (A5f),
+                                  the positional-id migration (A3b)
+  tests/test_networth.py         22 tests: the accounts-columns migration, net_worth_sign(),
+                                  record_balance()/latest_balances() including same-day tie-breaking,
+                                  and seed_from_sample_json() including the Wealthsimple credit card
+                                  fold-in (Part C Phase 1)
 
 finance/                       tracked — docs + the Part B (Plaid) schema reference only, no code
   ARCHITECTURE.md              (this file)
