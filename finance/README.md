@@ -40,6 +40,14 @@ credit card, from a different institution) is documented but not built**
 a real sample export from that institution, not on a decision. **Not
 started**: a real auth gate in front of the upload/route endpoints.
 
+A live bug found while reviewing the Part C plan below is **fixed**:
+transaction ids
+were positional, so re-importing an export that contained any new row on
+an already-imported date silently moved category corrections and Cash
+Flow exclusions onto the wrong transaction. Ids are content-derived now,
+and an automatic migration carries existing corrections across — see
+`ARCHITECTURE.md` §A3b.
+
 **Part C** of `ARCHITECTURE.md` is a holistic, documented-but-not-built
 plan (2026-09-07) for an append-only raw/staging capture layer under
 every financial fact this app tracks — not just CSV transactions but

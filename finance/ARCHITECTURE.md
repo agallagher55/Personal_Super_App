@@ -48,8 +48,18 @@
   what changes when one does, not code.
 - **Not started**: a real auth gate in front of the upload/route endpoints
   (still just the same-origin check from A4).
+- **Stable, content-derived transaction ids (A3b) are built
+  (2026-09-07).** Ids were positional, so a re-import containing any new
+  row on an already-imported date silently moved every category
+  override and Cash Flow exclusion after it onto the wrong transaction.
+  Ids are now derived from row content, with the first
+  `PRAGMA user_version` migration carrying existing corrections across.
 - **Full-history raw/staging layer + real net worth tables (Part C) is
-  documented, not built** — see Part C below. A holistic plan (requested
+  documented, not built** — see Part C below. Revised 2026-09-07 after a
+  review pass: manual entries no longer get a redundant raw layer, the
+  rollout leads with the visible net worth work instead of the invisible
+  transactions refactor, and the liability sign convention, closed/stale
+  accounts, and the missing migration mechanism are all now pinned down. A holistic plan (requested
   2026-09-07) for an append-only raw capture layer under every
   financial fact this app tracks - not just CSV transactions but also
   Cash/Investments/Bitcoin/Debt/Lines of Credit, all still hardcoded
@@ -782,7 +792,8 @@ data/finance/                  gitignored — real personal financial data lives
                                 (no spending-summary.json/cash-flow.json - summary.py queries live, no cache file)
 
 backend/finance/                tracked — code, no real data, mirrors backend/fitness/'s layout
-  db.py                          connect() / init_schema() / ensure_database(), range-replace load,
+  db.py                          connect() / init_schema() / ensure_database(), migrate() +
+                                  transaction_id() (A3b), range-replace load,
                                   last_imported_at() (A5c), transaction_exists()/set_transaction_category_override()/
                                   set_merchant_category_override() (A5d), set_cash_flow_exclusion() (A5f)
   csv_schema.sql                 DDL for accounts + transactions (A3), transaction_category_overrides +
@@ -1044,12 +1055,14 @@ uniformly to every financial fact the app tracks.
   balance. "Current" is just "the latest snapshot," a view rather than a
   special case, and "history" (a net worth chart, a holdings-over-time
   chart) falls out of the same table for free.
-- **Manual entry is not a special case.** Cash/Bitcoin/Debt/Lines of
-  Credit/Investments have no CSV or API today, but a typed-in balance
-  goes through the exact same two layers as an imported CSV row: its own
-  raw table, its own import batch, feeding the same snapshot-based
-  curated tables. The only difference from a CSV import is what produces
-  the raw row - a small form instead of a file parser.
+- **Manual entry gets the same guarantees, not the same plumbing.**
+  Cash/Bitcoin/Debt/Lines of Credit/Investments have no CSV or API
+  today. A typed-in balance is append-only, dated, batch-audited and
+  never edited in place, exactly like an imported row. What it does
+  *not* need is a separate raw table, because there is no lossy
+  transform between what you typed and what gets stored - the snapshot
+  row already is the raw fact. See C4c; an earlier draft got this wrong
+  and gave manual entries a mirror-image raw layer that derived nothing.
 
 ### C3. Cross-cutting: import_batches
 
@@ -1130,50 +1143,39 @@ CREATE TABLE IF NOT EXISTS raw_bank_activity (
 CREATE INDEX IF NOT EXISTS idx_raw_bank_batch ON raw_bank_activity(batch_id);
 ```
 
-**C4c. `raw_balance_entries`** - the "export" for everything with no
-CSV/API today (cash accounts, Bitcoin, debt, lines of credit). One row
-per "this account was worth $X as of date Y." A mistake gets a corrected
-new entry, exactly like a bad CSV row gets fixed by re-importing, never
-by hand-patching history.
+**C4c. Manually-entered data has no raw table, deliberately.** An
+earlier draft of this section had `raw_balance_entries` and
+`raw_holding_entries` mirroring the CSV tables above, so that every
+source went through the same two layers. That was ceremony, not
+symmetry, and it is dropped.
 
-```sql
-CREATE TABLE IF NOT EXISTS raw_balance_entries (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  batch_id      INTEGER NOT NULL REFERENCES import_batches(id),
-  account_ref   TEXT NOT NULL,    -- human key, e.g. 'wealthsimple-cash', 'nslsc-student-loan'
-  as_of_date    TEXT NOT NULL,
-  balance_cad   REAL NOT NULL,
-  interest_rate REAL,             -- line of credit / loan only, NULL otherwise
-  credit_limit  REAL,             -- line of credit only, NULL otherwise
-  note          TEXT
-);
-```
+The two-layer split earns its keep for CSVs because the raw row and the
+curated row are genuinely *different things*: the export says
+`activity_sub_type = AFT_IN`, and a lossy, bug-prone transform turns
+that into a categorized transaction. Keeping the original means a fix to
+that transform can be replayed over history.
 
-**C4d. `raw_holding_entries`** - one row per security per account per
-time a holding is reported. Same append-only rule as C4c.
+A hand-entered balance has no such transform. "This account was worth $X
+as of date Y" is already the curated fact, and
+`account_balance_snapshots` (C5c) is *already* append-only, dated, and
+never updated in place — it is the raw record. A second table upstream of
+it would store the same numbers twice and derive nothing, and the route
+sketch that populated both in one request (C8) quietly broke the very
+invariant the split exists to enforce, since the curated row was written
+directly rather than derived.
 
-```sql
-CREATE TABLE IF NOT EXISTS raw_holding_entries (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  batch_id      INTEGER NOT NULL REFERENCES import_batches(id),
-  account_ref   TEXT NOT NULL,   -- e.g. 'wealthsimple-tfsa'
-  as_of_date    TEXT NOT NULL,
-  symbol        TEXT NOT NULL,
-  yahoo_symbol  TEXT,
-  name          TEXT,
-  shares        REAL NOT NULL,
-  price         REAL NOT NULL,
-  currency      TEXT
-);
-```
+So manual entries write straight into the snapshot tables, and still
+record an `import_batches` row for the audit trail. Provenance is kept by
+`source` (`'manual'` vs `'import'`) plus that batch id, which is all the
+lineage there was to keep.
 
-**C4e. Deferred: `raw_investment_activity`** (a real brokerage/investment
+**C4d. Deferred: `raw_investment_activity`** (a real brokerage/investment
 transaction export - buys, sells, dividends). Not designed here, same
 reasoning as A9: no real sample export exists yet to design columns
 against, and guessing at a shape nobody has seen would just produce a
-parser for a format that doesn't exist. `raw_holding_entries` (C4d)
-covers point-in-time holdings in the meantime; a transaction-level buy/
-sell history stays out of scope until a real export shows up.
+parser for a format that doesn't exist. `investment_holdings_snapshots`
+(C5f) covers point-in-time holdings in the meantime; a transaction-level
+buy/sell history stays out of scope until a real export shows up.
 
 ### C5. Layer 2 — curated tables
 
@@ -1190,12 +1192,29 @@ CREATE TABLE IF NOT EXISTS accounts (
   id          TEXT PRIMARY KEY,
   label       TEXT NOT NULL,
   institution TEXT,
-  kind        TEXT NOT NULL,      -- credit_card | chequing | savings | investment |
-                                   -- bitcoin_wallet | line_of_credit | loan | bill
-  is_asset    INTEGER NOT NULL,   -- 1 = counts toward assets, 0 = counts toward debt (net worth math, C6)
-  currency    TEXT NOT NULL DEFAULT 'CAD'
+  kind        TEXT NOT NULL,   -- credit_card | chequing | savings | investment |
+                                -- bitcoin_wallet | line_of_credit | loan | bill
+  currency    TEXT NOT NULL DEFAULT 'CAD',
+  closed_at   TEXT             -- NULL while open; see the staleness rule in C6
 );
 ```
+
+An earlier draft also had an `is_asset` column. Dropped: it is a pure
+function of `kind` (every `chequing`/`savings`/`investment`/
+`bitcoin_wallet` is an asset, every `credit_card`/`line_of_credit`/
+`loan`/`bill` is a liability), and storing it separately only creates
+room for a row to contradict itself (`kind = 'loan', is_asset = 1`).
+It belongs in Python next to the `kind` values themselves, the same way
+`CHEQUING_INCOME_TYPES` already lives in `summary.py` rather than in the
+schema.
+
+**Sign convention, which the earlier draft left unspecified and net
+worth depends on entirely:** `balance_cad` is **always stored as a
+positive magnitude**, and `kind` decides which side of net worth it
+lands on. A $8,200 student loan stores `8200.0`, not `-8200.0`. The
+alternative (signed balances) means every entry point has to remember to
+negate, and a single missed negation silently turns debt into an asset.
+A magnitude plus a kind cannot be entered wrong that way.
 
 **C5b. `transactions` - unchanged shape, changed provenance.** Every
 column stays exactly as csv_schema.sql has it today - `summary.py`,
@@ -1228,10 +1247,10 @@ CREATE TABLE IF NOT EXISTS account_balance_snapshots (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   account_id    TEXT NOT NULL REFERENCES accounts(id),
   as_of_date    TEXT NOT NULL,
-  balance_cad   REAL NOT NULL,
+  balance_cad   REAL NOT NULL,    -- always a positive magnitude; `kind` decides the sign (C5a)
   source        TEXT NOT NULL,     -- 'manual' | 'import' (room for a future Plaid/API source, Part B)
-  recorded_at   TEXT NOT NULL,
-  raw_entry_id  INTEGER REFERENCES raw_balance_entries(id)
+  batch_id      INTEGER REFERENCES import_batches(id),
+  recorded_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_balance_snapshots_account_date ON account_balance_snapshots(account_id, as_of_date);
 ```
@@ -1269,6 +1288,12 @@ CREATE TABLE IF NOT EXISTS securities (
 security) per time the holding is known. Same snapshot pattern as C5c,
 one level more granular.
 
+An earlier draft also stored `market_value` (`shares * price`), arguing
+that computing it later would let a price correction reshape old
+history. That reasoning doesn't hold: both operands sit in the same row,
+so the product is fixed once the row is written, and a correction is a
+new row anyway under the append-only rule. Dropped as redundant.
+
 ```sql
 CREATE TABLE IF NOT EXISTS investment_holdings_snapshots (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1277,10 +1302,8 @@ CREATE TABLE IF NOT EXISTS investment_holdings_snapshots (
   as_of_date    TEXT NOT NULL,
   shares        REAL NOT NULL,
   price         REAL NOT NULL,
-  market_value  REAL NOT NULL,    -- shares * price, stored rather than computed - a later price
-                                   -- correction or split shouldn't silently reshape old history
-  recorded_at   TEXT NOT NULL,
-  raw_entry_id  INTEGER REFERENCES raw_holding_entries(id)
+  batch_id      INTEGER REFERENCES import_batches(id),
+  recorded_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_holdings_snapshots_account_date ON investment_holdings_snapshots(account_id, as_of_date);
 ```
@@ -1320,11 +1343,29 @@ JOIN (
 
 `transactions_effective` (A5d) already exists and needs no change.
 
+**Closed and stale accounts.** "The latest snapshot at or before this
+date" has a trap the earlier draft walked straight into: an account you
+stop entering balances for keeps contributing its last known value to
+every future month, forever. Close a chequing account and net worth
+silently keeps counting it. Two rules handle it:
+
+- `accounts.closed_at` (C5a) ends an account's contribution from that
+  date onward. Explicit, and the normal case.
+- A **staleness horizon** for accounts nobody closed but nobody updated
+  either. A snapshot older than the horizon (12 months is the obvious
+  starting value) still shows on the dashboard, flagged as stale rather
+  than silently trusted. It should be visible in the UI, not just
+  suppressed in the math, since "I forgot to update this" and "this is
+  genuinely unchanged" look identical in the data and only you can tell
+  them apart.
+
 **Net worth by month** stays a live Python query (a new function
 alongside `summary.py`'s, or its own `networth.py`), matching the
 existing "live SQLite query, no cache file" philosophy stated at the top
 of `summary.py`: for each month-end date, join every account to its
-latest snapshot at or before that date, then sum grouped by `is_asset`.
+latest snapshot at or before that date (skipping accounts closed by
+then), then sum, adding the asset kinds and subtracting the liability
+ones per C5a's sign convention.
 This replaces the hardcoded `netWorthHistory` array with a real
 derivation - one that updates automatically the moment a new balance
 snapshot is entered, with no array to hand-edit.
@@ -1346,27 +1387,31 @@ snapshot is entered, with no array to hand-edit.
 
 Two new routes, following the same POST-a-small-JSON-body pattern
 `/finance/categories/transaction` and `/finance/cash-flow-exclusions`
-already use:
+already use. Each writes one `import_batches` row for the audit trail
+and then the snapshot row itself - no intermediate raw table, per C4c:
 
-- **`POST /finance/balance-entries`** — body: `account_ref` (existing, or
+- **`POST /finance/balance-entries`** — body: `account_id` (existing, or
   new alongside `label`/`institution`/`kind`), `as_of_date`,
-  `balance_cad`, optional `interest_rate`/`credit_limit`. Writes one
-  `import_batches` row (`kind = 'manual_balance'`), one
-  `raw_balance_entries` row, upserts the `accounts` row if new, and
-  inserts one `account_balance_snapshots` row (plus an
-  `account_terms_snapshots` row when rate/limit are given).
-- **`POST /finance/holding-entries`** — body: `account_ref`, `symbol`,
-  `name`, `yahoo_symbol`, `shares`, `price`, `as_of_date`. Writes one
-  `import_batches` row (`kind = 'manual_holding'`), one
-  `raw_holding_entries` row, upserts `securities`, and inserts one
-  `investment_holdings_snapshots` row.
+  `balance_cad` (a positive magnitude, C5a), optional
+  `interest_rate`/`credit_limit`. Upserts the `accounts` row if new,
+  inserts one `account_balance_snapshots` row with `source = 'manual'`,
+  and an `account_terms_snapshots` row when rate/limit are given.
+- **`POST /finance/holding-entries`** — body: `account_id`, `symbol`,
+  `name`, `yahoo_symbol`, `shares`, `price`, `as_of_date`. Upserts
+  `securities`, inserts one `investment_holdings_snapshots` row.
 
-UI: once C10's Phase 4 wires the dashboard sections to read from the new
-tables, each account/holding row gets a small "+ Update" affordance
-reusing the existing `<dialog>` pattern (the category-edit and
-cash-flow-transaction dialogs already establish this) to open a tiny
-inline form. Exact form layout/UX is a small design pass of its own at
-implementation time, not fully specified here.
+Both are strictly additive: neither ever updates or deletes an existing
+snapshot. Correcting a wrong entry means adding a later one, and a
+same-day correction means a second row with the same `as_of_date` - so
+`latest_account_balances` (C6) needs to break that tie on `recorded_at`,
+not just `as_of_date`. Worth getting right in the view from the start;
+it is the one place the append-only rule shows through into a query.
+
+UI: once C10 wires the dashboard sections to read from these tables,
+each account/holding row gets a small "+ Update" affordance reusing the
+existing `<dialog>` pattern (the category-edit and cash-flow-transaction
+dialogs already establish it) to open a tiny inline form. Exact form
+layout is a small design pass of its own at implementation time.
 
 ### C9. Backfilling existing history
 
@@ -1388,11 +1433,21 @@ raw capture from the next import onward.
    row-for-row against today's live one. They should match exactly,
    since the parsing/categorization logic is unchanged and the replay
    rule reduces to today's per-file range-replace when batches don't
-   overlap. Existing overrides/exclusions (`transaction_category_overrides`,
-   `merchant_category_overrides`, `cash_flow_exclusions`) are keyed by the
-   deterministic transaction id (A3) or by description, so they should
-   keep applying correctly post-rebuild without needing to be touched -
-   worth an explicit test rather than an assumption.
+   overlap.
+
+   An earlier draft of this section claimed existing overrides and
+   exclusions "should keep applying correctly post-rebuild" because
+   transaction ids are deterministic. That was wrong, and the reason is
+   worth keeping visible: ids were deterministic but **not stable**, and
+   the resulting bug is written up in A3b. It is fixed (ids are now
+   content-derived), which is what makes this step safe — a replay
+   regenerates the same id for the same transaction regardless of which
+   file it came from or what else shares its date. The backfill replays
+   *differently-scoped* exports over each other, which is exactly the
+   case the old positional ids got wrong, so this ordering matters:
+   **A3b's fix is a prerequisite for C9, not an optional cleanup.** Still
+   worth an explicit before/after test on the override and exclusion
+   tables rather than trusting the argument.
 4. **Seed the net worth tables from today's sample values.** Nothing
    further back than `static/finance/finance-dashboard.json`'s current
    numbers exists for Cash/Investments/Bitcoin/Debt/Lines of Credit -
@@ -1401,65 +1456,98 @@ raw capture from the next import onward.
    account/holding, dated as of "today," as the starting point history
    builds forward from. `netWorthHistory`'s existing monthly array has no
    real accounts behind it to backfill against and is left as-is,
-   unused, once C10's Phase 4 switches the chart to the real query.
+   unused, once C10's Phase 3 switches the chart to the real query.
+   Note this step belongs to Phase 1/2, not to the Phase 4 backfill the
+   rest of C9 describes - it is here because it is the same question
+   ("what history exists to start from?"), answered differently for data
+   that never had an export behind it.
 
 ### C10. Phased rollout
 
-1. **Foundation.** `import_batches` + `raw_credit_card_transactions` +
-   `raw_bank_activity` (C3/C4a/C4b). Change `import_csv.py` to write raw
-   rows first, then derive `transactions` via the replay rule (C5b)
-   instead of parsing the upload directly. Backfill (C9) and verify
-   row-for-row equality against today's data before relying on it.
-2. **Net worth accounts.** Extend `accounts` (`kind` enum, `is_asset`,
-   `currency`), add `account_balance_snapshots`, `account_terms_snapshots`,
-   `raw_balance_entries`, and the `/finance/balance-entries` route (C8).
-   Seed from today's sample JSON (C9.4).
-3. **Investment holdings.** `securities`, `investment_holdings_snapshots`,
-   `raw_holding_entries`, `/finance/holding-entries` (C8). Seed from
-   today's sample JSON.
-4. **Cut the dashboard over.** Point Cash/Investments/Bitcoin/Debt/Lines
-   of Credit/Net Worth Over Time at the new tables/views (C7) instead of
-   `finance-dashboard.json`; retire the static file (or keep it only as
-   a documented fixture for local dev with no database yet).
+**Reordered 2026-09-07.** The first draft led with the transactions raw
+layer, which is a rewrite of code that already works and changes nothing
+you can see, and deferred the part that replaces hardcoded sample data
+with your real net worth. That is backwards for a personal project: the
+invisible refactor carries all the migration risk and delivers the
+payoff last. The net worth tables are also pure net-new DDL, so
+`CREATE TABLE IF NOT EXISTS` covers them with no migration at all.
+
+Phase 0 is already done, ahead of the rest, because C9 depends on it.
+
+0. **Stable transaction ids. Built 2026-09-07** — see A3b. Content-derived
+   ids plus the first `PRAGMA user_version` migration. Needed on its own
+   merits (it was silently corrupting corrections), and a hard
+   prerequisite for C9's replay of overlapping exports.
+1. **Net worth accounts.** `accounts` extended (`currency`, `closed_at`)
+   via a `migrate()` step — `CREATE TABLE IF NOT EXISTS` will *not* add
+   columns to the existing table, so this needs real `ALTER TABLE`s at
+   version 2. Then `account_balance_snapshots`, `account_terms_snapshots`,
+   `import_batches`, and `POST /finance/balance-entries` (C8). Seed from
+   today's sample JSON (C9.4).
+2. **Investment holdings.** `securities`,
+   `investment_holdings_snapshots`, `POST /finance/holding-entries`
+   (C8). Seed from today's sample JSON.
+3. **Cut the dashboard over.** Point Cash/Investments/Bitcoin/Debt/Lines
+   of Credit/Net Worth Over Time at the new tables and views (C7)
+   instead of `finance-dashboard.json`; retire the static file, or keep
+   it only as a fixture for local dev against an empty database. This is
+   the phase where the visible change lands.
+4. **Transactions raw layer.** `raw_credit_card_transactions`,
+   `raw_bank_activity`, and the replay rule (C5b), plus the C9 backfill
+   and its row-for-row verification. Deliberately last: it is a refactor
+   of working code, and its main payoff (replaying a transform fix over
+   all history) only matters once there is enough history to be worth
+   replaying.
 5. **Deferred, documented only:** a real brokerage/investment CSV import
-   (C4e), once a real sample export exists - same "don't build against a
-   format nobody's seen" reasoning as A9. Eventually, Part B's Plaid sync
-   could feed these same curated tables too (a Plaid sync becomes just
-   another raw source, e.g. `raw_plaid_holdings`), unifying Part A and
-   Part B onto one curated schema - not needed now, just a consistency
-   note for whenever B is revisited.
+   (C4d), once a real sample export exists - same "don't build against a
+   format nobody's seen" reasoning as A9. Eventually Part B's Plaid sync
+   could feed these same curated tables (a sync becomes just another
+   source populating snapshots, with `source = 'plaid'`), unifying Part
+   A and Part B onto one schema - a consistency note for whenever B is
+   revisited, not work to schedule now.
 
 ### C11. Open questions
 
 - **Bitcoin: CAD value only, or quantity too?** Today's sample data
-  tracks BTC quantity (`btc`) alongside its CAD value. `account_balance_snapshots.balance_cad`
-  captures the value; a quantity-over-time chart would need either a
-  nullable `btc_quantity` column there (crypto-only, NULL otherwise) or
-  a small sibling table. Not designed above pending a decision on
-  whether that chart is wanted.
+  tracks BTC quantity (`btc`) alongside its CAD value.
+  `account_balance_snapshots.balance_cad` captures the value; a
+  quantity-over-time chart would need either a nullable `quantity`
+  column there (crypto-only, NULL otherwise) or a small sibling table.
+  Undecided pending whether that chart is actually wanted.
 - **The Wealthsimple credit card may already be double-modeled.**
   `finance-dashboard.json`'s `debt.creditCards` lists a `"Wealthsimple"`
   balance ($210) separately from `accounts.main-credit-card` (A9), the
   same Wealthsimple-issued card Part A's CSV import already tracks
   transaction-by-transaction. If these are the same physical card, its
-  statement-balance-owed should be an `account_balance_snapshots` row on
-  the *existing* `main-credit-card` account id, not a second, separate
-  `accounts` row - otherwise the same card is modeled twice. Worth
-  confirming before Phase 2 (C10) seeds the debt accounts.
+  statement balance owed should be an `account_balance_snapshots` row on
+  the *existing* `main-credit-card` account, not a second `accounts`
+  row. Worth confirming before Phase 1 seeds the debt accounts.
+- **Should a credit card's balance be entered at all, or derived?** Its
+  transactions are already imported, so in principle the balance owed is
+  a running sum. In practice the CSV covers a window rather than all
+  time, so there is no opening balance to sum from. Probably: enter it
+  like any other balance, and treat agreement with the transaction sum
+  as a sanity check rather than a constraint.
 - **Multi-currency.** Every export and every sample value today is CAD
-  (A1/A2). If any investment/bitcoin holding is ever USD-denominated,
-  `account_balance_snapshots`/`investment_holdings_snapshots` would need
-  a real `iso_currency_code` + conversion step rather than the implicit
-  CAD assumption baked into every column name above (`balance_cad`,
-  `market_value`). Not a problem to solve until it's real.
+  (A1/A2). A USD-denominated holding would need a real
+  `iso_currency_code` plus a conversion step rather than the implicit
+  CAD baked into the column names above. Not worth solving until real.
+- **Batch date ranges come from row min/max, not the window actually
+  requested.** `import_csv_text` derives a file's range from the first
+  and last dated row in it, so an export pulled for "last 90 days" whose
+  first three weeks had no transactions registers as covering only the
+  span that did. A later, narrower import can then never clear rows in
+  that leading gap. This is a pre-existing quirk of today's
+  range-replace, not something C5b's replay introduces, but Phase 4 is
+  the natural place to fix it: the upload form knows, or could ask, what
+  window was requested, and `import_batches` has a column ready for it.
 - **How often does a full `transactions` rebuild run?** The common path
   (a new CSV import) can stay a per-file range-replace exactly like
-  today, sourced from the new raw tables instead of the upload directly
-  - no behavior change, just added durability underneath. A *full*
-  replay across every historical batch (C5b) is only needed for the C9
-  backfill and for any future fix to the parsing/categorization logic
-  itself; proposed as an explicit one-off maintenance operation
-  (a script or admin route), not something that runs on every request.
+  today, sourced from the raw tables instead of the upload directly.
+  A *full* replay across every batch (C5b) is only needed for the C9
+  backfill and for any future fix to the parsing logic itself. Proposed
+  as an explicit one-off maintenance operation, not something that runs
+  per request.
 
 ---
 
