@@ -61,7 +61,8 @@ class TestTransactionExists(unittest.TestCase):
     def test_true_for_a_real_transaction(self):
         text = CC_HEADER + '2026-09-01,Purchase,Completed,Cafe,-5.00,CAD,,Coffee\n'
         import_csv.import_csv_text(self.conn, 'cc.csv', text)
-        self.assertTrue(finance_db.transaction_exists(self.conn, 'main-credit-card:2026-09-01:0'))
+        self.assertTrue(finance_db.transaction_exists(
+            self.conn, finance_db.transaction_id('main-credit-card', '2026-09-01', 'Cafe', -5.00, 'Purchase', 0)))
 
 
 class TestCategoryOverrideSetters(unittest.TestCase):
@@ -151,6 +152,95 @@ class TestCashFlowExclusionSetter(unittest.TestCase):
             'SELECT * FROM cash_flow_exclusions WHERE transaction_id = ?', ('tx1',)
         ).fetchone()
         self.assertIsNone(row)
+
+
+class TestPositionalIdMigration(unittest.TestCase):
+    """Migration 1 (db._rewrite_positional_transaction_ids): moves an
+    existing database off the old positional ids without orphaning the
+    corrections attached to them."""
+
+    OLD_COFFEE = 'main-credit-card:2026-09-02:0'
+    OLD_HOTEL = 'main-credit-card:2026-09-02:1'
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        finance_db.init_schema(self.conn)
+
+        self.conn.execute(
+            "INSERT INTO accounts (id, label, institution, kind) VALUES ('main-credit-card', 'Credit Card', NULL, 'credit_card')"
+        )
+        self.conn.executemany(
+            '''INSERT INTO transactions
+               (id, account_id, date, description, amount, activity_type, category, status, source_file, imported_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            [
+                (self.OLD_COFFEE, 'main-credit-card', '2026-09-02', 'Coffee Shop', -5.0,
+                 'Purchase', 'Coffee', 'Completed', 'v1.csv', '2026-09-06T00:00:00Z'),
+                (self.OLD_HOTEL, 'main-credit-card', '2026-09-02', 'Big Hotel', -450.0,
+                 'Purchase', 'Hotels', 'Completed', 'v1.csv', '2026-09-06T00:00:00Z'),
+            ],
+        )
+        self.conn.execute(
+            "INSERT INTO transaction_category_overrides VALUES (?, 'Vacation', '2026-09-06T00:00:00Z')",
+            (self.OLD_HOTEL,),
+        )
+        self.conn.execute(
+            "INSERT INTO cash_flow_exclusions VALUES (?, 'reimbursed', '2026-09-06T00:00:00Z')",
+            (self.OLD_COFFEE,),
+        )
+        # init_schema already migrated the (empty) database, so wind the
+        # version back to stage a genuinely pre-migration one.
+        self.conn.execute('PRAGMA user_version = 0')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def new_id(self, description, amount):
+        return finance_db.transaction_id('main-credit-card', '2026-09-02', description, amount, 'Purchase', 0)
+
+    def test_rewrites_ids_to_the_content_derived_form(self):
+        finance_db.migrate(self.conn)
+        ids = {r['description']: r['id'] for r in self.conn.execute('SELECT id, description FROM transactions')}
+        self.assertEqual(ids['Coffee Shop'], self.new_id('Coffee Shop', -5.0))
+        self.assertEqual(ids['Big Hotel'], self.new_id('Big Hotel', -450.0))
+
+    def test_carries_the_category_override_onto_the_new_id(self):
+        finance_db.migrate(self.conn)
+        categories = {
+            r['description']: r['effective_category']
+            for r in self.conn.execute('SELECT description, effective_category FROM transactions_effective')
+        }
+        self.assertEqual(categories['Big Hotel'], 'Vacation')
+        self.assertEqual(categories['Coffee Shop'], 'Coffee')
+
+    def test_carries_the_cash_flow_exclusion_onto_the_new_id(self):
+        finance_db.migrate(self.conn)
+        excluded = self.conn.execute(
+            'SELECT t.description FROM cash_flow_exclusions e JOIN transactions t ON t.id = e.transaction_id'
+        ).fetchall()
+        self.assertEqual([r['description'] for r in excluded], ['Coffee Shop'])
+
+    def test_leaves_no_orphaned_corrections(self):
+        finance_db.migrate(self.conn)
+        orphans = self.conn.execute(
+            '''SELECT COUNT(*) AS n FROM transaction_category_overrides o
+               LEFT JOIN transactions t ON t.id = o.transaction_id WHERE t.id IS NULL'''
+        ).fetchone()
+        self.assertEqual(orphans['n'], 0)
+
+    def test_is_idempotent(self):
+        finance_db.migrate(self.conn)
+        after_first = sorted(r['id'] for r in self.conn.execute('SELECT id FROM transactions'))
+
+        finance_db.migrate(self.conn)
+        self.assertEqual(sorted(r['id'] for r in self.conn.execute('SELECT id FROM transactions')), after_first)
+
+    def test_records_the_schema_version_so_it_runs_once(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
 
 
 if __name__ == '__main__':

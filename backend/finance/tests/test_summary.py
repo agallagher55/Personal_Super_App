@@ -27,6 +27,17 @@ def bank_row(date_, activity_type, sub_type, description, amount, account_id='WK
     return f'{date_},12:00:00,,{account_id},Chequing,{activity_type},{sub_type},{description},,,,CAD,{amount},,,{amount}\n'
 
 
+# Transaction ids are content-derived (db.transaction_id), so tests build
+# the expected id from the same fields the importer hashes rather than
+# hardcoding an opaque digest.
+def cc_id(date_, description, amount, activity_type='Purchase', occurrence=0):
+    return finance_db.transaction_id('main-credit-card', date_, description, amount, activity_type, occurrence)
+
+
+def bank_id(date_, description, amount, activity_type, occurrence=0, account_id='WK1WPY033CAD'):
+    return finance_db.transaction_id(account_id, date_, description, amount, activity_type, occurrence)
+
+
 class SummaryTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -253,7 +264,7 @@ class TestCategoryOverrides(SummaryTestCase):
         )
         import_csv.import_csv_text(self.conn, 'cc.csv', text)
 
-        tx_id = 'main-credit-card:2026-09-01:0'
+        tx_id = cc_id('2026-09-01', 'Tim Hortons', -6.26)
         finance_db.set_transaction_category_override(self.conn, tx_id, 'Food', '2026-09-06T00:00:00Z')
 
         result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
@@ -284,7 +295,7 @@ class TestCategoryOverrides(SummaryTestCase):
 
         finance_db.set_merchant_category_override(self.conn, 'Tim Hortons', 'Food', '2026-09-06T00:00:00Z')
         finance_db.set_transaction_category_override(
-            self.conn, 'main-credit-card:2026-09-01:0', 'Gifts', '2026-09-06T00:00:00Z'
+            self.conn, cc_id('2026-09-01', 'Tim Hortons', -6.26), 'Gifts', '2026-09-06T00:00:00Z'
         )
 
         result = summary.category_breakdown(self.conn, '2026-09-01', '2026-09-30')
@@ -293,7 +304,7 @@ class TestCategoryOverrides(SummaryTestCase):
     def test_removing_a_transaction_override_falls_back_to_merchant_override(self):
         text = CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'Tim Hortons', -6.26, 'Coffee')
         import_csv.import_csv_text(self.conn, 'cc.csv', text)
-        tx_id = 'main-credit-card:2026-09-01:0'
+        tx_id = cc_id('2026-09-01', 'Tim Hortons', -6.26)
 
         finance_db.set_merchant_category_override(self.conn, 'Tim Hortons', 'Food', '2026-09-06T00:00:00Z')
         finance_db.set_transaction_category_override(self.conn, tx_id, 'Gifts', '2026-09-06T00:00:00Z')
@@ -335,25 +346,25 @@ class TestCategoryOverrides(SummaryTestCase):
         )
         import_csv.import_csv_text(self.conn, 'cc.csv', text)
         finance_db.set_transaction_category_override(
-            self.conn, 'main-credit-card:2026-09-01:0', 'Food', '2026-09-06T00:00:00Z'
+            self.conn, cc_id('2026-09-01', 'Tim Hortons', -6.26), 'Food', '2026-09-06T00:00:00Z'
         )
 
         result = summary.merchant_transactions(self.conn, 'Tim Hortons', '2026-09-01', '2026-09-30')
         self.assertEqual(result, [
-            {'id': 'main-credit-card:2026-09-02:0', 'date': '2026-09-02', 'amount': -7.98, 'category': 'Coffee'},
-            {'id': 'main-credit-card:2026-09-01:0', 'date': '2026-09-01', 'amount': -6.26, 'category': 'Food'},
+            {'id': cc_id('2026-09-02', 'Tim Hortons', -7.98), 'date': '2026-09-02', 'amount': -7.98, 'category': 'Coffee'},
+            {'id': cc_id('2026-09-01', 'Tim Hortons', -6.26), 'date': '2026-09-01', 'amount': -6.26, 'category': 'Food'},
         ])
 
     def test_range_replace_reimport_keeps_the_transaction_override(self):
         # The whole reason overrides aren't a foreign key with ON DELETE
         # CASCADE (csv_schema.sql): a range-replace re-import deletes and
         # re-inserts every row in the file's date range, and re-uploading
-        # the *same* file regenerates the *same* deterministic ids - the
+        # the *same* file regenerates the *same* content-derived ids - the
         # override should still apply after that happens.
         text = CREDIT_CARD_HEADER + cc_row('2026-09-01', 'Purchase', 'Tim Hortons', -6.26, 'Coffee')
         import_csv.import_csv_text(self.conn, 'cc.csv', text)
         finance_db.set_transaction_category_override(
-            self.conn, 'main-credit-card:2026-09-01:0', 'Food', '2026-09-06T00:00:00Z'
+            self.conn, cc_id('2026-09-01', 'Tim Hortons', -6.26), 'Food', '2026-09-06T00:00:00Z'
         )
 
         import_csv.import_csv_text(self.conn, 'cc.csv', text)  # re-upload the identical file
@@ -411,7 +422,7 @@ class TestChequingExpenseInSpending(SummaryTestCase):
         self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_OUT', 'Rent payment', -1500.00), 'bank.csv')
         result = summary.merchant_transactions(self.conn, 'Rent payment', '2026-09-01', '2026-09-30')
         self.assertEqual(result, [
-            {'id': 'WK1WPY033CAD:2026-09-01:0', 'date': '2026-09-01', 'amount': -1500.0, 'category': 'Uncategorized'},
+            {'id': bank_id('2026-09-01', 'Rent payment', -1500.0, 'AFT_OUT'), 'date': '2026-09-01', 'amount': -1500.0, 'category': 'Uncategorized'},
         ])
 
     def test_transfer_type_rows_stay_out_of_spending_entirely(self):

@@ -40,6 +40,29 @@ credit card, from a different institution) is documented but not built**
 a real sample export from that institution, not on a decision. **Not
 started**: a real auth gate in front of the upload/route endpoints.
 
+A live bug found while reviewing the Part C plan below is **fixed**:
+transaction ids
+were positional, so re-importing an export that contained any new row on
+an already-imported date silently moved category corrections and Cash
+Flow exclusions onto the wrong transaction. Ids are content-derived now,
+and an automatic migration carries existing corrections across — see
+`ARCHITECTURE.md` §A3b.
+
+**Part C** of `ARCHITECTURE.md` is a holistic plan (2026-09-07) for an
+append-only raw/staging capture layer under every financial fact this
+app tracks — not just CSV transactions but also
+Cash/Investments/Bitcoin/Debt/Lines of Credit, still hardcoded sample
+data per the note above. **Phase 1 is built**: `accounts` is extended,
+new snapshot tables (`account_balance_snapshots`, `account_terms_snapshots`)
+give Cash/Bitcoin/Debt/Lines of Credit a real, dated history instead of
+a single mutable number, `POST /finance/balance-entries` is the manual
+entry mechanism for all of it, and the real database has been seeded
+from today's sample values as a starting point. The dashboard itself
+still reads `finance-dashboard.json` for now — that switch is Phase 3.
+Phases 2 (investment holdings) and 4 (a raw layer under CSV
+transactions, plus backfilling today's already-imported CSVs into it)
+remain documented, not built.
+
 Plaid-based live account linking (Wealthsimple first, any Plaid-supported
 institution after that) is kept as **Part B** of `ARCHITECTURE.md`,
 deferred rather than dropped, in case account-linking is revisited later.

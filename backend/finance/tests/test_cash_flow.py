@@ -27,6 +27,18 @@ def bank_row(date_, activity_type, sub_type, description, amount, account_id='WK
     return f'{date_},12:00:00,,{account_id},Chequing,{activity_type},{sub_type},{description},,,,CAD,{amount},,,{amount}\n'
 
 
+# Transaction ids are content-derived (db.transaction_id), so tests build
+# the expected id from the same fields the importer hashes rather than
+# hardcoding an opaque digest. `amount` is the stored, signed amount -
+# not the sign-flipped figure the expense views display.
+def cc_id(date_, description, amount, activity_type='Purchase', occurrence=0):
+    return finance_db.transaction_id('main-credit-card', date_, description, amount, activity_type, occurrence)
+
+
+def bank_id(date_, description, amount, activity_type, occurrence=0, account_id='WK1WPY033CAD'):
+    return finance_db.transaction_id(account_id, date_, description, amount, activity_type, occurrence)
+
+
 class CashFlowTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -214,8 +226,8 @@ class TestCashFlowMonthTransactions(CashFlowTestCase):
         )
         result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'income')
         self.assertEqual(result, [
-            {'id': 'WK1WPY033CAD:2026-09-02:0', 'date': '2026-09-02', 'description': 'Cash back', 'amount': 5.5, 'excluded': False, 'reason': None, 'type': 'Cashback'},
-            {'id': 'WK1WPY033CAD:2026-09-01:0', 'date': '2026-09-01', 'description': 'Direct deposit received', 'amount': 2000.0, 'excluded': False, 'reason': None, 'type': 'Deposits'},
+            {'id': bank_id('2026-09-02', 'Cash back', 5.5, 'CASHBACK'), 'date': '2026-09-02', 'description': 'Cash back', 'amount': 5.5, 'excluded': False, 'reason': None, 'type': 'Cashback'},
+            {'id': bank_id('2026-09-01', 'Direct deposit received', 2000.0, 'AFT_IN'), 'date': '2026-09-01', 'description': 'Direct deposit received', 'amount': 2000.0, 'excluded': False, 'reason': None, 'type': 'Deposits'},
         ])
 
     def test_income_excludes_expense_and_transfer_rows(self):
@@ -234,15 +246,15 @@ class TestCashFlowMonthTransactions(CashFlowTestCase):
 
         result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'expense')
         self.assertEqual(result, [
-            {'id': 'main-credit-card:2026-09-02:0', 'date': '2026-09-02', 'description': 'Cafe', 'amount': 10.0, 'excluded': False, 'reason': None},
-            {'id': 'WK1WPY033CAD:2026-09-01:0', 'date': '2026-09-01', 'description': 'Debit spend', 'amount': 50.0, 'excluded': False, 'reason': None},
+            {'id': cc_id('2026-09-02', 'Cafe', -10.0), 'date': '2026-09-02', 'description': 'Cafe', 'amount': 10.0, 'excluded': False, 'reason': None},
+            {'id': bank_id('2026-09-01', 'Debit spend', -50.0, 'SPEND'), 'date': '2026-09-01', 'description': 'Debit spend', 'amount': 50.0, 'excluded': False, 'reason': None},
         ])
 
     def test_expense_shows_a_refund_as_negative(self):
         self.load(CC_HEADER + cc_row('2026-09-01', 'Refund', 'Airbnb Refund', 50.00, 'Hotels'), 'cc.csv')
         result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'expense')
         self.assertEqual(result, [
-            {'id': 'main-credit-card:2026-09-01:0', 'date': '2026-09-01', 'description': 'Airbnb Refund', 'amount': -50.0, 'excluded': False, 'reason': None},
+            {'id': cc_id('2026-09-01', 'Airbnb Refund', 50.0, 'Refund'), 'date': '2026-09-01', 'description': 'Airbnb Refund', 'amount': -50.0, 'excluded': False, 'reason': None},
         ])
 
     def test_expense_excludes_the_credit_card_payment_transfer(self):
@@ -259,7 +271,7 @@ class TestCashFlowMonthTransactions(CashFlowTestCase):
         self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Deposit', 2000.00), 'bank.csv')
         result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'not-a-real-kind')
         self.assertEqual(result, [
-            {'id': 'WK1WPY033CAD:2026-09-01:0', 'date': '2026-09-01', 'description': 'Deposit', 'amount': 2000.0, 'excluded': False, 'reason': None, 'type': 'Deposits'},
+            {'id': bank_id('2026-09-01', 'Deposit', 2000.0, 'AFT_IN'), 'date': '2026-09-01', 'description': 'Deposit', 'amount': 2000.0, 'excluded': False, 'reason': None, 'type': 'Deposits'},
         ])
 
 
@@ -293,7 +305,7 @@ class TestCashFlowIncomeByType(CashFlowTestCase):
             'bank.csv',
         )
         finance_db.set_cash_flow_exclusion(
-            self.conn, 'WK1WPY033CAD:2026-09-25:0', True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
+            self.conn, bank_id('2026-09-25', 'Direct deposit received', 320.0, 'AFT_IN'), True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
         )
         transactions = summary.cash_flow_month_transactions(self.conn, '2026-09', 'income')
         result = summary.cash_flow_income_by_type(transactions)
@@ -318,7 +330,7 @@ class TestCashFlowExclusions(CashFlowTestCase):
             'bank.csv',
         )
         finance_db.set_cash_flow_exclusion(
-            self.conn, 'WK1WPY033CAD:2026-09-25:0', True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
+            self.conn, bank_id('2026-09-25', 'Direct deposit received', 320.0, 'AFT_IN'), True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
         )
         total = summary.chequing_income_total(self.conn, '2026-09-01', '2026-09-30')
         self.assertEqual(total, 2000.0)
@@ -326,7 +338,7 @@ class TestCashFlowExclusions(CashFlowTestCase):
     def test_excluded_chequing_expense_row_does_not_count_toward_expense_total(self):
         self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'SPEND', 'Spend', -73.50), 'bank.csv')
         finance_db.set_cash_flow_exclusion(
-            self.conn, 'WK1WPY033CAD:2026-09-01:0', True, None, '2026-09-06T00:00:00Z'
+            self.conn, bank_id('2026-09-01', 'Spend', -73.5, 'SPEND'), True, None, '2026-09-06T00:00:00Z'
         )
         total = summary.chequing_expense_total(self.conn, '2026-09-01', '2026-09-30')
         self.assertEqual(total, 0.0)
@@ -334,7 +346,7 @@ class TestCashFlowExclusions(CashFlowTestCase):
     def test_excluded_credit_card_row_does_not_count_toward_expense_total(self):
         self.load(CC_HEADER + cc_row('2026-09-01', 'Purchase', 'Cafe', -5.00, 'Coffee'), 'cc.csv')
         finance_db.set_cash_flow_exclusion(
-            self.conn, 'main-credit-card:2026-09-01:0', True, None, '2026-09-06T00:00:00Z'
+            self.conn, cc_id('2026-09-01', 'Cafe', -5.0), True, None, '2026-09-06T00:00:00Z'
         )
         total = summary.credit_card_expense_total(self.conn, '2026-09-01', '2026-09-30')
         self.assertEqual(total, 0.0)
@@ -347,7 +359,7 @@ class TestCashFlowExclusions(CashFlowTestCase):
             'bank.csv',
         )
         finance_db.set_cash_flow_exclusion(
-            self.conn, 'WK1WPY033CAD:2026-09-25:0', True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
+            self.conn, bank_id('2026-09-25', 'Direct deposit received', 320.0, 'AFT_IN'), True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
         )
         result = summary.cash_flow_by_month(self.conn)
         self.assertEqual(result, [{'month': '2026-09', 'income': 2000.0, 'expense': 0.0}])
@@ -360,24 +372,25 @@ class TestCashFlowExclusions(CashFlowTestCase):
             'bank.csv',
         )
         finance_db.set_cash_flow_exclusion(
-            self.conn, 'WK1WPY033CAD:2026-09-25:0', True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
+            self.conn, bank_id('2026-09-25', 'Direct deposit received', 320.0, 'AFT_IN'), True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
         )
         result = summary.cash_flow_month_transactions(self.conn, '2026-09', 'income')
         self.assertEqual(result, [
-            {'id': 'WK1WPY033CAD:2026-09-25:0', 'date': '2026-09-25', 'description': 'Direct deposit received',
+            {'id': bank_id('2026-09-25', 'Direct deposit received', 320.0, 'AFT_IN'), 'date': '2026-09-25', 'description': 'Direct deposit received',
              'amount': 320.0, 'excluded': True, 'reason': 'Benefits reimbursement', 'type': 'Deposits'},
-            {'id': 'WK1WPY033CAD:2026-09-01:0', 'date': '2026-09-01', 'description': 'Direct deposit received',
+            {'id': bank_id('2026-09-01', 'Direct deposit received', 2000.0, 'AFT_IN'),
+             'date': '2026-09-01', 'description': 'Direct deposit received',
              'amount': 2000.0, 'excluded': False, 'reason': None, 'type': 'Deposits'},
         ])
 
     def test_removing_the_exclusion_restores_the_total(self):
         self.load(BANK_HEADER + bank_row('2026-09-01', 'MoneyMovement', 'AFT_IN', 'Deposit', 320.00), 'bank.csv')
         finance_db.set_cash_flow_exclusion(
-            self.conn, 'WK1WPY033CAD:2026-09-01:0', True, 'Reimbursement', '2026-09-06T00:00:00Z'
+            self.conn, bank_id('2026-09-01', 'Deposit', 320.0, 'AFT_IN'), True, 'Reimbursement', '2026-09-06T00:00:00Z'
         )
         self.assertEqual(summary.chequing_income_total(self.conn, '2026-09-01', '2026-09-30'), 0.0)
 
-        finance_db.set_cash_flow_exclusion(self.conn, 'WK1WPY033CAD:2026-09-01:0', False, None, '2026-09-06T00:00:00Z')
+        finance_db.set_cash_flow_exclusion(self.conn, bank_id('2026-09-01', 'Deposit', 320.0, 'AFT_IN'), False, None, '2026-09-06T00:00:00Z')
         self.assertEqual(summary.chequing_income_total(self.conn, '2026-09-01', '2026-09-30'), 320.0)
 
     def test_build_cash_flow_reflects_exclusion(self):
@@ -388,7 +401,7 @@ class TestCashFlowExclusions(CashFlowTestCase):
             'bank.csv',
         )
         finance_db.set_cash_flow_exclusion(
-            self.conn, 'WK1WPY033CAD:2026-09-25:0', True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
+            self.conn, bank_id('2026-09-25', 'Direct deposit received', 320.0, 'AFT_IN'), True, 'Benefits reimbursement', '2026-09-06T00:00:00Z'
         )
         result = summary.build_cash_flow(self.conn, 'month', today=date(2026, 9, 30))
         self.assertEqual(result['income'], 2000.0)

@@ -155,13 +155,21 @@ def parse_csv_text(text):
 
 
 def _assign_ids(account_id, rows, source_file, imported_at):
-    seq_by_date = {}
+    """Ids come from row content, not file position - see
+    db.transaction_id for why. `occurrence` counts rows that are
+    identical in every hashed field, so two separate same-day charges of
+    the same amount at the same merchant still get distinct ids.
+    """
+    occurrences = {}
     out = []
     for row in rows:
-        seq = seq_by_date.get(row['date'], 0)
-        seq_by_date[row['date']] = seq + 1
+
+        key = (row['date'], row['description'], row['amount'], row['activity_type'])
+        occurrence = occurrences.get(key, 0)
+        occurrences[key] = occurrence + 1
+
         out.append({
-            'id': f"{account_id}:{row['date']}:{seq}",
+            'id': finance_db.transaction_id(account_id, *key, occurrence),
             'account_id': account_id,
             'source_file': source_file,
             'imported_at': imported_at,
