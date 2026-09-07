@@ -123,6 +123,11 @@ python3 backend/finance/import_shakepay.py path/to/shakepay-account.pdf path/to/
 python3 backend/finance/import_shakepay.py data/finance/shakepay/
 ```
 
+On Windows, `backend/shakepay-update.bat` wraps that last form (same
+`python.exe` path `start-server.bat` already uses) — double-click it, or
+run it with a folder path as its one argument to import from somewhere
+other than `data\finance\shakepay\`.
+
 This creates three accounts on first run — `shakepay-card` (kind
 `credit_card`; card purchases as `Purchase`/`Refund`, exactly the shape
 `credit_card_expense_total()`/`category_breakdown()`/`top_merchants()`
