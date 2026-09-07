@@ -185,6 +185,7 @@ _GLUED_LITERAL_FIXES = (
     ('TransferTransfer from Shakepay Inc.', 'Transfer Transfer from Shakepay Inc.'),
     ('Round upBought', 'Round up Bought'),
     ('Shakepay InterestInterest', 'Shakepay Interest Interest'),
+    ('Receive BitcoinBitcoin', 'Receive Bitcoin Bitcoin'),
     ('Starting balanceBTC', 'Starting balance BTC'),
     ('Closing balanceBTC', 'Closing balance BTC'),
     ('Shakepay@', 'Shakepay @'),
@@ -195,6 +196,7 @@ _GLUED_LITERAL_FIXES = (
     ('Card purchase', 'Card purchase '),
     ('Interac e-Transfer', 'Interac e-Transfer '),
     ('Shakepay reward', 'Shakepay reward '),
+    ('CAD balance', 'CAD balance '),
 )
 
 
@@ -314,12 +316,12 @@ def _parse_cash_section(text):
 # --- Crypto subsection -------------------------------------------------
 
 _CRYPTO_PATTERNS = [
-    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Shakepay reward (ShakingSats|ShakeSquad|Bitcoin cashback) '
-                rf'\+([\d.]+) BTC ([\d,]+\.\d{{2}})\s*([\d,]+\.\d{{2}})$'), 'reward'),
-    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Shakepay Interest Interest payout on CAD balance '
-                rf'\+([\d.]+) BTC ([\d,]+\.\d{{2}})\s*([\d,]+\.\d{{2}})$'), 'interest'),
-    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Receive Bitcoin Bitcoin address (.+?) '
-                rf'\+([\d.]+) BTC ([\d,]+\.\d{{2}})\s*([\d,]+\.\d{{2}})$'), 'deposit'),
+    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Shakepay reward (ShakingSats|ShakeSquad|Bitcoin cashback)\s*'
+                rf'\+([\d.]+)\s*BTC\s*([\d,]+\.\d{{2}})\s*([\d,]+\.\d{{2}})$'), 'reward'),
+    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Shakepay Interest Interest payout on CAD balance\s*'
+                rf'\+([\d.]+)\s*BTC\s*([\d,]+\.\d{{2}})\s*([\d,]+\.\d{{2}})$'), 'interest'),
+    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Receive Bitcoin Bitcoin address (.+?)\s*'
+                rf'\+([\d.]+)\s*BTC\s*([\d,]+\.\d{{2}})\s*([\d,]+\.\d{{2}})$'), 'deposit'),
 ]
 
 

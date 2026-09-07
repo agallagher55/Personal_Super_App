@@ -96,10 +96,10 @@ ACCOUNT_STATEMENT_TEXT_GLUED = (
     "(CA$)**Original cost (CA$)*** "
     "2026-08-01Starting balanceBTC 0.00716192 BTC 631.91700.23 ETH 0 ETH0.000.00 "
     "2026-08-01 08:06:46Shakepay rewardShakingSats +0.0000001 BTC 0.010.00 "
-    "2026-08-05 10:31:00Shakepay InterestInterest payout on CAD balance +0.00000003 BTC 0.000.00 "
+    "2026-08-05 10:31:00Shakepay InterestInterest payout on CAD balance+0.00000003 BTC0.000.00 "
     "2026-08-03 09:14:10Round upBought @ CA$89,208.15 +0.00002993 BTC 3.262.63 "
-    "2026-08-09 16:01:14Receive Bitcoin Bitcoin address bc1q6lwcmm8cw5dp3vxssqvxspgtns3xeancp6hup3 "
-    "+0.00021993 BTC 23.9819.97 "
+    "2026-08-09 16:01:14Receive BitcoinBitcoin address bc1q6lwcmm8cw5dp3v xssqvxspgtns3xeancp6 "
+    "hup3+0.00021993 BTC23.9819.97 "
     "2026-08-31Closing balanceBTC 0.64866807 BTC 70,748.3857,412.60 ETH 0 ETH0.000.00 "
     "Monthly account statement 2026-08-01 to 2026-08-31 All figures are in $CAD unless "
     "otherwise specified Shakepay Inc. 500 Place d'Armes, Suite 1800, Montreal, QC Canada "
@@ -278,6 +278,26 @@ class TestGluedTextIsRecoveredCorrectly(unittest.TestCase):
         roundup = next(r for r in rows_by_account['shakepay-cash'] if r['activity_type'] == 'ROUNDUP_BUY')
         self.assertIn('0.00002993 BTC', roundup['description'])
         self.assertEqual(roundup['amount'], -2.67)
+
+    def test_receive_bitcoin_category_glue_is_recovered(self):
+        # "Receive BitcoinBitcoin address ..." (category glued straight
+        # into the fixed "Bitcoin address" description prefix) plus the
+        # address itself glued directly to the signed BTC amount with no
+        # space at all ("hup3+0.00021993") and "BTC" glued to the
+        # following CAD value ("BTC23.98").
+        _, _, rows_by_account, unparsed, _ = import_shakepay.parse_statement_text(ACCOUNT_STATEMENT_TEXT_GLUED)
+        self.assertEqual(unparsed, [])
+        deposit = next(r for r in rows_by_account['shakepay-crypto'] if r['activity_type'] == 'CRYPTO_DEPOSIT')
+        self.assertEqual(deposit['amount'], 23.98)
+
+    def test_interest_row_survives_amount_glued_straight_onto_balance(self):
+        # "CAD balance+0.00000003 BTC0.000.00" - no space at all between
+        # the fixed description text and the amount, nor between "BTC"
+        # and the CAD value that follows it.
+        _, _, rows_by_account, unparsed, _ = import_shakepay.parse_statement_text(ACCOUNT_STATEMENT_TEXT_GLUED)
+        self.assertEqual(unparsed, [])
+        interest = next(r for r in rows_by_account['shakepay-crypto'] if r['activity_type'] == 'CRYPTO_INTEREST')
+        self.assertEqual(interest['amount'], 0.0)
 
 
 class TestImportShakepayText(unittest.TestCase):
