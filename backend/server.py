@@ -275,7 +275,10 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             # count toward the total - summing here (rather than in the
             # frontend) keeps "what counts" defined in exactly one place.
             total = round(sum(t['amount'] for t in transactions if not t['excluded']), 2)
-            self.send_json(200, {'month': month, 'kind': kind, 'transactions': transactions, 'total': total})
+            # byType (income only - expense rows carry no `type`) is the
+            # dialog's per-type summary (Cashback, Interest, Deposits, ...).
+            by_type = finance_summary.cash_flow_income_by_type(transactions) if kind != 'expense' else []
+            self.send_json(200, {'month': month, 'kind': kind, 'transactions': transactions, 'total': total, 'byType': by_type})
             return
         if path == '/finance/last-imported.json':
             conn = finance_db.connect()

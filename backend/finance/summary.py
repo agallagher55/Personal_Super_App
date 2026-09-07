@@ -79,6 +79,17 @@ _SPENDING_FILTER = (
     f"AND activity_type IN ({_SPENDING_ACTIVITY_TYPES_SQL})"
 )
 
+# Friendly labels for the income dialog's "by type" breakdown (below) -
+# groups rows like "Cash back - Credit card" and "Interest received"
+# under the same bucket their raw activity_type already sorts them into,
+# rather than inventing a separate description-keyword classifier.
+INCOME_TYPE_LABELS = {
+    'AFT_IN': 'Deposits',
+    'CASHBACK': 'Cashback',
+    'GIVEAWAY': 'Giveaways',
+    'Interest': 'Interest',
+}
+
 WINDOWS = {
     'month': lambda today: today.replace(day=1),
     '30d': lambda today: today - timedelta(days=30),
@@ -302,7 +313,7 @@ def cash_flow_month_transactions(conn, month, kind):
     /finance/cash-flow-transactions.json)."""
     if kind != 'expense':
         rows = conn.execute(
-            f'''SELECT t.id AS id, t.date, t.description, t.amount,
+            f'''SELECT t.id AS id, t.date, t.description, t.amount, t.activity_type AS activity_type,
                        e.transaction_id IS NOT NULL AS excluded, e.reason AS reason
                 FROM transactions t
                 JOIN accounts a ON a.id = t.account_id
@@ -339,7 +350,7 @@ def cash_flow_month_transactions(conn, month, kind):
 
 
 def _cash_flow_tx_row(r):
-    return {
+    row = {
         'id': r['id'],
         'date': r['date'],
         'description': r['description'],
@@ -347,6 +358,34 @@ def _cash_flow_tx_row(r):
         'excluded': bool(r['excluded']),
         'reason': r['reason'],
     }
+    if 'activity_type' in r.keys():
+        row['type'] = INCOME_TYPE_LABELS.get(r['activity_type'], r['activity_type'])
+    return row
+
+
+def cash_flow_income_by_type(transactions):
+    """Aggregates an income month's transactions (as returned by
+    cash_flow_month_transactions) into per-type totals - e.g. all "Cash
+    back - Credit card" and "Interest received" rows collapse into single
+    Cashback/Interest lines instead of listing every transaction
+    individually. Only non-excluded rows count, same "what counts" rule
+    as the dialog's overall total. Rows with no `type` (expense rows,
+    which this is never called with) fall under 'Other'."""
+    totals = {}
+    counts = {}
+    order = []
+    for t in transactions:
+        if t['excluded']:
+            continue
+        label = t.get('type') or 'Other'
+        if label not in totals:
+            totals[label] = 0.0
+            counts[label] = 0
+            order.append(label)
+        totals[label] += t['amount']
+        counts[label] += 1
+    order.sort(key=lambda label: totals[label], reverse=True)
+    return [{'type': label, 'total': round(totals[label], 2), 'count': counts[label]} for label in order]
 
 
 def build_cash_flow(conn, window=DEFAULT_WINDOW, today=None):
