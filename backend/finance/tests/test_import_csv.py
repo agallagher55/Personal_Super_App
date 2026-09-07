@@ -230,6 +230,88 @@ class TestImportCsvText(ImportDbTestCase):
         self.assertEqual(finance_db.account_transaction_count(self.conn, 'WK1WPY033CAD'), 5)
 
 
+class TestTransactionIdStability(ImportDbTestCase):
+    """Ids are derived from row content, not file position (db.transaction_id).
+
+    The positional scheme this replaced numbered rows by their index
+    within a date, so a single newly-appearing row shifted every id after
+    it on that date - silently re-pointing the category overrides and
+    cash flow exclusions keyed to those ids at other transactions.
+    """
+
+    HEADER = 'transaction_date,transaction_type,status,merchant,amount,currency,notes,category\n'
+
+    def cc(self, date_, merchant, amount, category, status='Completed', txn_type='Purchase'):
+        return f'{date_},{txn_type},{status},{merchant},{amount},CAD,,{category}\n'
+
+    def ids_by_description(self):
+        return {r['description']: r['id'] for r in self.conn.execute('SELECT id, description FROM transactions')}
+
+    def test_a_new_same_day_row_does_not_move_the_other_rows_ids(self):
+        first = self.HEADER + self.cc('2026-09-02', 'Coffee Shop', -5.00, 'Coffee') \
+            + self.cc('2026-09-02', 'Big Hotel', -450.00, 'Hotels')
+        import_csv.import_csv_text(self.conn, 'v1.csv', first)
+        before = self.ids_by_description()
+
+        # A charge that was still pending at the first export shows up in
+        # the second one, sorted ahead of both existing rows.
+        import_csv.import_csv_text(
+            self.conn, 'v2.csv',
+            self.HEADER + self.cc('2026-09-02', 'Gas Station', -60.00, 'Gas') + first[len(self.HEADER):],
+        )
+        after = self.ids_by_description()
+        self.assertEqual(before['Coffee Shop'], after['Coffee Shop'])
+        self.assertEqual(before['Big Hotel'], after['Big Hotel'])
+
+    def test_a_category_override_stays_on_its_own_transaction_across_a_reimport(self):
+        # The user-visible form of the bug above: the correction used to
+        # jump to whichever row inherited the old positional id.
+        first = self.HEADER + self.cc('2026-09-02', 'Coffee Shop', -5.00, 'Coffee') \
+            + self.cc('2026-09-02', 'Big Hotel', -450.00, 'Hotels')
+        import_csv.import_csv_text(self.conn, 'v1.csv', first)
+        finance_db.set_transaction_category_override(
+            self.conn, self.ids_by_description()['Big Hotel'], 'Vacation', '2026-09-07T00:00:00Z'
+        )
+
+        import_csv.import_csv_text(
+            self.conn, 'v2.csv',
+            self.HEADER + self.cc('2026-09-02', 'Gas Station', -60.00, 'Gas') + first[len(self.HEADER):],
+        )
+
+        categories = {
+            r['description']: r['effective_category']
+            for r in self.conn.execute('SELECT description, effective_category FROM transactions_effective')
+        }
+        self.assertEqual(categories['Big Hotel'], 'Vacation')
+        self.assertEqual(categories['Coffee Shop'], 'Coffee')
+
+    def test_a_pending_charge_posting_keeps_the_same_id(self):
+        import_csv.import_csv_text(self.conn, 'v1.csv', self.HEADER + self.cc('2026-09-05', 'Slow Merchant', -20.00, 'Food', status='Pending'))
+        pending_id = self.ids_by_description()['Slow Merchant']
+
+        import_csv.import_csv_text(self.conn, 'v2.csv', self.HEADER + self.cc('2026-09-05', 'Slow Merchant', -20.00, 'Food', status='Completed'))
+        self.assertEqual(self.ids_by_description()['Slow Merchant'], pending_id)
+
+    def test_genuinely_identical_same_day_rows_still_get_distinct_ids(self):
+        # Two separate $2.94 charges at one merchant on one day are real
+        # (ARCHITECTURE.md A3) - content alone can't tell them apart, so
+        # the occurrence index has to.
+        import_csv.import_csv_text(
+            self.conn, 'cc.csv',
+            self.HEADER + self.cc('2026-09-08', 'McDonalds', -2.94, 'Food') + self.cc('2026-09-08', 'McDonalds', -2.94, 'Food'),
+        )
+        ids = [r['id'] for r in self.conn.execute('SELECT id FROM transactions')]
+        self.assertEqual(len(ids), 2)
+        self.assertEqual(len(set(ids)), 2)
+
+    def test_reimporting_the_identical_file_reproduces_the_identical_ids(self):
+        text = self.HEADER + self.cc('2026-09-01', 'Tim Hortons', -6.26, 'Coffee')
+        import_csv.import_csv_text(self.conn, 'cc.csv', text)
+        before = self.ids_by_description()
+        import_csv.import_csv_text(self.conn, 'cc.csv', text)
+        self.assertEqual(self.ids_by_description(), before)
+
+
 class TestImportUploadedFile(unittest.TestCase):
     """Exercises the real POST /finance/import entry point end to end,
     including the audit-copy save, against a temp data dir rather than the

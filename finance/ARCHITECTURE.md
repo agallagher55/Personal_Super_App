@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
-  id            TEXT PRIMARY KEY,   -- account_id + date + in-file row sequence
+  id            TEXT PRIMARY KEY,   -- account_id + date + content digest + occurrence (A3b)
   account_id    TEXT NOT NULL REFERENCES accounts(id),
   date          TEXT NOT NULL,
   description   TEXT NOT NULL,      -- merchant (CC) or activity description (chequing)
@@ -176,6 +176,65 @@ each import is a **range replace**: for the account the file belongs to,
 file> AND <max date in file>`, then insert every row from the file fresh.
 Re-running the same or an overlapping export is then naturally idempotent,
 and there's no cross-file matching heuristic to get wrong.
+
+### A3b. Transaction ids are content-derived — fixed a live bug (2026-09-07)
+
+Ids were originally **positional**: `account_id:date:N`, where `N` was the
+row's index within its own date in the imported file. That looked stable,
+because re-importing an unchanged export reproduces the same order, and
+A5d/A5f both relied on it (a category override or a Cash Flow exclusion is
+keyed by transaction id, and survives a range-replace re-import only
+because the same id comes back).
+
+It isn't stable. **Any newly-appearing row on an already-imported date
+shifts every id after it on that date**, and re-imports routinely contain
+new rows for dates already covered: a `Pending` charge posts, or a
+transaction settles after the previous export was pulled. Reproduced
+against the real code before fixing:
+
+```
+v1: main-credit-card:2026-09-02:1  Big Hotel     (user tags this "Vacation")
+--- re-import, with one new same-day row sorted ahead of it ---
+v2: main-credit-card:2026-09-02:1  Coffee Shop -> Vacation
+v2: main-credit-card:2026-09-02:2  Big Hotel   -> Hotels
+```
+
+The correction silently moved to a different transaction. No error, and
+nothing in the UI to notice it by. Cash Flow exclusions are keyed the same
+way, so an exclusion could just as silently start suppressing a different
+row and change the income/expense totals.
+
+**The fix** (`db.transaction_id`): hash the fields that identify the
+transaction itself and use that instead of file position:
+
+```
+account_id : date : sha256(date|description|amount|activity_type)[:12] : occurrence
+```
+
+- **`status` is deliberately not hashed.** A `Pending` charge posting as
+  `Completed` is the same transaction and has to keep its id — hashing
+  status would break the exact case this exists to fix.
+- **`category` is not hashed either.** Correcting a category must not move
+  the row that correction is attached to.
+- **`occurrence`** disambiguates rows identical in every hashed field.
+  Two separate $2.94 McDonald's charges on one day are real (A3), and
+  content alone genuinely cannot tell them apart, so this one index still
+  has to come from position. That residue is fine: it only ever applies
+  *among identical rows*, which are interchangeable by definition, so an
+  unrelated new row on the same date no longer disturbs anything.
+
+**Migration.** Changing the id format would itself orphan every existing
+correction — the same breakage, just triggered once by the upgrade. So
+`db.migrate()` rewrites existing rows onto the new ids and carries
+`transaction_category_overrides` and `cash_flow_exclusions` across with
+them, tracked in `PRAGMA user_version` so it runs exactly once per
+database. `init_schema()` calls it, so every path (server startup, the
+upload/CLI import, tests) migrates automatically. Verified against a copy
+of the real database: all ids rewritten, zero orphaned corrections.
+
+This is also the first migration this database has ever had, so
+`SCHEMA_VERSION`/`migrate()` is now the mechanism for any future one
+(Part C needs it — see C10).
 
 ### A4. Import flow — built
 
@@ -444,7 +503,7 @@ resolution logic.
 re-import (A3) deletes and re-inserts every transaction row in the
 affected date range, and a cascade would silently wipe the override the
 next time that CSV gets re-uploaded. Left as a plain column instead - the
-override re-applies automatically because the same deterministic id
+override re-applies automatically because the same content-derived id
 (`account_id:date:sequence`) gets regenerated for an unchanged re-export,
 and simply points at nothing if it doesn't. Verified directly: set a
 one-time override, re-import the identical file, confirmed the override
@@ -592,7 +651,7 @@ side of it shouldn't count as income.)
 **`cash_flow_exclusions(transaction_id, reason, created_at)`**
 (`csv_schema.sql`) - same "no `ON DELETE CASCADE`" reasoning as every
 other override table here: a range-replace re-import regenerates the
-same deterministic id for an unchanged re-export, so the exclusion
+same content-derived id for the same transaction, so the exclusion
 sticks naturally; a cascade would wipe it the instant that CSV is
 re-uploaded. `db.set_cash_flow_exclusion(conn, transaction_id,
 is_excluded, reason, created_at)` mirrors `set_transaction_category_override`'s

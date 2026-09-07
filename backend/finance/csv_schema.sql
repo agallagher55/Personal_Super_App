@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
-  id            TEXT PRIMARY KEY,   -- account_id:date:in-file-sequence, see import_csv.py
+  id            TEXT PRIMARY KEY,   -- account_id:date:content-digest:occurrence, see db.transaction_id
   account_id    TEXT NOT NULL REFERENCES accounts(id),
   date          TEXT NOT NULL,
   description   TEXT NOT NULL,      -- merchant (credit card) or activity description (bank)
@@ -99,7 +99,7 @@ LEFT JOIN merchant_category_overrides mco ON mco.description = t.description;
 -- rule would incorrectly exclude real paycheck deposits too. Same
 -- reasoning as transaction_category_overrides for skipping
 -- ON DELETE CASCADE: a range-replace re-import regenerates the same
--- deterministic id for an unchanged re-export, so the exclusion sticks
+-- content-derived id for the same transaction, so the exclusion sticks
 -- naturally; a cascade would wipe it the moment that CSV is re-uploaded.
 CREATE TABLE IF NOT EXISTS cash_flow_exclusions (
   transaction_id TEXT PRIMARY KEY,
