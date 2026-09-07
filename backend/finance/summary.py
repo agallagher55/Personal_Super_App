@@ -164,28 +164,60 @@ def monthly_trend_by_source(conn, months=MONTHS_OF_TREND):
 
 
 def top_merchants(conn, start, end, limit=TOP_MERCHANTS_LIMIT, category=None):
+    """`sources` on each result names which institution(s) (Shakepay,
+    Wealthsimple, a bank account's own label, ...) contributed to a
+    merchant's total - same COALESCE(institution, label) grouping key
+    monthly_trend_by_source() stacks the Spend by Month chart by, so a
+    merchant's colour dot(s) in the dashboard's Top Merchants list line up
+    with that chart's legend. Grouped by (description, source) below, then
+    merged back into one row per merchant in Python, since a description
+    shared across sources (rare, but e.g. a generic "Interac e-Transfer"
+    label) should read as one merchant with every contributing source
+    listed, not fragment into separate rows."""
     if category:
         rows = conn.execute(
-            f'''SELECT description AS merchant, SUM(-amount) AS total, COUNT(*) AS count
-               FROM transactions_effective
-               WHERE activity_type IN ({_SPENDING_ACTIVITY_TYPES_SQL}) AND date >= ? AND date <= ? AND effective_category = ?
-               GROUP BY description
-               ORDER BY total DESC
-               LIMIT ?''',
-            (start, end, category, limit),
+            f'''SELECT t.description AS merchant, COALESCE(a.institution, a.label) AS source,
+                       SUM(-t.amount) AS total, COUNT(*) AS count
+               FROM transactions_effective t
+               JOIN accounts a ON a.id = t.account_id
+               WHERE t.activity_type IN ({_SPENDING_ACTIVITY_TYPES_SQL}) AND t.date >= ? AND t.date <= ? AND t.effective_category = ?
+               GROUP BY t.description, source''',
+            (start, end, category),
         ).fetchall()
-        return [{'merchant': r['merchant'], 'total': round(r['total'], 2), 'count': r['count']} for r in rows]
+    else:
+        rows = conn.execute(
+            f'''SELECT t.description AS merchant, COALESCE(a.institution, a.label) AS source,
+                       SUM(-t.amount) AS total, COUNT(*) AS count
+               FROM transactions t
+               JOIN accounts a ON a.id = t.account_id
+               WHERE t.activity_type IN ({_SPENDING_ACTIVITY_TYPES_SQL}) AND t.date >= ? AND t.date <= ?
+               GROUP BY t.description, source''',
+            (start, end),
+        ).fetchall()
 
-    rows = conn.execute(
-        f'''SELECT description AS merchant, SUM(-amount) AS total, COUNT(*) AS count
-           FROM transactions
-           WHERE activity_type IN ({_SPENDING_ACTIVITY_TYPES_SQL}) AND date >= ? AND date <= ?
-           GROUP BY description
-           ORDER BY total DESC
-           LIMIT ?''',
-        (start, end, limit),
-    ).fetchall()
-    return [{'merchant': r['merchant'], 'total': round(r['total'], 2), 'count': r['count']} for r in rows]
+    merchants = {}
+    order = []
+    for r in rows:
+        merged = merchants.get(r['merchant'])
+        if merged is None:
+            merged = {'total': 0.0, 'count': 0, 'sources': set()}
+            merchants[r['merchant']] = merged
+            order.append(r['merchant'])
+        merged['total'] += r['total']
+        merged['count'] += r['count']
+        merged['sources'].add(r['source'])
+
+    result = [
+        {
+            'merchant': merchant,
+            'total': round(merchants[merchant]['total'], 2),
+            'count': merchants[merchant]['count'],
+            'sources': sorted(merchants[merchant]['sources']),
+        }
+        for merchant in order
+    ]
+    result.sort(key=lambda m: m['total'], reverse=True)
+    return result[:limit]
 
 
 def merchant_transactions(conn, description, start, end):
@@ -203,6 +235,38 @@ def merchant_transactions(conn, description, start, end):
         (description, start, end),
     ).fetchall()
     return [{'id': r['id'], 'date': r['date'], 'amount': round(r['amount'], 2), 'category': r['category']} for r in rows]
+
+
+def spend_month_transactions(conn, month):
+    """Individual spend transactions behind one bar of the Spend by Month
+    chart (finance/README.md) - what clicking a bar shows. `month` is
+    'YYYY-MM'; same `_SPENDING_FILTER`/`_SPENDING_CASE` scope as
+    monthly_trend()/monthly_trend_by_source(), so the sum of `amount` here
+    matches that month's chart total. `source` is the same
+    COALESCE(institution, label) grouping key monthly_trend_by_source()
+    stacks by, and `category` is already the effective (post-override) one -
+    both are shown per row since a month's bar can mix several sources and
+    categories that the chart itself only shows totalled."""
+    rows = conn.execute(
+        f'''SELECT t.id AS id, t.date, t.description, -t.amount AS amount,
+                   effective_category AS category, COALESCE(a.institution, a.label) AS source
+            FROM transactions_effective t
+            JOIN accounts a ON a.id = t.account_id
+            WHERE {_SPENDING_FILTER} AND substr(t.date, 1, 7) = ?
+            ORDER BY t.date DESC, t.id DESC''',
+        (month,),
+    ).fetchall()
+    return [
+        {
+            'id': r['id'],
+            'date': r['date'],
+            'description': r['description'],
+            'amount': round(r['amount'], 2),
+            'category': r['category'],
+            'source': r['source'],
+        }
+        for r in rows
+    ]
 
 
 def btc_accumulated_by_month(conn, months=MONTHS_OF_TREND):

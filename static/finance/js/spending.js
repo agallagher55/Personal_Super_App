@@ -13,6 +13,7 @@ const MERCHANT_TX_URL = "/finance/merchant-transactions.json";
 const SET_TRANSACTION_CATEGORY_URL = "/finance/categories/transaction";
 const SET_MERCHANT_CATEGORY_URL = "/finance/categories/merchant";
 const BTC_BY_MONTH_URL = "/finance/shakepay-btc-by-month.json";
+const SPEND_MONTH_TX_URL = "/finance/spend-month-transactions.json";
 // Reuses dashboard.js's --stock-1..12 identity-color family (already a
 // generic, validated 12-slot categorical palette, not something specific
 // to stocks) rather than defining a second one for spending categories.
@@ -40,6 +41,12 @@ function formatShortDate(iso) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function formatMonthTitle(month) {
+  const d = new Date(`${month}-01T00:00:00`);
+  if (Number.isNaN(d.getTime())) return month;
+  return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
 // Alphabetical assignment, not by current rank, so a category keeps the
 // same identity color across window changes even as its rank shifts -
 // same "color follows the entity, never rank" reasoning as
@@ -57,19 +64,36 @@ function categoryColors(byCategory) {
 }
 
 // Same alphabetical-assignment convention as categoryColors above, over
-// every source that appears in any month (not just the most recent one),
-// so a source's color stays the same across the whole chart even if it
-// only shows up in some months.
-function sourceColors(byMonthBySource) {
-  const sources = [...new Set(byMonthBySource.flatMap((m) => Object.keys(m.bySource)))].sort();
-  if (sources.length > CATEGORY_COLOR_SLOTS) {
+// every source that appears anywhere in this window's data - Spend by
+// Month's own monthly totals and Top Merchants' per-merchant sources alike
+// (see updateSourceColors) - so a source (e.g. "Shakepay") keeps exactly
+// one identity color everywhere it shows up on the page, not a different
+// one in the chart than in the merchants list.
+function sourceColors(sources) {
+  const sorted = [...new Set(sources)].sort();
+  if (sorted.length > CATEGORY_COLOR_SLOTS) {
     console.warn(
-      `finance spending: ${sources.length} sources exceeds the ${CATEGORY_COLOR_SLOTS} color slots - some will share an identity color.`
+      `finance spending: ${sorted.length} sources exceeds the ${CATEGORY_COLOR_SLOTS} color slots - some will share an identity color.`
     );
   }
   const colors = new Map();
-  sources.forEach((source, i) => colors.set(source, `--stock-${(i % CATEGORY_COLOR_SLOTS) + 1}`));
+  sorted.forEach((source, i) => colors.set(source, `--stock-${(i % CATEGORY_COLOR_SLOTS) + 1}`));
   return colors;
+}
+
+// Recomputed on every renderSpending() (window change) from both this
+// window's Top Merchants sources and the (unwindowed) Spend by Month
+// sources, so a source not currently in the trailing-12-months chart but
+// present in an "All time" merchants list still gets a stable color
+// instead of falling back to unstyled.
+let currentSourceColors = new Map();
+
+function updateSourceColors(byMonthBySource, topMerchants) {
+  const sources = new Set(byMonthBySource.flatMap((m) => Object.keys(m.bySource)));
+  for (const merchant of topMerchants) {
+    for (const source of merchant.sources || []) sources.add(source);
+  }
+  currentSourceColors = sourceColors([...sources]);
 }
 
 // Clicking a category (donut segment or legend row) filters Top Merchants
@@ -147,6 +171,12 @@ function renderTopMerchants(topMerchants) {
   const maxTotal = Math.max(...topMerchants.map((m) => m.total));
   for (const merchant of topMerchants) {
     const pct = maxTotal > 0 ? (merchant.total / maxTotal) * 100 : 0;
+    const sourceBadges = (merchant.sources || [])
+      .map((source) => {
+        const colorVar = currentSourceColors.get(source) || "--ink-soft";
+        return `<span class="fin-source-badge"><span class="fin-source-dot" style="background:var(${colorVar})"></span>${escapeHtml(source)}</span>`;
+      })
+      .join("");
     const row = document.createElement("div");
     row.className = "fin-row";
     row.innerHTML = `
@@ -159,7 +189,7 @@ function renderTopMerchants(topMerchants) {
       <div class="fin-row-bar-track">
         <div class="fin-row-bar-fill" style="width:${pct.toFixed(1)}%; background:var(--status-blue)"></div>
       </div>
-      <div class="fin-row-pct">${merchant.count} visit${merchant.count === 1 ? "" : "s"}</div>
+      <div class="fin-row-pct">${merchant.count} visit${merchant.count === 1 ? "" : "s"}${sourceBadges ? ` · ${sourceBadges}` : ""}</div>
     `;
     row.querySelector(".fin-edit-category-btn").addEventListener("click", () => openCategoryEditor(merchant.merchant));
     container.appendChild(row);
@@ -186,9 +216,12 @@ function renderMonthlyChart(byMonthBySource) {
   canvas.hidden = false;
   if (empty) empty.hidden = true;
 
-  const colors = sourceColors(byMonthBySource);
-  const series = [...colors.keys()].map((key) => ({ key, colorVar: colors.get(key) }));
-  drawMonthlyBarChart(canvas, tooltip, byMonthBySource, series);
+  // Reads from currentSourceColors (set by updateSourceColors, called
+  // before this) rather than recomputing from byMonthBySource alone, so a
+  // source's color here matches its dot in the Top Merchants list exactly.
+  const monthSources = [...new Set(byMonthBySource.flatMap((m) => Object.keys(m.bySource)))].sort();
+  const series = monthSources.map((key) => ({ key, colorVar: currentSourceColors.get(key) || "--ink-soft" }));
+  drawMonthlyBarChart(canvas, tooltip, byMonthBySource, series, { onBarClick: openSpendMonthTransactions });
 
   if (legendEl) {
     const totals = new Map();
@@ -200,6 +233,57 @@ function renderMonthlyChart(byMonthBySource) {
     const grandTotal = [...totals.values()].reduce((sum, v) => sum + v, 0);
     const slices = series.map((s) => ({ label: s.key, value: totals.get(s.key) || 0, colorVar: s.colorVar }));
     renderLegend("fin-spend-month-legend", slices, grandTotal, { compact: true });
+  }
+}
+
+// --- Click a Spend by Month bar to see its transactions ------------------
+
+function renderSpendMonthTxRows(container, transactions) {
+  container.innerHTML = "";
+  if (transactions.length === 0) {
+    container.innerHTML = `<p class="fin-empty-note">No transactions.</p>`;
+    return;
+  }
+  for (const tx of transactions) {
+    const colorVar = currentSourceColors.get(tx.source) || "--ink-soft";
+    const row = document.createElement("div");
+    row.className = "fin-category-tx-row";
+    row.innerHTML = `
+      <span class="fin-category-tx-date">${formatShortDate(tx.date)}</span>
+      <span class="fin-category-tx-description">
+        <span class="fin-source-dot" style="background:var(${colorVar})" title="${escapeHtml(tx.source)}"></span>
+        ${escapeHtml(tx.description)}
+      </span>
+      <span class="fin-category-tx-category">${escapeHtml(tx.category || "Uncategorized")}</span>
+      <span class="fin-category-tx-amount">${cad(tx.amount)}</span>
+    `;
+    container.appendChild(row);
+  }
+}
+
+async function openSpendMonthTransactions(month) {
+  const dialog = document.getElementById("fin-spend-month-tx-dialog");
+  if (!dialog) return;
+
+  const title = document.getElementById("fin-spend-month-tx-dialog-title");
+  const subtitle = document.getElementById("fin-spend-month-tx-dialog-subtitle");
+  const list = document.getElementById("fin-spend-month-tx-list");
+  if (title) title.textContent = `Spend by Month — ${formatMonthTitle(month)}`;
+  if (subtitle) subtitle.textContent = "";
+  list.innerHTML = `<p class="fin-empty-note">Loading…</p>`;
+  dialog.showModal();
+
+  try {
+    const params = new URLSearchParams({ month });
+    const res = await fetch(`${SPEND_MONTH_TX_URL}?${params}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderSpendMonthTxRows(list, data.transactions);
+    if (subtitle) {
+      subtitle.textContent = `${data.transactions.length} transaction${data.transactions.length === 1 ? "" : "s"} · ${cad(data.total)}`;
+    }
+  } catch (err) {
+    list.innerHTML = `<p class="fin-empty-note">Couldn't load transactions (${err.message}).</p>`;
   }
 }
 
@@ -260,6 +344,7 @@ async function renderSpending(window_) {
     console.warn("finance spending: failed to load summary", err);
     return;
   }
+  updateSourceColors(data.byMonthBySource, data.topMerchants);
   renderCategoryDonut(data.byCategory);
   renderTopMerchants(data.topMerchants);
   renderMonthlyChart(data.byMonthBySource);

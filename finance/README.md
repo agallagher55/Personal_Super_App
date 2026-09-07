@@ -22,14 +22,22 @@ contain, the import/storage design, and a new "Spending by Category" +
 export and range-replace loads it into `data/finance/finance.db` (a "data
 last imported" timestamp next to the button confirms it landed), a
 "Spending" block (category donut — click a category to filter Top
-Merchants down to it, and a pencil button on any merchant opens a dialog
-to fix its category, either for just one transaction or permanently — a
-spend-by-month chart, its bars stacked and coloured by source — e.g.
-Wealthsimple vs. Shakepay, see `summary.monthly_trend_by_source()` — with
-a legend naming which colour is which, below it a Bitcoin-accumulated-
-by-month chart totalling `transactions.btc_quantity` on Shakepay's
-round-up-your-purchase buys specifically, not spend/income of any kind)
-that now covers chequing debit spend (debit
+Merchants down to it, a small coloured dot plus source name (e.g.
+"Wealthsimple", "Shakepay") on every Top Merchants row so a merchant that's
+shown up on more than one source (rare, but e.g. an Interac e-Transfer fee
+charged from either) lists every one of them, not just whichever happened
+to sort first — see `summary.top_merchants()`'s `sources` field — and a
+pencil button on any merchant opens a dialog to fix its category, either
+for just one transaction or permanently — a spend-by-month chart, its bars
+stacked and coloured by source — e.g. Wealthsimple vs. Shakepay, see
+`summary.monthly_trend_by_source()` — with a legend naming which colour is
+which, and clicking a bar opens a dialog listing every transaction behind
+that month's total (date, source dot, merchant, category, amount — see
+`summary.spend_month_transactions()` and
+`GET /finance/spend-month-transactions.json`), below it a
+Bitcoin-accumulated-by-month chart totalling `transactions.btc_quantity`
+on Shakepay's round-up-your-purchase buys specifically, not spend/income
+of any kind) that now covers chequing debit spend (debit
 purchases, pre-authorized debits like rent, bill payments) alongside
 credit-card purchases, and a "Cash Flow" block (income/expense/net stat
 tiles, a monthly income-vs-expense chart where clicking a bar lists the

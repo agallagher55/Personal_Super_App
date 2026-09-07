@@ -341,9 +341,15 @@ export function drawDonut(container, slices, { label, onSliceClick }) {
  * `series` is [{ key, colorVar }, ...] in bottom-to-top stacking order -
  * a month missing a given key (that source had no spend that month)
  * contributes a zero-height segment, not a gap. A single-entry `series`
- * degenerates to a plain single-colour bar per month.
+ * degenerates to a plain single-colour bar per month. `onBarClick(month)`,
+ * if given, makes every bar clickable (pointer cursor + a click listener) -
+ * same convention as drawIncomeExpenseChart's onBarClick below, but this
+ * chart's bars stack multiple sources rather than sitting side by side, so
+ * a click resolves to the whole month rather than one segment - used by
+ * static/finance/js/spending.js's click-a-bar-to-see-its-transactions
+ * interaction.
  */
-export function drawMonthlyBarChart(canvas, tooltipEl, points, series) {
+export function drawMonthlyBarChart(canvas, tooltipEl, points, series, { onBarClick } = {}) {
   const ctx = canvas.getContext("2d");
 
   let colors, gridColor, mutedColor;
@@ -441,6 +447,24 @@ export function drawMonthlyBarChart(canvas, tooltipEl, points, series) {
     resizeTimer = setTimeout(render, 100);
   });
   resizeObserver.observe(canvas);
+
+  if (onBarClick) {
+    canvas.style.cursor = "pointer";
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      let nearest = 0;
+      let nearestDist = Infinity;
+      points.forEach((_, i) => {
+        const d = Math.abs(xFor(i) - mx);
+        if (d < nearestDist) {
+          nearestDist = d;
+          nearest = i;
+        }
+      });
+      onBarClick(points[nearest].month);
+    });
+  }
 
   if (!tooltipEl) return;
 
