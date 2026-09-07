@@ -83,16 +83,13 @@ being stored — though real transaction data will exist in
 
 Shakepay isn't a Plaid-linkable institution and doesn't offer a CSV export
 in either shape `backend/finance/import_csv.py` understands, so it falls
-outside both the Plaid plan (Part B) and the CSV-import system above.
-`finance/import_shakepay.py` is a separate, standalone script that covers
-spending/activity tracking for it in the meantime by parsing the monthly
-PDF statements Shakepay emails out — it does **not** write to
-`data/finance/finance.db` or show up in the `/finance` dashboard; it has
-its own JSON/CSV output. Wiring Shakepay into the real dashboard as its
-own account(s) is a bigger step, not done here — see the code comments in
-`import_shakepay.py` for the category/activity_type mapping it would need
-and the `_SPENDING_FILTER`/"Uncategorized" gap already flagged in
-`ARCHITECTURE.md` §A9 for a second card, which would apply here too.
+outside both the Plaid plan (Part B) and the CSV-import system above, so
+it gets its own ingestion path: `backend/finance/import_shakepay.py`
+parses the monthly PDF statements Shakepay emails out and range-replace
+loads them into the same `data/finance/finance.db` `transactions` table
+`import_csv.py` writes to — Shakepay activity shows up in Spending and
+Cash Flow the same way the credit card/bank CSV imports do, no dashboard
+changes needed.
 
 Shakepay actually sends **two separate PDFs** each month for the same
 account, and they are not interchangeable:
@@ -108,29 +105,51 @@ account, and they are not interchangeable:
 
 For tracking what you actually spent money on, the second file is the one
 that matters — the first file's card lines are uninformative without it.
-The script accepts either or both (any order, any month) and merges them:
-when both are given, the funding-transfer lines that appear in *both*
-files for the same card swipe are intentionally skipped (only the
-merchant-named `Card purchase` line is kept) so spend isn't double
-counted. Same idea for round-up buys, which appear once in the cash table
-(the CAD side) and once in the crypto table (the BTC side) — only the CAD
-side is kept.
+Import both together for a full month: the account statement's funding-
+transfer lines are always dropped in favor of the card statement's
+merchant-named lines, so a month imported without the card PDF is simply
+missing card-spend detail. Same idea for round-up buys, which appear once
+in the cash table (the CAD side, kept) and once in the crypto table (the
+BTC side, dropped) — only the CAD side counts.
 
 ```
 pip install pypdf   # not part of this repo's stdlib-only rule; scoped
                      # exception for this tool, same as plaid-python/
                      # cryptography above
 
-python3 finance/import_shakepay.py path/to/shakepay-account.pdf path/to/shakepay-card.pdf
+python3 backend/finance/import_shakepay.py path/to/shakepay-account.pdf path/to/shakepay-card.pdf
 ```
 
-This upserts (by a stable id, so re-running is safe) into
-`data/finance/shakepay_transactions.json` and prints a summary — card
-spend total, top merchants, and any statement lines it couldn't parse
-(Shakepay's PDF layout isn't guaranteed to stay identical forever, so
-unrecognized lines are surfaced instead of silently dropped). Pass
-`--csv path.csv` to also get a spreadsheet-friendly export, or `--dry-run`
-to preview without writing anything.
+This creates three accounts on first run — `shakepay-card` (kind
+`credit_card`; card purchases as `Purchase`/`Refund`, exactly the shape
+`credit_card_expense_total()`/`category_breakdown()`/`top_merchants()`
+already scope for, i.e. the "second credit card" case `ARCHITECTURE.md`
+§A9 flagged but hadn't built), `shakepay-cash` (kind `chequing`; P2P
+sends reuse the existing `P2P` expense type, everything else — P2P
+receives, Interac transfers, round-ups — uses a value that deliberately
+isn't in `summary.CHEQUING_INCOME_TYPES`/`CHEQUING_EXPENSE_TYPES`, so it's
+recorded but excluded from Spending/Cash Flow by default, same
+conservative treatment e-transfers already get), and `shakepay-crypto`
+(kind `bitcoin_wallet`; staking rewards/interest/external BTC deposits,
+also excluded by default — paid in BTC, not spendable CAD). See the
+module docstring in `import_shakepay.py` for the full mapping and the
+reasoning behind each choice. These are separate from the
+`shakepay-cad`/`shakepay-btc` accounts `networth.py` seeded for the net
+worth sections (Part C) — those are dated balance snapshots, these are
+itemized transactions, the same relationship `main-credit-card` has to
+its own net worth entry.
+
+New card purchases land with category `None` (shows "Uncategorized" until
+tagged via the pencil-edit dialog, same as any other uncategorized row).
+Re-running with the same PDF is idempotent (range-replace, same as CSV
+import); a "data last imported" refresh on `/finance` picks up Shakepay's
+timestamp too, since it's the same `transactions` table.
+
+Deliberately a CLI script, not a `/finance` upload button: `pypdf` would
+otherwise become a dependency of the live server process
+(`backend/server.py` imports `import_csv`/`db`/`summary`/`networth` at
+startup) for a file type only run by hand, a few times a month. Run it
+locally, or in a Render Shell against the deployed `data/finance/finance.db`.
 
 `data/finance/` is git-ignored (see above) — real dollar amounts and
 transaction history shouldn't sit in git history or a public-ish
