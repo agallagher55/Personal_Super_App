@@ -164,16 +164,74 @@ def detect_statement_type(text):
     return None
 
 
+# Some pypdf versions/platforms (observed: ArcGIS Pro's bundled Python
+# environment) extract this statement's tables without a space between
+# adjacent columns whose visual gap is small - "09:14:06Transfer",
+# "Card purchaseRAMBLERS", "+5.006.73" - apparently a difference in the
+# horizontal-gap heuristic pypdf's default text extraction uses to decide
+# whether two runs need a space between them. Not fixable by pinning a
+# pypdf version we don't control (ArcGIS Pro bundles its own), so the
+# parser has to tolerate both shapes instead.
+#
+# Each fix below is narrowly targeted at this statement's own fixed
+# template keywords/timestamps, not a general "insert space at every
+# lower-to-upper-case transition" heuristic - that would also mangle real
+# mixed-case merchant names this statement legitimately contains
+# ("McDonalds", "DOLLARAMA") that must NOT get a space inserted inside
+# them. The two regexes below are anchored on formats that never appear
+# inside a merchant name (a full HH:MM:SS timestamp, a bare YYYY-MM-DD
+# date) so they can't false-positive there either.
+_GLUED_LITERAL_FIXES = (
+    ('TransferTransfer from Shakepay Inc.', 'Transfer Transfer from Shakepay Inc.'),
+    ('Round upBought', 'Round up Bought'),
+    ('Shakepay InterestInterest', 'Shakepay Interest Interest'),
+    ('Starting balanceBTC', 'Starting balance BTC'),
+    ('Closing balanceBTC', 'Closing balance BTC'),
+    ('Shakepay@', 'Shakepay @'),
+    # Unconditional trailing space after these fixed keywords - always
+    # safe since none of them is ever itself a merchant/counterparty
+    # name, and a real pre-existing space just becomes a harmless double
+    # space that the final whitespace normalization collapses.
+    ('Card purchase', 'Card purchase '),
+    ('Interac e-Transfer', 'Interac e-Transfer '),
+    ('Shakepay reward', 'Shakepay reward '),
+)
+
+
+def _insert_missing_spaces(text):
+    text = re.sub(r'(?<=\d{2}:\d{2}:\d{2})(?=\S)', ' ', text)  # time -> next column
+    text = re.sub(r'(?<=\d{4}-\d{2}-\d{2})(?=[A-Za-z])', ' ', text)  # bare date -> next word
+    for glued, fixed in _GLUED_LITERAL_FIXES:
+        text = text.replace(glued, fixed)
+    return ' '.join(text.split())
+
+
+def _flex_phrase(phrase):
+    """A phrase's words joined with \\s* instead of a literal single
+    space, so a known boilerplate string still matches whole even where
+    _insert_missing_spaces above didn't specifically target its internal
+    gluing (e.g. header artifacts like "(CA$)**Original" or
+    "TransactionDescription")."""
+    return r'\s*'.join(re.escape(word) for word in phrase.split(' '))
+
+
+_FOOTER_RE = re.compile(r'Monthly account statement.*?Page \d+ of \d+')
+# Longest/most specific first - see _strip_boilerplate.
+_HEADER_RES = [
+    re.compile(_flex_phrase(
+        'Date/time (EST) Transaction Description Debit (CA$) Credit (CA$) Balance (CA$)')),
+    re.compile(_flex_phrase(
+        'Date/time (EST) Transaction Description Debit (US$) Credit (US$) Balance (US$)')),
+    re.compile(_flex_phrase(
+        'Date/time (EST) Transaction Description Debit Credit Market value (CA$)** Original cost (CA$)***')),
+    re.compile(_flex_phrase('Date/time (EST) Transaction Description Debit Credit')),
+]
+
+
 def _strip_boilerplate(text):
-    text = re.sub(r'Monthly account statement.*?Page \d+ of \d+', ' ', text)
-    headers = [
-        'Date/time (EST) Transaction Description Debit (CA$) Credit (CA$) Balance (CA$)',
-        'Date/time (EST) Transaction Description Debit (US$) Credit (US$) Balance (US$)',
-        'Date/time (EST) Transaction Description Debit Credit Market value (CA$)** Original cost (CA$)***',
-        'Date/time (EST) Transaction Description Debit Credit',
-    ]
-    for header in headers:
-        text = text.replace(header, ' ')
+    text = _FOOTER_RE.sub(' ', text)
+    for pattern in _HEADER_RES:
+        text = pattern.sub(' ', text)
     return ' '.join(text.split())
 
 
@@ -212,12 +270,12 @@ def _row(date, description, amount, activity_type):
 
 _CASH_PATTERNS = [
     (re.compile(rf'^({DATE_RE}) (Starting|Closing) balance ([\d,]+\.\d{{2}})$'), 'balance_snapshot'),
-    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Interac e-Transfer (\S+) ({MONEY_RE}) ([\d,]+\.\d{{2}})$'), 'interac'),
-    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) (Receive|Send) cash via Shakepay (@\S+) ({MONEY_RE}) ([\d,]+\.\d{{2}})$'), 'p2p'),
+    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Interac e-Transfer (\S+) ({MONEY_RE})\s*([\d,]+\.\d{{2}})$'), 'interac'),
+    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) (Receive|Send) cash via Shakepay (@\S+) ({MONEY_RE})\s*([\d,]+\.\d{{2}})$'), 'p2p'),
     (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Transfer Transfer from Shakepay Inc\. to Shakepay Financial '
-                rf'Inc\. for Card purchase ({MONEY_RE}) ([\d,]+\.\d{{2}})$'), 'card_funding'),
-    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Round up Bought ([\d.]+) BTC @ CA\$([\d,]+\.\d{{2}}) '
-                rf'({MONEY_RE}) ([\d,]+\.\d{{2}})$'), 'roundup'),
+                rf'Inc\. for Card purchase ({MONEY_RE})\s*([\d,]+\.\d{{2}})$'), 'card_funding'),
+    (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Round up Bought ([\d.]+) BTC @ CA\$([\d,]+\.\d{{2}})\s*'
+                rf'({MONEY_RE})\s*([\d,]+\.\d{{2}})$'), 'roundup'),
 ]
 
 
@@ -257,11 +315,11 @@ def _parse_cash_section(text):
 
 _CRYPTO_PATTERNS = [
     (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Shakepay reward (ShakingSats|ShakeSquad|Bitcoin cashback) '
-                rf'\+([\d.]+) BTC ([\d,]+\.\d{{2}}) ([\d,]+\.\d{{2}})$'), 'reward'),
+                rf'\+([\d.]+) BTC ([\d,]+\.\d{{2}})\s*([\d,]+\.\d{{2}})$'), 'reward'),
     (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Shakepay Interest Interest payout on CAD balance '
-                rf'\+([\d.]+) BTC ([\d,]+\.\d{{2}}) ([\d,]+\.\d{{2}})$'), 'interest'),
+                rf'\+([\d.]+) BTC ([\d,]+\.\d{{2}})\s*([\d,]+\.\d{{2}})$'), 'interest'),
     (re.compile(rf'^({DATE_RE}) ({TIME_RE}) Receive Bitcoin Bitcoin address (.+?) '
-                rf'\+([\d.]+) BTC ([\d,]+\.\d{{2}}) ([\d,]+\.\d{{2}})$'), 'deposit'),
+                rf'\+([\d.]+) BTC ([\d,]+\.\d{{2}})\s*([\d,]+\.\d{{2}})$'), 'deposit'),
 ]
 
 
@@ -365,6 +423,7 @@ def parse_statement_text(text):
     Exposed separately from import_shakepay_pdf/extract_text so tests can
     exercise the parsing/mapping logic against small inline text fixtures
     instead of real PDF binaries."""
+    text = _insert_missing_spaces(text)
     stype = detect_statement_type(text)
     if stype is None:
         raise ShakepayImportError(
