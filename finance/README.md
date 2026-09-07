@@ -40,6 +40,15 @@ credit card, from a different institution) is documented but not built**
 a real sample export from that institution, not on a decision. **Not
 started**: a real auth gate in front of the upload/route endpoints.
 
+**Part C** of `ARCHITECTURE.md` is a holistic, documented-but-not-built
+plan (2026-09-07) for an append-only raw/staging capture layer under
+every financial fact this app tracks — not just CSV transactions but
+also Cash/Investments/Bitcoin/Debt/Lines of Credit, still hardcoded
+sample data per the note above — with curated tables translated from
+that raw layer, a manual balance-entry mechanism for everything with no
+CSV/API today, and a plan to backfill today's already-imported CSVs into
+the new layer rather than starting history from zero.
+
 Plaid-based live account linking (Wealthsimple first, any Plaid-supported
 institution after that) is kept as **Part B** of `ARCHITECTURE.md`,
 deferred rather than dropped, in case account-linking is revisited later.
