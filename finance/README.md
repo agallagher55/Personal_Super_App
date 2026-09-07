@@ -153,6 +153,31 @@ Re-running with the same PDF is idempotent (range-replace, same as CSV
 import); a "data last imported" refresh on `/finance` picks up Shakepay's
 timestamp too, since it's the same `transactions` table.
 
+### Bulk-categorizing Shakepay merchants
+
+Tagging each merchant by hand through the dashboard adds up once there
+are a few dozen of them across several months, so
+`backend/finance/categorize_shakepay.py` does it in bulk: a
+keyword-pattern table (Tim Hortons/Starbucks/etc. → `Coffee`, grocery
+chains → `Groceries`, "PARKING"/"AIR-SERV" → `Gas, parking, and tolls`,
+and so on — category names deliberately match the taxonomy the existing
+credit card export already uses, so Shakepay spend merges into the same
+Spending categories instead of fragmenting into new ones) matched
+case-insensitively against every distinct `shakepay-card` merchant, each
+match written through the exact same `set_merchant_category_override`
+the dashboard's pencil-edit dialog uses. Never overwrites a category
+you already set by hand. `backend/shakepay-update.bat` runs this
+automatically after every import; run it on its own with:
+
+```
+python3 backend/finance/categorize_shakepay.py            # apply
+python3 backend/finance/categorize_shakepay.py --dry-run  # preview only
+```
+
+Prints what it categorized and, more usefully, which merchants matched
+nothing — extend `CATEGORY_RULES` with a pattern for those and re-run,
+or just tag the odd one out by hand via the dashboard.
+
 Deliberately a CLI script, not a `/finance` upload button: `pypdf` would
 otherwise become a dependency of the live server process
 (`backend/server.py` imports `import_csv`/`db`/`summary`/`networth` at
