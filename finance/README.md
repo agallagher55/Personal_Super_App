@@ -24,7 +24,9 @@ last imported" timestamp next to the button confirms it landed), a
 "Spending" block (category donut — click a category to filter Top
 Merchants down to it, and a pencil button on any merchant opens a dialog
 to fix its category, either for just one transaction or permanently — a
-spend-by-month chart), and a "Cash Flow" block (income/expense/net stat
+spend-by-month chart) that now covers chequing debit spend (debit
+purchases, pre-authorized debits like rent, bill payments) alongside
+credit-card purchases, and a "Cash Flow" block (income/expense/net stat
 tiles, a monthly income-vs-expense chart where clicking a bar lists the
 transactions behind it, each with an Exclude/Include toggle so a
 transaction that isn't real income/expense — e.g. a reimbursement deposit

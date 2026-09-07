@@ -131,6 +131,20 @@ class TestParseCsvText(unittest.TestCase):
         self.assertIsNone(by_description['Interac e-Transfer® Out']['category'])
         self.assertIsNone(by_description['Credit card payment']['category'])
 
+    def test_expense_type_chequing_rows_default_to_uncategorized(self):
+        # SPEND/AFT_OUT/OBP_OUT/P2P rows (summary.CHEQUING_EXPENSE_TYPES) are
+        # folded into Spending (ARCHITECTURE.md A5g) alongside credit-card
+        # purchases, so they need a real category value to start from too -
+        # 'Uncategorized', the same label the credit card export itself uses,
+        # rather than sitting NULL like a transfer row does.
+        text = (
+            'effective_date,effective_time,settlement_date,account_id,account_type,activity_type,'
+            'activity_sub_type,description,direction,symbol,name,currency,quantity,unit_price,commission,net_cash_amount\n'
+            '2026-09-01,12:00:00,,WK1WPY033CAD,Chequing,MoneyMovement,AFT_OUT,Rent payment,,,,CAD,-1500,,,-1500\n'
+        )
+        _, _, _, _, rows = import_csv.parse_csv_text(text)
+        self.assertEqual(rows[0]['category'], 'Uncategorized')
+
     def test_unrecognized_header_raises(self):
         with self.assertRaises(import_csv.ImportFormatError):
             import_csv.parse_csv_text('foo,bar\n1,2\n')

@@ -93,20 +93,33 @@ def _rows_from_bank_activity(rows_in):
             'description': row['description'].strip(),
             'amount': float(row['net_cash_amount']),
             'activity_type': activity_type,
-            # Income rows (direct deposits, cashback, interest, ...) get a
-            # real 'Income' category by default, rather than sitting blank
-            # like every other chequing row, so a transaction listing has
-            # something meaningful to show for them - see ARCHITECTURE.md's
-            # "Editing categories" section. This is purely a label: it can
-            # never leak into Spending's totals, since every query there
-            # also requires activity_type IN ('Purchase', 'Refund'), which
-            # no chequing row ever satisfies. Uses summary.py's
-            # CHEQUING_INCOME_TYPES as the one source of truth for "what
-            # counts as income," rather than a second hardcoded list here.
-            'category': 'Income' if activity_type in finance_summary.CHEQUING_INCOME_TYPES else None,
+            # Income rows (direct deposits, cashback, interest, ...) default
+            # to 'Income'; expense-type rows (debit spend, pre-authorized
+            # debits, bill payments, P2P sends - summary.CHEQUING_EXPENSE_TYPES)
+            # default to 'Uncategorized', the same label the credit card
+            # export itself uses for its own uncategorized rows (its Payment
+            # rows) - both are folded into Spending (ARCHITECTURE.md A5g), so
+            # both need a real value here rather than sitting NULL, ready to
+            # be fixed via the same one-time/permanent override mechanism
+            # ("Editing categories"). Everything else (e-transfers, TRANSFER,
+            # EFT - can't tell real income/expense from a transfer between
+            # your own accounts, per summary.py) stays NULL: it's excluded
+            # from both Spending and Cash Flow entirely, so a category would
+            # never be seen anyway. Uses summary.py's CHEQUING_INCOME_TYPES/
+            # CHEQUING_EXPENSE_TYPES as the one source of truth for these
+            # classifications, rather than a second hardcoded copy here.
+            'category': _default_chequing_category(activity_type),
             'status': None,
         })
     return rows
+
+
+def _default_chequing_category(activity_type):
+    if activity_type in finance_summary.CHEQUING_INCOME_TYPES:
+        return 'Income'
+    if activity_type in finance_summary.CHEQUING_EXPENSE_TYPES:
+        return 'Uncategorized'
+    return None
 
 
 def parse_csv_text(text):

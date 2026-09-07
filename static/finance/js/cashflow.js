@@ -5,7 +5,12 @@
 // DOM, no dependency on spending.js beyond sharing charts.js's helpers and
 // dashboard.js's escapeHtml.
 import { drawIncomeExpenseChart } from "./charts.js";
-import { escapeHtml } from "./dashboard.js";
+import { escapeHtml, renderLegend } from "./dashboard.js";
+
+// Cyclic color assignment for the "by type" breakdown - same "reuse the
+// --stock-1..12 identity-color family" reasoning as spending.js's
+// categoryColors, just keyed by type label instead of category.
+const TYPE_COLOR_SLOTS = 12;
 
 const CASH_FLOW_URL = "/finance/cash-flow.json";
 const CASH_FLOW_TX_URL = "/finance/cash-flow-transactions.json";
@@ -49,6 +54,23 @@ function renderStats(data) {
 // month/kind and re-render in place without closing the dialog.
 let currentTxDialogMonth = null;
 let currentTxDialogKind = null;
+
+function renderCashFlowByType(byType) {
+  const section = document.getElementById("fin-cashflow-tx-breakdown-section");
+  if (!section) return;
+  if (!byType || byType.length === 0) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+  const total = byType.reduce((sum, t) => sum + t.total, 0);
+  const slices = byType.map((t, i) => ({
+    label: `${t.type} (${t.count})`,
+    value: t.total,
+    colorVar: `--stock-${(i % TYPE_COLOR_SLOTS) + 1}`,
+  }));
+  renderLegend("fin-cashflow-tx-breakdown", slices, total);
+}
 
 function renderCashFlowTxRows(container, transactions) {
   container.innerHTML = "";
@@ -112,11 +134,13 @@ async function loadAndRenderCashFlowTx(month, kind) {
     const res = await fetch(`${CASH_FLOW_TX_URL}?${params}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    renderCashFlowByType(data.byType);
     renderCashFlowTxRows(list, data.transactions);
     if (subtitle) {
       subtitle.textContent = `${data.transactions.length} transaction${data.transactions.length === 1 ? "" : "s"} · ${cad(data.total)}`;
     }
   } catch (err) {
+    renderCashFlowByType([]);
     list.innerHTML = `<p class="fin-empty-note">Couldn't load transactions (${err.message}).</p>`;
   }
 }
@@ -133,6 +157,7 @@ async function openCashFlowTransactions(month, kind) {
   const list = document.getElementById("fin-cashflow-tx-list");
   if (title) title.textContent = `${kind === "income" ? "Income" : "Expense"} — ${formatMonthTitle(month)}`;
   if (subtitle) subtitle.textContent = "";
+  renderCashFlowByType([]);
   list.innerHTML = `<p class="fin-empty-note">Loading…</p>`;
   dialog.showModal();
 
