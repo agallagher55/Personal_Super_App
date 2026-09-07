@@ -118,6 +118,9 @@ pip install pypdf   # not part of this repo's stdlib-only rule; scoped
                      # cryptography above
 
 python3 backend/finance/import_shakepay.py path/to/shakepay-account.pdf path/to/shakepay-card.pdf
+# or point it at a folder you save every month's two downloads into -
+# any argument that's a directory expands to the *.pdf files in it:
+python3 backend/finance/import_shakepay.py data/finance/shakepay/
 ```
 
 This creates three accounts on first run — `shakepay-card` (kind
