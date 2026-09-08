@@ -261,11 +261,11 @@ def _row(date, description, amount, activity_type, btc_quantity=None):
     return {
         'date': date,
         'description': description,
-        'amount': round(amount, 2),
+        'amount': finance_db.round_cad(amount),
         'activity_type': activity_type,
         'category': import_csv._default_chequing_category(activity_type),
         'status': None,
-        'btc_quantity': btc_quantity,
+        'btc_quantity': finance_db.round_btc(btc_quantity),
     }
 
 

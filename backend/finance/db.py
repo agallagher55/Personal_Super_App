@@ -32,6 +32,51 @@ ACCOUNT_KINDS = frozenset({
     'credit_card', 'line_of_credit', 'loan', 'bill',
 })
 
+# --- Financial value storage: containment, not elimination, of binary
+# float imprecision --------------------------------------------------------
+#
+# transactions.amount/account_balance_snapshots.balance_cad/
+# account_terms_snapshots.interest_rate/credit_limit and
+# transactions.btc_quantity are all SQLite REAL (IEEE 754 double), not an
+# integer-cents/integer-satoshis representation. Binary floating point
+# cannot exactly represent most decimal fractions (0.1 has no exact double
+# value), so this is a deliberate choice to contain that imprecision at a
+# fixed, documented precision rather than eliminate it outright with an
+# integer column type - the latter would mean every import path, every
+# summary.py aggregation query, and the JSON contract every finance page
+# already reads (whole-dollar-and-cents floats) changing in lockstep, for
+# a personal-scale ledger where "off by a fraction of a cent in a value
+# nothing compares with `==`" has never been an observed problem.
+#
+# The containment: every value is rounded to its canonical precision at
+# the moment it's about to be written (ROUND_CAD_DECIMALS for anything in
+# CAD, ROUND_BTC_DECIMALS for btc_quantity - see round_cad()/round_btc()
+# below), so imprecision never accumulates across re-imports or repeated
+# arithmetic. Reads that aggregate (SUM, in summary.py) round again at
+# output time for the same reason. Nothing compares two of these values
+# with `==` for equality - transaction_id() formats amount with `.2f`
+# specifically so its content-derived hash depends on the canonical
+# rounded value, never on whatever binary noise floats past two decimal
+# places.
+ROUND_CAD_DECIMALS = 2
+ROUND_BTC_DECIMALS = 8
+
+
+def round_cad(amount):
+    """Canonical precision for any CAD-denominated value (transaction
+    amounts, balances, credit limits) - None passes through unchanged,
+    since several of these columns are nullable (e.g. account_terms_
+    snapshots.credit_limit) and None means "not given," not zero."""
+    return None if amount is None else round(amount, ROUND_CAD_DECIMALS)
+
+
+def round_btc(quantity):
+    """Canonical precision for a Bitcoin quantity (transactions.
+    btc_quantity) - eight decimal places, a satoshi. None passes through
+    unchanged: every non-Shakepay-round-up row has no BTC quantity at
+    all, not zero."""
+    return None if quantity is None else round(quantity, ROUND_BTC_DECIMALS)
+
 
 def connect(path=None):
     """A connection for one unit of work. Callers close it when done."""

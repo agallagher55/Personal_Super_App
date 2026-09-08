@@ -28,6 +28,21 @@
 --     text the bank's or card issuer's export happens to contain
 --     (ARCHITECTURE.md Part A2) - constraining them risks rejecting a
 --     legitimate future export format change outright.
+--
+-- Every REAL column below (transactions.amount/btc_quantity,
+-- account_balance_snapshots.balance_cad, account_terms_snapshots.
+-- interest_rate/credit_limit) is IEEE 754 double, which cannot exactly
+-- represent most decimal fractions - CONTAINED, not eliminated, by
+-- rounding to a fixed canonical precision at every write boundary
+-- (db.round_cad/round_btc, db.ROUND_CAD_DECIMALS/ROUND_BTC_DECIMALS: two
+-- decimal places for anything CAD-denominated including interest_rate,
+-- eight for btc_quantity - a satoshi) rather than switching these to an
+-- integer-cents/integer-satoshis column type, which would mean every
+-- import path, every summary.py aggregation, and the JSON contract every
+-- finance page already reads changing in lockstep for a personal-scale
+-- ledger where two of these values have never needed to be compared with
+-- `==`. See db.py's longer comment next to ROUND_CAD_DECIMALS for the
+-- full reasoning.
 
 CREATE TABLE IF NOT EXISTS accounts (
   id          TEXT PRIMARY KEY,   -- human-assigned (e.g. 'main-credit-card') or the bank export's own account_id

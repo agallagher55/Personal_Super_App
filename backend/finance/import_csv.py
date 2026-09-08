@@ -69,7 +69,7 @@ def _rows_from_credit_card(reader):
         rows.append({
             'date': date,
             'description': description,
-            'amount': float(row['amount']),
+            'amount': finance_db.round_cad(float(row['amount'])),
             'activity_type': row['transaction_type'].strip(),
             'category': row['category'].strip() or None,
             'status': row['status'].strip() or None,
@@ -97,7 +97,7 @@ def _rows_from_bank_activity(rows_in):
         rows.append({
             'date': date,
             'description': row['description'].strip(),
-            'amount': float(row['net_cash_amount']),
+            'amount': finance_db.round_cad(float(row['net_cash_amount'])),
             'activity_type': activity_type,
             # Income rows (direct deposits, cashback, interest, ...) default
             # to 'Income'; expense-type rows (debit spend, pre-authorized

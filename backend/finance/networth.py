@@ -72,12 +72,23 @@ def record_balance(conn, account_id, label, institution, kind, as_of_date, balan
 
     `balance_cad` must be a positive magnitude (ARCHITECTURE.md C5a) -
     `kind` alone decides which side of net worth it lands on.
+
+    balance_cad/credit_limit are rounded to finance_db.ROUND_CAD_DECIMALS
+    and interest_rate to the same two decimal places (a rate isn't CAD,
+    but shares that precision here) before being written - the canonical-
+    precision containment policy documented alongside those constants,
+    so a hand-typed or JSON-sourced value can't carry stray floating
+    point digits into storage.
     """
     if balance_cad < 0:
         raise ValueError(
             f'balance_cad must be a positive magnitude, not a signed value - kind {kind!r} already '
             f'determines the sign (got {balance_cad})'
         )
+
+    balance_cad = finance_db.round_cad(balance_cad)
+    credit_limit = finance_db.round_cad(credit_limit)
+    interest_rate = None if interest_rate is None else round(interest_rate, finance_db.ROUND_CAD_DECIMALS)
 
     now = _now_iso()
     finance_db.upsert_account(conn, account_id, label, institution, kind)
