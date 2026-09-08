@@ -15,7 +15,7 @@ SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csv_sche
 
 # Bumped whenever a one-time migration is added below; tracked per
 # database in PRAGMA user_version so each migration runs exactly once.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 ID_DIGEST_LENGTH = 12
 
@@ -121,6 +121,9 @@ def migrate(conn):
 
     if version < 4:
         _add_account_kind_constraint(conn)
+
+    if version < 5:
+        _add_cad_only_currency_constraint(conn)
 
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is
@@ -280,6 +283,57 @@ def _add_account_kind_constraint(conn):
                 CHECK (kind IN ('credit_card', 'chequing', 'savings', 'investment', 'bitcoin_wallet',
                                  'line_of_credit', 'loan', 'bill')),
               currency    TEXT NOT NULL DEFAULT 'CAD',
+              closed_at   TEXT
+            )
+        ''')
+        conn.execute('''
+            INSERT INTO accounts_new (id, label, institution, kind, currency, closed_at)
+            SELECT id, label, institution, kind, currency, closed_at FROM accounts
+        ''')
+        conn.execute('DROP TABLE accounts')
+        conn.execute('ALTER TABLE accounts_new RENAME TO accounts')
+
+        violations = conn.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            conn.execute('ROLLBACK')
+            raise RuntimeError('foreign key violations after accounts rebuild: %r' % (violations,))
+
+        conn.execute('COMMIT')
+    finally:
+        conn.execute('PRAGMA foreign_keys = ON')
+
+
+def _add_cad_only_currency_constraint(conn):
+    """Migration 5: adds the accounts.currency CHECK constraint (CAD-only
+    for now - see csv_schema.sql's currency comment). Same table-rebuild
+    procedure and same reasoning as _add_account_kind_constraint just
+    above: no normalization pass, since a non-CAD account already in the
+    data isn't something this migration can safely reinterpret as CAD -
+    it refuses instead, leaving a human to decide what that account's
+    balances/transactions actually mean before this constraint can land.
+    """
+    unknown = conn.execute("SELECT DISTINCT currency FROM accounts WHERE currency != 'CAD'").fetchall()
+    if unknown:
+        raise RuntimeError(
+            'refusing to add the accounts.currency constraint: non-CAD currency/currencies %s already '
+            'stored - this schema has no original-amount/exchange-rate modeling for a real multi-'
+            'currency account yet (see csv_schema.sql), so reclassify or remove those accounts by hand '
+            'first.' % sorted(row['currency'] for row in unknown)
+        )
+
+    conn.execute('PRAGMA foreign_keys = OFF')
+    try:
+        conn.execute('BEGIN')
+
+        conn.execute('''
+            CREATE TABLE accounts_new (
+              id          TEXT PRIMARY KEY,
+              label       TEXT NOT NULL,
+              institution TEXT,
+              kind        TEXT NOT NULL
+                CHECK (kind IN ('credit_card', 'chequing', 'savings', 'investment', 'bitcoin_wallet',
+                                 'line_of_credit', 'loan', 'bill')),
+              currency    TEXT NOT NULL DEFAULT 'CAD' CHECK (currency = 'CAD'),
               closed_at   TEXT
             )
         ''')

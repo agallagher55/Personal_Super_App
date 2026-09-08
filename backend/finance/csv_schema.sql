@@ -43,6 +43,21 @@
 -- ledger where two of these values have never needed to be compared with
 -- `==`. See db.py's longer comment next to ROUND_CAD_DECIMALS for the
 -- full reasoning.
+--
+-- CAD-only, enforced: accounts.currency exists as a column, but every
+-- export, every sample value, and transactions.amount/account_balance_
+-- snapshots.balance_cad are CAD today (ARCHITECTURE.md A1/A2, "Every
+-- export and every sample value today is CAD... Not worth solving until
+-- real"). Leaving currency an unconstrained free-text column would let
+-- the schema silently *imply* multi-currency support - a non-CAD account
+-- whose transactions and balances are still bare CAD amounts with no
+-- original currency, no original amount, and no exchange rate anywhere -
+-- that no calculation in this codebase actually provides. Constrained to
+-- 'CAD' below until that's real: adding a genuinely non-CAD account
+-- needs, at minimum, a transaction's original amount/currency alongside
+-- its normalized CAD value, an exchange rate, and documented conversion
+-- behavior for refunds/transfers/account totals - not just relaxing this
+-- constraint.
 
 CREATE TABLE IF NOT EXISTS accounts (
   id          TEXT PRIMARY KEY,   -- human-assigned (e.g. 'main-credit-card') or the bank export's own account_id
@@ -53,7 +68,7 @@ CREATE TABLE IF NOT EXISTS accounts (
                                    -- ARCHITECTURE.md Part C5a) - CLOSED domain, see db.ACCOUNT_KINDS above
     CHECK (kind IN ('credit_card', 'chequing', 'savings', 'investment', 'bitcoin_wallet',
                      'line_of_credit', 'loan', 'bill')),
-  currency    TEXT NOT NULL DEFAULT 'CAD',
+  currency    TEXT NOT NULL DEFAULT 'CAD' CHECK (currency = 'CAD'),  -- CAD-only for now, see above
   closed_at   TEXT                -- NULL while open; a closed account stops counting toward net worth
                                    -- (ARCHITECTURE.md C6) from this date. Existing databases get these two
                                    -- columns via db.py's migration 2, since CREATE TABLE IF NOT EXISTS is a

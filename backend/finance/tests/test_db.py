@@ -473,5 +473,88 @@ class TestAccountKindConstraintMigration(unittest.TestCase):
         self.assertEqual(finance_db.get_account(self.conn, 'acc1')['kind'], 'crypto_stash')
 
 
+class TestCadOnlyCurrencyConstraint(unittest.TestCase):
+    """Issue: CAD/multi-currency semantics. accounts.currency is
+    constrained to 'CAD' (csv_schema.sql) - the app has no per-transaction
+    original-amount/exchange-rate modeling for a real non-CAD account, so
+    the schema shouldn't be able to imply it has one."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        finance_db.init_schema(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_upsert_account_defaults_to_cad(self):
+        finance_db.upsert_account(self.conn, 'acc1', 'Chequing', 'TD', 'chequing')
+        self.assertEqual(finance_db.get_account(self.conn, 'acc1')['currency'], 'CAD')
+
+    def test_rejects_a_non_cad_currency(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                "INSERT INTO accounts (id, label, institution, kind, currency) "
+                "VALUES ('acc1', 'US Account', NULL, 'chequing', 'USD')"
+            )
+
+
+class TestCadOnlyCurrencyConstraintMigration(unittest.TestCase):
+    """Migration 5 (db._add_cad_only_currency_constraint): rebuilds
+    accounts with the currency CHECK constraint, staged here as the
+    unconstrained shape every finance.db had before this migration."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        self.conn.executescript('''
+            CREATE TABLE accounts (
+              id TEXT PRIMARY KEY, label TEXT NOT NULL, institution TEXT, kind TEXT NOT NULL,
+              currency TEXT NOT NULL DEFAULT 'CAD', closed_at TEXT
+            );
+        ''')
+        self.conn.execute(
+            "INSERT INTO accounts (id, label, institution, kind) VALUES ('acc1', 'Chequing', 'TD', 'chequing')"
+        )
+        self.conn.execute('PRAGMA user_version = 4')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_adds_the_currency_check_constraint(self):
+        finance_db.migrate(self.conn)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                "INSERT INTO accounts (id, label, institution, kind, currency) "
+                "VALUES ('bad', 'US Account', NULL, 'chequing', 'USD')"
+            )
+
+    def test_preserves_the_existing_account(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(finance_db.get_account(self.conn, 'acc1')['currency'], 'CAD')
+
+    def test_is_idempotent(self):
+        finance_db.migrate(self.conn)
+        finance_db.migrate(self.conn)
+        self.assertEqual(finance_db.get_account(self.conn, 'acc1')['currency'], 'CAD')
+
+    def test_records_the_schema_version(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
+
+    def test_refuses_to_migrate_an_existing_non_cad_account(self):
+        self.conn.execute("UPDATE accounts SET currency = 'USD' WHERE id = 'acc1'")
+        self.conn.commit()
+
+        with self.assertRaises(RuntimeError):
+            finance_db.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], 4)
+        self.assertEqual(finance_db.get_account(self.conn, 'acc1')['currency'], 'USD')
+
+
 if __name__ == '__main__':
     unittest.main()

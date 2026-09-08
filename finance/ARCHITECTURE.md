@@ -1630,7 +1630,11 @@ Phase 0 is already done, ahead of the rest, because C9 depends on it.
 - **Multi-currency.** Every export and every sample value today is CAD
   (A1/A2). A USD-denominated holding would need a real
   `iso_currency_code` plus a conversion step rather than the implicit
-  CAD baked into the column names above. Not worth solving until real.
+  CAD baked into the column names above. Not worth solving until real -
+  and, as of the September 2026 database review, enforced rather than
+  merely assumed: `accounts.currency` has a `CHECK (currency = 'CAD')`
+  constraint (csv_schema.sql), so the schema can't silently imply
+  multi-currency support this codebase doesn't actually provide.
 - **Batch date ranges come from row min/max, not the window actually
   requested.** `import_csv_text` derives a file's range from the first
   and last dated row in it, so an export pulled for "last 90 days" whose
