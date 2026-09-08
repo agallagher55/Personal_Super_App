@@ -13,6 +13,7 @@ import io
 import os
 from datetime import datetime, timezone
 
+import dates
 import db as finance_db
 import summary as finance_summary
 
@@ -69,7 +70,7 @@ def _rows_from_credit_card(reader):
         rows.append({
             'date': date,
             'description': description,
-            'amount': float(row['amount']),
+            'amount': finance_db.round_cad(float(row['amount'])),
             'activity_type': row['transaction_type'].strip(),
             'category': row['category'].strip() or None,
             'status': row['status'].strip() or None,
@@ -97,7 +98,7 @@ def _rows_from_bank_activity(rows_in):
         rows.append({
             'date': date,
             'description': row['description'].strip(),
-            'amount': float(row['net_cash_amount']),
+            'amount': finance_db.round_cad(float(row['net_cash_amount'])),
             'activity_type': activity_type,
             # Income rows (direct deposits, cashback, interest, ...) default
             # to 'Income'; expense-type rows (debit spend, pre-authorized
@@ -165,6 +166,11 @@ def _assign_ids(account_id, rows, source_file, imported_at):
     db.transaction_id for why. `occurrence` counts rows that are
     identical in every hashed field, so two separate same-day charges of
     the same amount at the same merchant still get distinct ids.
+
+    batch_id defaults to None here since the batch (db.create_import_batch)
+    isn't created until row_count/date_range are known from these very
+    rows - callers set it on every row afterward, once they have it, same
+    as this function's own caller does right after calling it.
     """
     occurrences = {}
     out = []
@@ -180,6 +186,7 @@ def _assign_ids(account_id, rows, source_file, imported_at):
             'source_file': source_file,
             'imported_at': imported_at,
             'btc_quantity': row.get('btc_quantity'),  # only import_shakepay.py's ROUNDUP_BUY rows set this
+            'batch_id': None,
             **row,
         })
     return out
@@ -187,24 +194,41 @@ def _assign_ids(account_id, rows, source_file, imported_at):
 
 def import_csv_text(conn, source_file, text):
     """Parses `text` (one export file's full contents) and range-replace
-    loads it into the transactions table. Returns a summary dict."""
+    loads it into the transactions table. Returns a summary dict.
+
+    One import_batches row is created per call, inside the same
+    transaction as the range-replace it audits (see db.create_import_
+    batch's `kind='csv_...'`) - if parsing above already raised
+    ImportFormatError, or the range-replace itself fails, nothing ever
+    reaches `with conn:` and no batch row exists for that attempt: a
+    batch means a successful import, not an attempted one.
+    """
     kind, account_id, account_label, account_kind, rows = parse_csv_text(text)
 
-    imported_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    imported_at = dates.now_iso()
     dated_rows = _assign_ids(account_id, rows, source_file, imported_at)
-    dates = [r['date'] for r in dated_rows]
+    row_dates = [r['date'] for r in dated_rows]
+    date_start, date_end = min(row_dates), max(row_dates)
 
     institution = DEFAULT_CREDIT_CARD_INSTITUTION if kind == 'credit_card' else None
     with conn:
         finance_db.upsert_account(conn, account_id, account_label, institution, account_kind)
-        finance_db.replace_transactions_in_range(conn, account_id, min(dates), max(dates), dated_rows)
+        batch_id = finance_db.create_import_batch(
+            conn, kind=f'csv_{kind}', imported_at=imported_at, source_file=source_file,
+            file_hash=finance_db.file_hash(text), date_range_start=date_start, date_range_end=date_end,
+            row_count=len(dated_rows),
+        )
+        for row in dated_rows:
+            row['batch_id'] = batch_id
+        finance_db.replace_transactions_in_range(conn, account_id, date_start, date_end, dated_rows)
 
     return {
         'kind': kind,
         'account_id': account_id,
+        'batch_id': batch_id,
         'rows_imported': len(dated_rows),
-        'date_start': min(dates),
-        'date_end': max(dates),
+        'date_start': date_start,
+        'date_end': date_end,
     }
 
 

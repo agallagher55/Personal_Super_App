@@ -45,6 +45,28 @@ TAGS_FILE = os.path.join(DATA_DIR, 'tags.json')
 # of executescript() on an old system library.
 MIN_SQLITE_VERSION = (3, 31, 0)
 
+# Bumped whenever a one-time migration is added below; tracked per database
+# in PRAGMA user_version so each migration runs exactly once. Mirrors
+# finance/db.py's SCHEMA_VERSION/migrate() pattern.
+#
+# To add the next migration: bump this constant, add an
+# `if version < N: _your_migration(conn)` line to migrate() below (in
+# order, one per version - see migration 2, _add_task_domain_constraints,
+# for a worked example of the table-rebuild case), and write
+# `_your_migration` the way
+# finance/db.py's migrations do - check what's actually there with
+# PRAGMA table_info() rather than assuming a database's starting state,
+# since CREATE TABLE IF NOT EXISTS is a no-op against a table that already
+# exists but says nothing about its columns. If the change needs more than
+# ALTER TABLE ADD COLUMN (SQLite can't ALTER TABLE to add a CHECK
+# constraint, drop a column's constraint, etc.), rebuild the table: create
+# a new one with the desired shape, copy the data across, drop the old
+# one, rename, then recreate any indexes the drop took with it. Add a test
+# in test_tasks_db.py that stages a database at the previous version (see
+# TestSchemaMigrations below) and asserts the upgrade preserves data and
+# is idempotent.
+SCHEMA_VERSION = 3
+
 # Order matters: the dicts built from these are serialized straight into
 # GET /tasks.json, and keeping the old JSON files' key order means the
 # response stays byte-for-byte what it was before the migration.
@@ -94,6 +116,281 @@ def init_schema(conn):
     # connection rather than needing to be re-set per request.
     conn.execute('PRAGMA journal_mode = WAL')
     conn.commit()
+    migrate(conn)
+
+
+def migrate(conn):
+    """Applies the migrations this database is behind on, in order. Every
+    setup path goes through init_schema (server startup, the JSON import,
+    tests), so no caller can end up on a database whose schema is current
+    but whose recorded version isn't - same pattern as finance/db.py.
+
+    Migration 1 has no DDL of its own: `CREATE TABLE IF NOT EXISTS` already
+    brought every tasks.db, old or new, to today's table shapes before this
+    module tracked a schema version at all. It exists purely to start that
+    tracking, so the *next* real migration (adding or changing a column)
+    has a version number to check against instead of probing
+    PRAGMA table_info() to guess whether it already ran.
+    """
+    version = conn.execute('PRAGMA user_version').fetchone()[0]
+
+    if version < 2:
+        _add_task_domain_constraints(conn)
+
+    if version < 3:
+        _add_date_format_constraints(conn)
+
+    if version < SCHEMA_VERSION:
+        # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is our
+        # own int constant, never user input.
+        conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
+        conn.commit()
+
+
+def _normalize_task_domain_values(conn):
+    """Best-effort repair pass ahead of the CHECK-constrained rebuild below:
+    coerces any status/priority/work_type/boolean value that predates
+    server.py's STATUSES/PRIORITIES/WORK_TYPES validation (or arrived by
+    direct SQL, bypassing it) into something the new constraints accept,
+    so the rebuild's INSERT can't fail on old data no live code path would
+    ever have written on purpose."""
+    conn.execute('''
+        UPDATE tasks SET status = 'open'
+        WHERE status NOT IN ('open', 'in-progress', 'pending', 'done', 'cancelled')
+    ''')
+    conn.execute('''
+        UPDATE tasks SET priority = 'medium' WHERE priority NOT IN ('low', 'medium', 'high')
+    ''')
+    conn.execute('''
+        UPDATE tasks SET work_type = '' WHERE work_type NOT IN ('', 'new-feature', 'schema-change')
+    ''')
+    for column in ('env_dev', 'env_qa', 'env_prod', 'cmdb_updated'):
+        conn.execute('UPDATE tasks SET "%s" = 0 WHERE "%s" NOT IN (0, 1)' % (column, column))
+    conn.execute('UPDATE tags SET flag = 0 WHERE flag NOT IN (0, 1)')
+
+
+def _add_task_domain_constraints(conn):
+    """Migration 2: adds CHECK constraints for tasks.status/priority/
+    work_type and every integer boolean column (tasks.env_dev/env_qa/
+    env_prod/cmdb_updated, tags.flag) - see tasks_schema.sql, which already
+    has them for a brand new database. SQLite can't ALTER TABLE to add a
+    CHECK constraint to an existing table, so this rebuilds both: create
+    the constrained shape under a temporary name, copy the (normalized)
+    data across, drop the original, rename the new one into place. This is
+    SQLite's own documented procedure for a schema change ALTER TABLE
+    can't express (https://www.sqlite.org/lang_altertable.html, "Making
+    Other Kinds Of Table Schema Changes").
+
+    Foreign keys are turned off for the duration: tags.task_id and
+    tasks.parent_id/section_id all reference a table this function drops
+    and recreates by name, and SQLite enforces those references against
+    whatever table currently has that name - so a mid-rebuild DROP TABLE
+    tasks would fail against tags' still-live reference to it otherwise.
+    tasks_new's own parent_id is declared REFERENCES tasks_new(id) while
+    that's still its name; SQLite rewrites that to REFERENCES tasks(id)
+    automatically when it's renamed (has done so since 3.25.0, comfortably
+    below MIN_SQLITE_VERSION), the same as it would for a view or trigger
+    referencing the old name.
+
+    Everything here runs in one transaction: PRAGMA foreign_key_check is
+    read before COMMIT, and finding any violation rolls back the whole
+    rebuild rather than leaving a half-migrated database - the version
+    number is only bumped by the caller (migrate()) after this returns
+    without raising, so a failure here leaves user_version exactly where
+    it was and the same migration re-attempts next time.
+    """
+    _normalize_task_domain_values(conn)
+    conn.commit()
+
+    conn.execute('PRAGMA foreign_keys = OFF')
+    try:
+        conn.execute('BEGIN')
+
+        conn.execute('''
+            CREATE TABLE tasks_new (
+              id                TEXT PRIMARY KEY,
+              section_id        TEXT NOT NULL REFERENCES sections(id),
+              position          INTEGER NOT NULL,
+              "desc"            TEXT NOT NULL,
+              note              TEXT NOT NULL DEFAULT '',
+              notes             TEXT NOT NULL DEFAULT '',
+              status            TEXT NOT NULL DEFAULT 'open'
+                                  CHECK (status IN ('open', 'in-progress', 'pending', 'done', 'cancelled')),
+              done              INTEGER GENERATED ALWAYS AS (status = 'done') VIRTUAL,
+              priority          TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+              ticket_number     TEXT NOT NULL DEFAULT '',
+              servicenow_sys_id TEXT,
+              assignment_group  TEXT NOT NULL DEFAULT '',
+              requested_by      TEXT NOT NULL DEFAULT '',
+              due_date          TEXT NOT NULL DEFAULT '',
+              time_estimate     TEXT NOT NULL DEFAULT '',
+              related_files     TEXT NOT NULL DEFAULT '',
+              parent_id         TEXT REFERENCES tasks_new(id) ON DELETE SET NULL,
+              work_type         TEXT NOT NULL DEFAULT '' CHECK (work_type IN ('', 'new-feature', 'schema-change')),
+              env_dev           INTEGER NOT NULL DEFAULT 0 CHECK (env_dev IN (0, 1)),
+              env_qa            INTEGER NOT NULL DEFAULT 0 CHECK (env_qa IN (0, 1)),
+              env_prod          INTEGER NOT NULL DEFAULT 0 CHECK (env_prod IN (0, 1)),
+              cmdb_updated      INTEGER NOT NULL DEFAULT 0 CHECK (cmdb_updated IN (0, 1)),
+              created           TEXT NOT NULL,
+              modified          TEXT NOT NULL,
+              completed         TEXT NOT NULL DEFAULT ''
+            )
+        ''')
+        conn.execute('''
+            INSERT INTO tasks_new (
+              id, section_id, position, "desc", note, notes, status, priority, ticket_number,
+              servicenow_sys_id, assignment_group, requested_by, due_date, time_estimate,
+              related_files, parent_id, work_type, env_dev, env_qa, env_prod, cmdb_updated,
+              created, modified, completed
+            )
+            SELECT
+              id, section_id, position, "desc", note, notes, status, priority, ticket_number,
+              servicenow_sys_id, assignment_group, requested_by, due_date, time_estimate,
+              related_files, parent_id, work_type, env_dev, env_qa, env_prod, cmdb_updated,
+              created, modified, completed
+            FROM tasks
+        ''')
+        conn.execute('DROP TABLE tasks')
+        conn.execute('ALTER TABLE tasks_new RENAME TO tasks')
+        conn.execute('CREATE INDEX idx_tasks_section ON tasks(section_id)')
+        conn.execute('CREATE INDEX idx_tasks_parent ON tasks(parent_id)')
+
+        conn.execute('''
+            CREATE TABLE tags_new (
+              id       TEXT PRIMARY KEY,
+              task_id  TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+              position INTEGER NOT NULL,
+              text     TEXT NOT NULL,
+              flag     INTEGER NOT NULL DEFAULT 0 CHECK (flag IN (0, 1))
+            )
+        ''')
+        conn.execute('''
+            INSERT INTO tags_new (id, task_id, position, text, flag)
+            SELECT id, task_id, position, text, flag FROM tags
+        ''')
+        conn.execute('DROP TABLE tags')
+        conn.execute('ALTER TABLE tags_new RENAME TO tags')
+        conn.execute('CREATE INDEX idx_tags_task ON tags(task_id)')
+
+        violations = conn.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            conn.execute('ROLLBACK')
+            raise RuntimeError('foreign key violations after tasks/tags rebuild: %r' % (violations,))
+
+        conn.execute('COMMIT')
+    finally:
+        conn.execute('PRAGMA foreign_keys = ON')
+
+
+_DATE_GLOB = "GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"
+_TIMESTAMP_GLOB = "GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'"
+
+
+def _add_date_format_constraints(conn):
+    """Migration 3: adds shape-only CHECK constraints (see tasks_schema.sql's
+    date/timestamp comment) for tasks.due_date/created/modified/completed
+    and scratchpad.modified. Same table-rebuild procedure as migration 2;
+    no normalization pass, for the same reason - a malformed date/
+    timestamp can't be safely reinterpreted without knowing what it was
+    supposed to be, so this refuses rather than guessing.
+    """
+    bad = conn.execute(
+        f"SELECT DISTINCT due_date AS value, 'due_date' AS column_name FROM tasks "
+        f"WHERE due_date != '' AND due_date NOT {_DATE_GLOB} "
+        f"UNION SELECT DISTINCT created, 'created' FROM tasks WHERE created NOT {_TIMESTAMP_GLOB} "
+        f"UNION SELECT DISTINCT modified, 'modified' FROM tasks WHERE modified NOT {_TIMESTAMP_GLOB} "
+        f"UNION SELECT DISTINCT completed, 'completed' FROM tasks "
+        f"WHERE completed != '' AND completed NOT {_TIMESTAMP_GLOB} "
+        f"UNION SELECT DISTINCT modified, 'scratchpad.modified' FROM scratchpad "
+        f"WHERE modified != '' AND modified NOT {_TIMESTAMP_GLOB}"
+    ).fetchall()
+    if bad:
+        raise RuntimeError(
+            'refusing to add the date/timestamp format constraints: malformed value(s) already stored '
+            '- %s - fix or remove those rows by hand first, since this migration cannot safely guess '
+            'what a malformed date or timestamp was supposed to be.'
+            % ', '.join('%s=%r' % (row['column_name'], row['value']) for row in bad)
+        )
+
+    conn.execute('PRAGMA foreign_keys = OFF')
+    try:
+        conn.execute('BEGIN')
+
+        conn.execute('''
+            CREATE TABLE tasks_new (
+              id                TEXT PRIMARY KEY,
+              section_id        TEXT NOT NULL REFERENCES sections(id),
+              position          INTEGER NOT NULL,
+              "desc"            TEXT NOT NULL,
+              note              TEXT NOT NULL DEFAULT '',
+              notes             TEXT NOT NULL DEFAULT '',
+              status            TEXT NOT NULL DEFAULT 'open'
+                                  CHECK (status IN ('open', 'in-progress', 'pending', 'done', 'cancelled')),
+              done              INTEGER GENERATED ALWAYS AS (status = 'done') VIRTUAL,
+              priority          TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+              ticket_number     TEXT NOT NULL DEFAULT '',
+              servicenow_sys_id TEXT,
+              assignment_group  TEXT NOT NULL DEFAULT '',
+              requested_by      TEXT NOT NULL DEFAULT '',
+              due_date          TEXT NOT NULL DEFAULT ''
+                CHECK (due_date = '' OR due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+              time_estimate     TEXT NOT NULL DEFAULT '',
+              related_files     TEXT NOT NULL DEFAULT '',
+              parent_id         TEXT REFERENCES tasks_new(id) ON DELETE SET NULL,
+              work_type         TEXT NOT NULL DEFAULT '' CHECK (work_type IN ('', 'new-feature', 'schema-change')),
+              env_dev           INTEGER NOT NULL DEFAULT 0 CHECK (env_dev IN (0, 1)),
+              env_qa            INTEGER NOT NULL DEFAULT 0 CHECK (env_qa IN (0, 1)),
+              env_prod          INTEGER NOT NULL DEFAULT 0 CHECK (env_prod IN (0, 1)),
+              cmdb_updated      INTEGER NOT NULL DEFAULT 0 CHECK (cmdb_updated IN (0, 1)),
+              created           TEXT NOT NULL
+                CHECK (created GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+              modified          TEXT NOT NULL
+                CHECK (modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+              completed         TEXT NOT NULL DEFAULT ''
+                CHECK (completed = '' OR
+                       completed GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+            )
+        ''')
+        conn.execute('''
+            INSERT INTO tasks_new (
+              id, section_id, position, "desc", note, notes, status, priority, ticket_number,
+              servicenow_sys_id, assignment_group, requested_by, due_date, time_estimate,
+              related_files, parent_id, work_type, env_dev, env_qa, env_prod, cmdb_updated,
+              created, modified, completed
+            )
+            SELECT
+              id, section_id, position, "desc", note, notes, status, priority, ticket_number,
+              servicenow_sys_id, assignment_group, requested_by, due_date, time_estimate,
+              related_files, parent_id, work_type, env_dev, env_qa, env_prod, cmdb_updated,
+              created, modified, completed
+            FROM tasks
+        ''')
+        conn.execute('DROP TABLE tasks')
+        conn.execute('ALTER TABLE tasks_new RENAME TO tasks')
+        conn.execute('CREATE INDEX idx_tasks_section ON tasks(section_id)')
+        conn.execute('CREATE INDEX idx_tasks_parent ON tasks(parent_id)')
+
+        conn.execute('''
+            CREATE TABLE scratchpad_new (
+              id       INTEGER PRIMARY KEY CHECK (id = 1),
+              text     TEXT NOT NULL DEFAULT '',
+              modified TEXT NOT NULL DEFAULT ''
+                CHECK (modified = '' OR
+                       modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+            )
+        ''')
+        conn.execute('INSERT INTO scratchpad_new (id, text, modified) SELECT id, text, modified FROM scratchpad')
+        conn.execute('DROP TABLE scratchpad')
+        conn.execute('ALTER TABLE scratchpad_new RENAME TO scratchpad')
+
+        violations = conn.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            conn.execute('ROLLBACK')
+            raise RuntimeError('foreign key violations after tasks/scratchpad rebuild: %r' % (violations,))
+
+        conn.execute('COMMIT')
+    finally:
+        conn.execute('PRAGMA foreign_keys = ON')
 
 
 def ensure_database(path=None):
@@ -171,17 +468,17 @@ def _tag_from_row(row):
 # ---------------------------------------------------------------------------
 
 def load_sections(conn):
-    rows = conn.execute('SELECT * FROM sections ORDER BY position').fetchall()
+    rows = conn.execute('SELECT * FROM sections ORDER BY position, id').fetchall()
     return [_section_from_row(row) for row in rows]
 
 
 def load_tasks(conn):
-    rows = conn.execute('SELECT * FROM tasks ORDER BY section_id, position').fetchall()
+    rows = conn.execute('SELECT * FROM tasks ORDER BY section_id, position, id').fetchall()
     return [_task_from_row(row) for row in rows]
 
 
 def load_tags(conn):
-    rows = conn.execute('SELECT * FROM tags ORDER BY task_id, position').fetchall()
+    rows = conn.execute('SELECT * FROM tags ORDER BY task_id, position, id').fetchall()
     return [_tag_from_row(row) for row in rows]
 
 
@@ -221,7 +518,15 @@ def task_exists(conn, task_id):
 
 
 def next_task_position(conn, section_id):
-    row = conn.execute('SELECT COUNT(*) AS n FROM tasks WHERE section_id = ?', (section_id,)).fetchone()
+    """One past the section's highest current position, not a row count:
+    COUNT(*) returns an already-occupied position the moment a section has
+    a gap (e.g. positions 0 and 2 after a delete that skipped
+    reposition_section) - MAX(position) + 1 cannot collide with anything
+    already there. COALESCE covers the empty-section case, where MAX is
+    NULL rather than 0."""
+    row = conn.execute(
+        'SELECT COALESCE(MAX(position) + 1, 0) AS n FROM tasks WHERE section_id = ?', (section_id,)
+    ).fetchone()
     return row['n']
 
 
@@ -232,7 +537,7 @@ def next_section_position(conn):
 
 def tags_for_task(conn, task_id):
     rows = conn.execute(
-        'SELECT * FROM tags WHERE task_id = ? ORDER BY position', (task_id,)
+        'SELECT * FROM tags WHERE task_id = ? ORDER BY position, id', (task_id,)
     ).fetchall()
     return [_tag_from_row(row) for row in rows]
 
@@ -304,7 +609,7 @@ def reposition_section(conn, section_id):
     order. The JSON-era function of the same name did this to an in-memory
     list; this one writes it."""
     rows = conn.execute(
-        'SELECT id FROM tasks WHERE section_id = ? ORDER BY position', (section_id,)
+        'SELECT id FROM tasks WHERE section_id = ? ORDER BY position, id', (section_id,)
     ).fetchall()
     set_task_positions(conn, [(row['id'], i) for i, row in enumerate(rows)])
 

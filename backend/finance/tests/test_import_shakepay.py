@@ -312,6 +312,23 @@ class TestImportShakepayText(unittest.TestCase):
         self.conn.close()
         self.tmp_dir.cleanup()
 
+    def test_account_statement_creates_one_batch_per_account(self):
+        summary = import_shakepay.import_shakepay_text(self.conn, 'acct.pdf', ACCOUNT_STATEMENT_TEXT)
+        batch_ids = {a['batch_id'] for a in summary['accounts']}
+        self.assertEqual(len(batch_ids), len(summary['accounts']), 'each account should get its own batch')
+        self.assertEqual(self.conn.execute('SELECT COUNT(*) AS n FROM import_batches').fetchone()['n'], len(batch_ids))
+
+        for entry in summary['accounts']:
+            batch = self.conn.execute('SELECT * FROM import_batches WHERE id = ?', (entry['batch_id'],)).fetchone()
+            self.assertEqual(batch['kind'], 'shakepay_account')
+            self.assertEqual(batch['source_file'], 'acct.pdf')
+            self.assertEqual(batch['row_count'], entry['rows_imported'])
+            row_batch_ids = {
+                r['batch_id'] for r in
+                self.conn.execute('SELECT batch_id FROM transactions WHERE account_id = ?', (entry['account_id'],))
+            }
+            self.assertEqual(row_batch_ids, {entry['batch_id']})
+
     def test_account_statement_creates_cash_and_crypto_accounts(self):
         summary = import_shakepay.import_shakepay_text(self.conn, 'acct.pdf', ACCOUNT_STATEMENT_TEXT)
         account_ids = {a['account_id'] for a in summary['accounts']}
@@ -328,7 +345,7 @@ class TestImportShakepayText(unittest.TestCase):
     def test_card_statement_creates_card_account(self):
         summary = import_shakepay.import_shakepay_text(self.conn, 'card.pdf', CARD_STATEMENT_TEXT)
         self.assertEqual(summary['accounts'], [{
-            'account_id': 'shakepay-card', 'rows_imported': 1,
+            'account_id': 'shakepay-card', 'batch_id': 1, 'rows_imported': 1,
             'date_start': '2026-08-03', 'date_end': '2026-08-03',
         }])
         card_account = finance_db.get_account(self.conn, 'shakepay-card')

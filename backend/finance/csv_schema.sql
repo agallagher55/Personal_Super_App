@@ -3,15 +3,95 @@
 -- finance/schema.sql at the repo root, which is the Plaid-oriented schema
 -- for the deferred Part B plan - no access tokens, sync cursors, or other
 -- Plaid-specific fields belong here.
+--
+-- Which text domains below are database-enforced (CHECK), versus
+-- documented but left open, is a deliberate split:
+--
+--   accounts.kind - CLOSED, and constrained. networth.py's
+--     ASSET_KINDS/LIABILITY_KINDS partition this exact set to decide a
+--     balance's sign in net worth math (raising UnknownAccountKindError
+--     for anything else); a typo or a stray value from direct SQL landing
+--     here wouldn't fail loudly at the point it was written, only later
+--     and less obviously when net worth math trips over it. See
+--     db.ACCOUNT_KINDS, the single source of truth both this constraint
+--     and networth.py's two sets are checked against.
+--   account_balance_snapshots.source, import_batches.kind -
+--     APPLICATION-EXTENSIBLE, left unconstrained. Both are genuinely
+--     expected to grow (a future Plaid/API source alongside
+--     manual/import; a future net-worth CSV import batch kind alongside
+--     manual_balance/manual_holding, ARCHITECTURE.md Part C3) and nothing
+--     downstream partitions on the full set the way net worth math
+--     partitions on account kind - an unrecognized value here is a
+--     forward-compatible admission, not silent data corruption.
+--   transactions.activity_type, transactions.category, transactions.status -
+--     EXTERNALLY SUPPLIED, left unconstrained. These come from whatever
+--     text the bank's or card issuer's export happens to contain
+--     (ARCHITECTURE.md Part A2) - constraining them risks rejecting a
+--     legitimate future export format change outright.
+--
+-- Every REAL column below (transactions.amount/btc_quantity,
+-- account_balance_snapshots.balance_cad, account_terms_snapshots.
+-- interest_rate/credit_limit) is IEEE 754 double, which cannot exactly
+-- represent most decimal fractions - CONTAINED, not eliminated, by
+-- rounding to a fixed canonical precision at every write boundary
+-- (db.round_cad/round_btc, db.ROUND_CAD_DECIMALS/ROUND_BTC_DECIMALS: two
+-- decimal places for anything CAD-denominated including interest_rate,
+-- eight for btc_quantity - a satoshi) rather than switching these to an
+-- integer-cents/integer-satoshis column type, which would mean every
+-- import path, every summary.py aggregation, and the JSON contract every
+-- finance page already reads changing in lockstep for a personal-scale
+-- ledger where two of these values have never needed to be compared with
+-- `==`. See db.py's longer comment next to ROUND_CAD_DECIMALS for the
+-- full reasoning.
+--
+-- CAD-only, enforced: accounts.currency exists as a column, but every
+-- export, every sample value, and transactions.amount/account_balance_
+-- snapshots.balance_cad are CAD today (ARCHITECTURE.md A1/A2, "Every
+-- export and every sample value today is CAD... Not worth solving until
+-- real"). Leaving currency an unconstrained free-text column would let
+-- the schema silently *imply* multi-currency support - a non-CAD account
+-- whose transactions and balances are still bare CAD amounts with no
+-- original currency, no original amount, and no exchange rate anywhere -
+-- that no calculation in this codebase actually provides. Constrained to
+-- 'CAD' below until that's real: adding a genuinely non-CAD account
+-- needs, at minimum, a transaction's original amount/currency alongside
+-- its normalized CAD value, an exchange rate, and documented conversion
+-- behavior for refunds/transfers/account totals - not just relaxing this
+-- constraint.
+--
+-- Dates are 'YYYY-MM-DD' (a calendar date, no time-of-day or timezone);
+-- timestamps are 'YYYY-MM-DDTHH:MM:SSZ' (an instant, always UTC - see
+-- dates.py, the single place that formats "right now" into either
+-- shape). Every date/timestamp column here is TEXT NOT NULL with no ''
+-- sentinel for "missing" - a row that has one at all always has a real
+-- value; where the value can legitimately be absent (import_batches.
+-- date_range_start/end, accounts.closed_at) the column is nullable and
+-- NULL means "not given," never ''.
+--
+-- transactions.date/imported_at are CHECK-constrained to that shape
+-- (GLOB, not a real calendar check - see dates.is_iso_date's docstring
+-- for why that's a deliberate, not lazy, choice) since transactions.date
+-- in particular feeds db.replace_transactions_in_range's DELETE...
+-- BETWEEN boundaries directly; a malformed value there risks silently
+-- deleting the wrong rows, not just failing to match. The remaining
+-- date/timestamp columns below (account_balance_snapshots,
+-- account_terms_snapshots, import_batches, the override/exclusion
+-- tables, accounts.closed_at) follow the identical format by convention,
+-- enforced by dates.py at the handful of trusted internal call sites
+-- that write them, rather than by a CHECK constraint on every single one
+-- - unlike transactions.date, none of them is used as a destructive
+-- operation's own boundary.
 
 CREATE TABLE IF NOT EXISTS accounts (
   id          TEXT PRIMARY KEY,   -- human-assigned (e.g. 'main-credit-card') or the bank export's own account_id
   label       TEXT NOT NULL,
   institution TEXT,
-  kind        TEXT NOT NULL,      -- credit_card | chequing | savings | investment | bitcoin_wallet |
+  kind        TEXT NOT NULL      -- credit_card | chequing | savings | investment | bitcoin_wallet |
                                    -- line_of_credit | loan | bill (net worth kinds, see networth.py -
-                                   -- ARCHITECTURE.md Part C5a)
-  currency    TEXT NOT NULL DEFAULT 'CAD',
+                                   -- ARCHITECTURE.md Part C5a) - CLOSED domain, see db.ACCOUNT_KINDS above
+    CHECK (kind IN ('credit_card', 'chequing', 'savings', 'investment', 'bitcoin_wallet',
+                     'line_of_credit', 'loan', 'bill')),
+  currency    TEXT NOT NULL DEFAULT 'CAD' CHECK (currency = 'CAD'),  -- CAD-only for now, see above
   closed_at   TEXT                -- NULL while open; a closed account stops counting toward net worth
                                    -- (ARCHITECTURE.md C6) from this date. Existing databases get these two
                                    -- columns via db.py's migration 2, since CREATE TABLE IF NOT EXISTS is a
@@ -21,7 +101,9 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE TABLE IF NOT EXISTS transactions (
   id            TEXT PRIMARY KEY,   -- account_id:date:content-digest:occurrence, see db.transaction_id
   account_id    TEXT NOT NULL REFERENCES accounts(id),
-  date          TEXT NOT NULL,
+  date          TEXT NOT NULL       -- YYYY-MM-DD - CHECK is shape-only (GLOB), see the classification
+                                     -- comment above for why this one column is enforced
+    CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
   description   TEXT NOT NULL,      -- merchant (credit card) or activity description (bank)
   amount        REAL NOT NULL,      -- negative = outflow, positive = inflow, CAD
   activity_type TEXT NOT NULL,      -- credit card: Purchase | Payment | Refund
@@ -39,7 +121,14 @@ CREATE TABLE IF NOT EXISTS transactions (
                                      -- db.py's migration 3, since CREATE TABLE IF NOT EXISTS is a no-op
                                      -- against a transactions table that already exists)
   source_file   TEXT NOT NULL,      -- which upload this row came from, for audit
-  imported_at   TEXT NOT NULL
+  imported_at   TEXT NOT NULL       -- YYYY-MM-DDTHH:MM:SSZ
+    CHECK (imported_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+  batch_id      INTEGER REFERENCES import_batches(id)  -- which import_csv_text()/import_shakepay_text()
+                                     -- call produced this row - see import_batches below. NULL for a
+                                     -- transaction imported before this column existed (existing
+                                     -- databases get it via db.py's migration 7); no batch is
+                                     -- reconstructed retroactively for those rows, since inventing one
+                                     -- would claim provenance the data doesn't actually have.
 );
 
 CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(account_id, date);
@@ -126,11 +215,18 @@ CREATE TABLE IF NOT EXISTS cash_flow_exclusions (
 -- "current" is just "the latest one" (latest_account_balances below)
 -- and history falls out of the same table for free - see networth.py.
 
--- One row per "event that produced facts" - here, a manual balance
--- entry (kind = manual_balance/manual_holding); a future CSV import for
--- one of these sources would get its own kind. Deliberately minimal for
--- Phase 1 - source_file/file_hash/date_range_* stay unused until a real
--- import populates them (Part C, C3/C10 Phase 4).
+-- One row per "event that produced facts": a manual balance entry
+-- (kind = manual_balance/manual_holding, source_file/file_hash/
+-- date_range_* left NULL - nothing to fill them with) or, since the
+-- September 2026 database review, one per successful import_csv.py/
+-- import_shakepay.py call (kind = csv_credit_card/csv_bank_activity/
+-- shakepay_card/shakepay_account - see those modules), which do
+-- populate every column here and are what transactions.batch_id above
+-- points at. "Successful" specifically: both importers create this row
+-- inside the same transaction as the rows it describes, so a failed
+-- import - whether it fails before ever reaching that transaction, or
+-- partway through it - never leaves a batch with no matching rows, or a
+-- row_count that disagrees with what actually landed.
 CREATE TABLE IF NOT EXISTS import_batches (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   kind              TEXT NOT NULL,
@@ -143,6 +239,23 @@ CREATE TABLE IF NOT EXISTS import_batches (
   notes             TEXT
 );
 
+-- Both snapshot tables below are append-only as a database INVARIANT,
+-- not just a coding convention db.py happens to follow (it already did -
+-- there is no update/delete path in insert_balance_snapshot/
+-- insert_terms_snapshot, only INSERT) - enforced by the BEFORE UPDATE/
+-- BEFORE DELETE triggers just under each table, which RAISE(ABORT) on
+-- any attempt (surfaces as sqlite3.IntegrityError). A wrong entry is
+-- corrected the way ARCHITECTURE.md's C8 already documents: insert a
+-- later snapshot, never edit or remove the old one - `recorded_at`
+-- (not just `as_of_date`) is what latest_account_balances breaks a
+-- same-day correction's tie on, precisely so this stays possible.
+--
+-- Administrative repair (e.g. undoing a genuine data-entry mistake, not
+-- a normal correction): `DROP TRIGGER account_balance_snapshots_no_*`
+-- (or the terms_snapshots equivalent), make the fix by hand, then
+-- recreate the trigger from this file. Deliberately not a soft
+-- bypass - the friction is the point, so an ordinary UPDATE/DELETE
+-- never slips through by accident.
 CREATE TABLE IF NOT EXISTS account_balance_snapshots (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   account_id    TEXT NOT NULL REFERENCES accounts(id),
@@ -154,6 +267,18 @@ CREATE TABLE IF NOT EXISTS account_balance_snapshots (
   recorded_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_balance_snapshots_account_date ON account_balance_snapshots(account_id, as_of_date);
+
+CREATE TRIGGER IF NOT EXISTS account_balance_snapshots_no_update
+BEFORE UPDATE ON account_balance_snapshots
+BEGIN
+  SELECT RAISE(ABORT, 'account_balance_snapshots is append-only - insert a new, later snapshot instead of updating an existing one');
+END;
+
+CREATE TRIGGER IF NOT EXISTS account_balance_snapshots_no_delete
+BEFORE DELETE ON account_balance_snapshots
+BEGIN
+  SELECT RAISE(ABORT, 'account_balance_snapshots is append-only - corrections are additive, never a deletion');
+END;
 
 -- A line of credit's rate/limit, split from its balance because they
 -- change on a much slower cadence (a rate hike, a new limit) than the
@@ -167,6 +292,18 @@ CREATE TABLE IF NOT EXISTS account_terms_snapshots (
   recorded_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_terms_snapshots_account_date ON account_terms_snapshots(account_id, as_of_date);
+
+CREATE TRIGGER IF NOT EXISTS account_terms_snapshots_no_update
+BEFORE UPDATE ON account_terms_snapshots
+BEGIN
+  SELECT RAISE(ABORT, 'account_terms_snapshots is append-only - insert a new, later snapshot instead of updating an existing one');
+END;
+
+CREATE TRIGGER IF NOT EXISTS account_terms_snapshots_no_delete
+BEFORE DELETE ON account_terms_snapshots
+BEGIN
+  SELECT RAISE(ABORT, 'account_terms_snapshots is append-only - corrections are additive, never a deletion');
+END;
 
 -- "Current" balance per account - what Cash/Bitcoin/Debt/Lines of
 -- Credit will render (Phase 3). A view, not a cached column, so it can

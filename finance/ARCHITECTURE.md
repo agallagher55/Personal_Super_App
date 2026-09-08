@@ -1117,6 +1117,20 @@ uniformly to every financial fact the app tracks.
 
 ### C3. Cross-cutting: import_batches
 
+> **Partially shipped, September 2026 database review.** A lighter-weight
+> subset of this landed already, well ahead of the rest of Part C:
+> `transactions.batch_id` (nullable, `NULL` for anything imported before
+> this column existed - no retroactive backfill or raw layer) points
+> straight at `import_batches` from the *existing* direct-insert
+> `import_csv.py`/`import_shakepay.py` path, with real `kind` values
+> (`csv_credit_card`, `csv_bank_activity`, `shakepay_card`,
+> `shakepay_account` - not the `credit_card_csv`/`bank_csv` names
+> sketched below, chosen before this shipped). This does NOT mean the
+> raw/staging tables, the replay rule, or the C9 backfill below exist -
+> only that `transactions` rows now carry which import produced them,
+> closing the gap where balance snapshots already had `batch_id`
+> (C2/C5c) but transactions didn't.
+
 ```sql
 -- One row per "event that produced facts" - a CSV upload OR a manual
 -- balance/holding entry. Every raw_* table below carries a batch_id FK
@@ -1493,6 +1507,12 @@ same-day correction means a second row with the same `as_of_date` - so
 `latest_account_balances` (C6) needs to break that tie on `recorded_at`,
 not just `as_of_date`. Worth getting right in the view from the start;
 it is the one place the append-only rule shows through into a query.
+As of the September 2026 database review this is a database invariant,
+not just something these two endpoints happen to respect: `BEFORE
+UPDATE`/`BEFORE DELETE` triggers on `account_balance_snapshots` and
+`account_terms_snapshots` (csv_schema.sql) reject any attempt outright,
+with a documented manual drop-trigger/fix/recreate-trigger procedure as
+the only way around it.
 
 UI: once C10 wires the dashboard sections to read from these tables,
 each account/holding row gets a small "+ Update" affordance reusing the
@@ -1630,7 +1650,11 @@ Phase 0 is already done, ahead of the rest, because C9 depends on it.
 - **Multi-currency.** Every export and every sample value today is CAD
   (A1/A2). A USD-denominated holding would need a real
   `iso_currency_code` plus a conversion step rather than the implicit
-  CAD baked into the column names above. Not worth solving until real.
+  CAD baked into the column names above. Not worth solving until real -
+  and, as of the September 2026 database review, enforced rather than
+  merely assumed: `accounts.currency` has a `CHECK (currency = 'CAD')`
+  constraint (csv_schema.sql), so the schema can't silently imply
+  multi-currency support this codebase doesn't actually provide.
 - **Batch date ranges come from row min/max, not the window actually
   requested.** `import_csv_text` derives a file's range from the first
   and last dated row in it, so an export pulled for "last 90 days" whose

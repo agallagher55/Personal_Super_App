@@ -38,10 +38,10 @@ Usage:
 
 import re
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+import dates  # noqa: E402
 import db as finance_db  # noqa: E402
 
 # Ordered (pattern, category) - first match wins, case-insensitive
@@ -145,7 +145,7 @@ def categorize(conn, dry_run=False):
     }
 
     categorized, unmatched, skipped = [], [], []
-    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    now = dates.now_iso()
     with conn:
         for row in rows:
             description = row['description']
