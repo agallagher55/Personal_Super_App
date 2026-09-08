@@ -13,7 +13,10 @@ this app will eventually use in a real database:
   data/tags.json        - one row per tag (task_id foreign key)
 
 GET /tasks.json joins them back into the nested shape the frontend expects,
-the same way a database query/view would.
+the same way a database query/view would. It also includes `scratchpad`, a
+single freeform text field backed by the `scratchpad` table - the "Today's
+List" notepad shown alongside the task list, unrelated to any one task or
+section, saved via POST /tasks/scratchpad.
 
 data/tasks.json's columns mirror a Notion-style tasks database: desc (Task),
 status/done (Status), priority (Priority), due_date (Due Date), completed
@@ -131,6 +134,7 @@ def build_nested():
         sections = tasks_db.load_sections(conn)
         tasks = tasks_db.load_tasks(conn)
         tags = tasks_db.load_tags(conn)
+        scratchpad = tasks_db.load_scratchpad(conn)
     finally:
         conn.close()
 
@@ -165,7 +169,7 @@ def build_nested():
             nested_section['note'] = section['note']
         result_sections.append(nested_section)
 
-    return {'sections': result_sections}
+    return {'sections': result_sections, 'scratchpad': scratchpad}
 
 
 class TaskHandler(http.server.SimpleHTTPRequestHandler):
@@ -551,6 +555,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             return self.handle_update_tasks()
         if parsed.path == '/tasks/delete':
             return self.handle_delete_task()
+        if parsed.path == '/tasks/scratchpad':
+            return self.handle_update_scratchpad()
         if parsed.path == '/finance/import':
             return self.handle_finance_import(parsed)
         if parsed.path == '/finance/categories/transaction':
@@ -1098,6 +1104,36 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             conn.close()
 
         response_body = json.dumps({'status': 'ok', 'deleted': True}).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(response_body)))
+        self.end_headers()
+        self.wfile.write(response_body)
+
+    def handle_update_scratchpad(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+
+        try:
+            payload = json.loads(body)
+        except ValueError:
+            self.send_json_error(400, 'Invalid JSON body')
+            return
+
+        text = payload.get('text') if isinstance(payload, dict) else None
+        if not isinstance(text, str):
+            self.send_json_error(400, 'Missing text field')
+            return
+
+        conn = tasks_db.connect()
+
+        try:
+            with conn:
+                tasks_db.save_scratchpad(conn, text, now_iso())
+        finally:
+            conn.close()
+
+        response_body = json.dumps({'status': 'ok'}).encode('utf-8')
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(response_body)))

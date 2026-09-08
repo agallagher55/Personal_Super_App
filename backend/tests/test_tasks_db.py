@@ -251,6 +251,29 @@ class TestDelete(DatabaseTestCase):
         self.assertEqual([(t['id'], t['position']) for t in remaining], [('t0', 0), ('t2', 1)])
 
 
+class TestScratchpad(DatabaseTestCase):
+
+    def test_empty_before_any_save(self):
+        self.assertEqual(tasks_db.load_scratchpad(self.conn), '')
+
+    def test_round_trips_saved_text(self):
+        tasks_db.save_scratchpad(self.conn, 'Buy milk\nCall dentist', '2026-01-01T00:00:00Z')
+        self.assertEqual(tasks_db.load_scratchpad(self.conn), 'Buy milk\nCall dentist')
+
+    def test_saving_again_overwrites_rather_than_adding_a_row(self):
+        tasks_db.save_scratchpad(self.conn, 'First draft', '2026-01-01T00:00:00Z')
+        tasks_db.save_scratchpad(self.conn, 'Second draft', '2026-01-02T00:00:00Z')
+
+        self.assertEqual(tasks_db.load_scratchpad(self.conn), 'Second draft')
+        count = self.conn.execute('SELECT COUNT(*) AS n FROM scratchpad').fetchone()['n']
+        self.assertEqual(count, 1)
+
+    def test_saving_empty_text_clears_it(self):
+        tasks_db.save_scratchpad(self.conn, 'Something', '2026-01-01T00:00:00Z')
+        tasks_db.save_scratchpad(self.conn, '', '2026-01-02T00:00:00Z')
+        self.assertEqual(tasks_db.load_scratchpad(self.conn), '')
+
+
 class TestMigrateFromJson(unittest.TestCase):
 
     def setUp(self):

@@ -14,8 +14,11 @@ Files:
   saving new tasks actually work); `backend/start-server.bat` runs it for
   double-click use on Windows
 - `data/tasks.db`, the task data, in three normalized SQLite tables
-  (`sections`, `tasks`, `tags`, one row each, joined by id). Created by
-  `backend/tasks_db.py`; see `DATABASE-MIGRATION.md` for the schema
+  (`sections`, `tasks`, `tags`, one row each, joined by id), plus a
+  `scratchpad` table (always exactly one row) for the freeform "Today's
+  List" notepad shown to the left of the task list on `/tasks`, unrelated
+  to any one task or section. Created by `backend/tasks_db.py`; see
+  `DATABASE-MIGRATION.md` for the schema
 - `data/sections.json`, `data/tasks.json`, `data/tags.json`, a readable,
   git-committed snapshot of the database. **Not live**: the running app
   never reads or writes them. Refresh them with
@@ -220,3 +223,7 @@ than sorted. Nothing is lost, only reordered; after that, diffs are small.
   refresh, those aren't persisted. Notes and done state persist once
   you click Save Changes; tasks added through the `/tasks/new` form
   are saved immediately on submit.
+- **Today's List**, the freeform notepad on the left of `/tasks`, is
+  independent of the task list: type into it and it autosaves to the
+  `scratchpad` table a moment after you stop typing (no Save Changes
+  needed), showing a small "Saved" confirmation under the box.

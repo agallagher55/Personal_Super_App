@@ -70,3 +70,11 @@ CREATE TABLE IF NOT EXISTS tags (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tags_task ON tags(task_id);
+
+-- The freeform "Today's List" notepad shown next to the task list on
+-- /tasks, unrelated to any one task or section - always exactly one row.
+CREATE TABLE IF NOT EXISTS scratchpad (
+  id       INTEGER PRIMARY KEY CHECK (id = 1),
+  text     TEXT NOT NULL DEFAULT '',
+  modified TEXT NOT NULL DEFAULT ''
+);

@@ -185,6 +185,13 @@ def load_tags(conn):
     return [_tag_from_row(row) for row in rows]
 
 
+def load_scratchpad(conn):
+    """The scratchpad's freeform text, or '' if nothing has been saved yet
+    (no row exists until the first save)."""
+    row = conn.execute('SELECT text FROM scratchpad WHERE id = 1').fetchone()
+    return row['text'] if row is not None else ''
+
+
 def find_task(conn, task_id):
     row = conn.execute('SELECT * FROM tasks WHERE id = ?', (task_id,)).fetchone()
     return _task_from_row(row) if row is not None else None
@@ -300,6 +307,16 @@ def reposition_section(conn, section_id):
         'SELECT id FROM tasks WHERE section_id = ? ORDER BY position', (section_id,)
     ).fetchall()
     set_task_positions(conn, [(row['id'], i) for i, row in enumerate(rows)])
+
+
+def save_scratchpad(conn, text, modified):
+    """Upserts the single scratchpad row - there is never a second one to
+    insert, only ever the first save or a later overwrite."""
+    conn.execute(
+        'INSERT INTO scratchpad (id, text, modified) VALUES (1, ?, ?) '
+        'ON CONFLICT(id) DO UPDATE SET text = excluded.text, modified = excluded.modified',
+        (text, modified),
+    )
 
 
 # ---------------------------------------------------------------------------
