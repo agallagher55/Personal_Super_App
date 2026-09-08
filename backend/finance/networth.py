@@ -23,6 +23,17 @@ import db as finance_db
 ASSET_KINDS = {'chequing', 'savings', 'investment', 'bitcoin_wallet'}
 LIABILITY_KINDS = {'credit_card', 'line_of_credit', 'loan', 'bill'}
 
+# These two sets are meant to exactly partition db.ACCOUNT_KINDS - the
+# accounts.kind CHECK constraint's closed domain (see csv_schema.sql). If
+# a kind is ever added to one without the other, this catches the drift
+# at import time instead of net_worth_sign() silently mis-signing it (or
+# the database accepting a kind net worth math doesn't know either side
+# of).
+assert not (ASSET_KINDS & LIABILITY_KINDS), 'a kind cannot be both an asset and a liability'
+assert (ASSET_KINDS | LIABILITY_KINDS) == finance_db.ACCOUNT_KINDS, (
+    'ASSET_KINDS/LIABILITY_KINDS must partition db.ACCOUNT_KINDS exactly'
+)
+
 SAMPLE_JSON_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     'static', 'finance', 'finance-dashboard.json',

@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -355,6 +356,121 @@ class TestBtcQuantityColumnMigration(unittest.TestCase):
     def test_records_the_schema_version(self):
         finance_db.migrate(self.conn)
         self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
+
+
+class TestAccountKindConstraint(unittest.TestCase):
+    """Issue: finance account/source domain integrity. accounts.kind is a
+    CLOSED domain (csv_schema.sql) - a fresh database rejects anything
+    outside db.ACCOUNT_KINDS directly."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        finance_db.init_schema(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_accepts_every_known_kind(self):
+        for i, kind in enumerate(sorted(finance_db.ACCOUNT_KINDS)):
+            finance_db.upsert_account(self.conn, 'acc%d' % i, 'Label', None, kind)
+
+    def test_rejects_an_unknown_kind(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            finance_db.upsert_account(self.conn, 'acc1', 'Label', None, 'crypto_stash')
+
+
+class TestAccountKindConstraintMigration(unittest.TestCase):
+    """Migration 4 (db._add_account_kind_constraint): rebuilds accounts
+    with the kind CHECK constraint, staged here as the unconstrained shape
+    every finance.db had before this migration - one account plus rows in
+    every table that references accounts(id), so the rebuild's foreign
+    keys have something real to preserve."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        self.conn.executescript('''
+            CREATE TABLE accounts (
+              id TEXT PRIMARY KEY, label TEXT NOT NULL, institution TEXT, kind TEXT NOT NULL,
+              currency TEXT NOT NULL DEFAULT 'CAD', closed_at TEXT
+            );
+            CREATE TABLE transactions (
+              id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
+              date TEXT NOT NULL, description TEXT NOT NULL, amount REAL NOT NULL,
+              activity_type TEXT NOT NULL, category TEXT, status TEXT, btc_quantity REAL,
+              source_file TEXT NOT NULL, imported_at TEXT NOT NULL
+            );
+            CREATE TABLE import_batches (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, source_file TEXT,
+              file_hash TEXT, date_range_start TEXT, date_range_end TEXT, row_count INTEGER NOT NULL,
+              imported_at TEXT NOT NULL, notes TEXT
+            );
+            CREATE TABLE account_balance_snapshots (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL REFERENCES accounts(id),
+              as_of_date TEXT NOT NULL, balance_cad REAL NOT NULL, source TEXT NOT NULL,
+              batch_id INTEGER REFERENCES import_batches(id), recorded_at TEXT NOT NULL
+            );
+        ''')
+        self.conn.execute(
+            "INSERT INTO accounts (id, label, institution, kind) VALUES ('acc1', 'Chequing', 'TD', 'chequing')"
+        )
+        self.conn.execute(
+            '''INSERT INTO transactions (id, account_id, date, description, amount, activity_type, source_file, imported_at)
+               VALUES ('tx1', 'acc1', '2026-09-01', 'Coffee', -5.0, 'Purchase', 'v1.csv', '2026-09-06T00:00:00Z')'''
+        )
+        self.conn.execute(
+            "INSERT INTO account_balance_snapshots (account_id, as_of_date, balance_cad, source, recorded_at) "
+            "VALUES ('acc1', '2026-09-01', 100.0, 'manual', '2026-09-06T00:00:00Z')"
+        )
+        self.conn.execute('PRAGMA user_version = 3')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_adds_the_kind_check_constraint(self):
+        finance_db.migrate(self.conn)
+        with self.assertRaises(sqlite3.IntegrityError):
+            finance_db.upsert_account(self.conn, 'bad', 'Label', None, 'crypto_stash')
+
+    def test_preserves_the_existing_account(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(finance_db.get_account(self.conn, 'acc1')['kind'], 'chequing')
+
+    def test_preserves_rows_that_reference_the_account(self):
+        finance_db.migrate(self.conn)
+        self.assertTrue(finance_db.transaction_exists(self.conn, 'tx1'))
+        snapshot = self.conn.execute('SELECT * FROM account_balance_snapshots WHERE account_id = ?', ('acc1',)).fetchone()
+        self.assertEqual(snapshot['balance_cad'], 100.0)
+
+    def test_foreign_keys_are_intact_after_the_rebuild(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA foreign_key_check').fetchall(), [])
+
+    def test_is_idempotent(self):
+        finance_db.migrate(self.conn)
+        finance_db.migrate(self.conn)
+        self.assertEqual(finance_db.get_account(self.conn, 'acc1')['kind'], 'chequing')
+
+    def test_records_the_schema_version(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
+
+    def test_refuses_to_migrate_an_unrecognized_existing_kind(self):
+        """An unknown kind already in the data can't be safely guessed as
+        an asset or a liability - the migration must refuse rather than
+        pick a side, and leave the version/data exactly as they were."""
+        self.conn.execute("UPDATE accounts SET kind = 'crypto_stash' WHERE id = 'acc1'")
+        self.conn.commit()
+
+        with self.assertRaises(RuntimeError):
+            finance_db.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], 3)
+        self.assertEqual(finance_db.get_account(self.conn, 'acc1')['kind'], 'crypto_stash')
 
 
 if __name__ == '__main__':

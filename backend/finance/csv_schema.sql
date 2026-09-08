@@ -3,14 +3,41 @@
 -- finance/schema.sql at the repo root, which is the Plaid-oriented schema
 -- for the deferred Part B plan - no access tokens, sync cursors, or other
 -- Plaid-specific fields belong here.
+--
+-- Which text domains below are database-enforced (CHECK), versus
+-- documented but left open, is a deliberate split:
+--
+--   accounts.kind - CLOSED, and constrained. networth.py's
+--     ASSET_KINDS/LIABILITY_KINDS partition this exact set to decide a
+--     balance's sign in net worth math (raising UnknownAccountKindError
+--     for anything else); a typo or a stray value from direct SQL landing
+--     here wouldn't fail loudly at the point it was written, only later
+--     and less obviously when net worth math trips over it. See
+--     db.ACCOUNT_KINDS, the single source of truth both this constraint
+--     and networth.py's two sets are checked against.
+--   account_balance_snapshots.source, import_batches.kind -
+--     APPLICATION-EXTENSIBLE, left unconstrained. Both are genuinely
+--     expected to grow (a future Plaid/API source alongside
+--     manual/import; a future net-worth CSV import batch kind alongside
+--     manual_balance/manual_holding, ARCHITECTURE.md Part C3) and nothing
+--     downstream partitions on the full set the way net worth math
+--     partitions on account kind - an unrecognized value here is a
+--     forward-compatible admission, not silent data corruption.
+--   transactions.activity_type, transactions.category, transactions.status -
+--     EXTERNALLY SUPPLIED, left unconstrained. These come from whatever
+--     text the bank's or card issuer's export happens to contain
+--     (ARCHITECTURE.md Part A2) - constraining them risks rejecting a
+--     legitimate future export format change outright.
 
 CREATE TABLE IF NOT EXISTS accounts (
   id          TEXT PRIMARY KEY,   -- human-assigned (e.g. 'main-credit-card') or the bank export's own account_id
   label       TEXT NOT NULL,
   institution TEXT,
-  kind        TEXT NOT NULL,      -- credit_card | chequing | savings | investment | bitcoin_wallet |
+  kind        TEXT NOT NULL      -- credit_card | chequing | savings | investment | bitcoin_wallet |
                                    -- line_of_credit | loan | bill (net worth kinds, see networth.py -
-                                   -- ARCHITECTURE.md Part C5a)
+                                   -- ARCHITECTURE.md Part C5a) - CLOSED domain, see db.ACCOUNT_KINDS above
+    CHECK (kind IN ('credit_card', 'chequing', 'savings', 'investment', 'bitcoin_wallet',
+                     'line_of_credit', 'loan', 'bill')),
   currency    TEXT NOT NULL DEFAULT 'CAD',
   closed_at   TEXT                -- NULL while open; a closed account stops counting toward net worth
                                    -- (ARCHITECTURE.md C6) from this date. Existing databases get these two

@@ -15,9 +15,22 @@ SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csv_sche
 
 # Bumped whenever a one-time migration is added below; tracked per
 # database in PRAGMA user_version so each migration runs exactly once.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 ID_DIGEST_LENGTH = 12
+
+# The single source of truth for accounts.kind - a CLOSED domain (see
+# csv_schema.sql's classification comment): every value net worth math
+# knows how to sign. networth.py's ASSET_KINDS/LIABILITY_KINDS partition
+# this exact set (and assert as much, so the two can't quietly drift
+# apart) rather than each defining their own - db.py can't import
+# networth.py, which already imports db as finance_db, so this lives here
+# and networth.py reads it instead of the schema owning two independent
+# copies of the same list.
+ACCOUNT_KINDS = frozenset({
+    'chequing', 'savings', 'investment', 'bitcoin_wallet',
+    'credit_card', 'line_of_credit', 'loan', 'bill',
+})
 
 
 def connect(path=None):
@@ -60,6 +73,9 @@ def migrate(conn):
 
     if version < 3:
         _add_transaction_btc_quantity_column(conn)
+
+    if version < 4:
+        _add_account_kind_constraint(conn)
 
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is
@@ -164,6 +180,79 @@ def _add_transaction_btc_quantity_column(conn):
     if 'btc_quantity' not in existing:
         conn.execute('ALTER TABLE transactions ADD COLUMN btc_quantity REAL')
     conn.commit()
+
+
+def _add_account_kind_constraint(conn):
+    """Migration 4: adds the accounts.kind CHECK constraint (ACCOUNT_KINDS
+    above; see csv_schema.sql's domain classification comment). SQLite
+    can't ALTER TABLE to add a CHECK constraint, so this rebuilds accounts
+    the way tasks_db._add_task_domain_constraints rebuilds tasks/tags:
+    create the constrained shape under a temporary name, copy data across,
+    drop the original, rename into place - SQLite's own documented
+    procedure for a schema change ALTER TABLE can't express
+    (https://www.sqlite.org/lang_altertable.html).
+
+    Unlike that migration, there is no normalization pass first: an
+    unrecognized status/priority has an obvious safe default, but an
+    unrecognized account kind does not - guessing asset vs. liability for
+    a kind nothing else in the codebase produces risks silently
+    corrupting net worth math, the exact failure mode this constraint
+    exists to prevent. If one somehow exists, this raises and leaves the
+    database exactly as it was (see the transaction/foreign_key_check
+    handling below) rather than picking a side for it.
+
+    transactions, account_balance_snapshots, and account_terms_snapshots
+    all declare `REFERENCES accounts(id)` but are not touched here: that
+    reference is by table name, and accounts keeps its name throughout
+    (recreated, then renamed back to it) - foreign keys are still turned
+    off for the duration, since SQLite validates a REFERENCES clause
+    against whatever table currently holds that name, and there's a
+    window here where "accounts" briefly doesn't exist at all.
+    """
+    unknown = conn.execute(
+        'SELECT DISTINCT kind FROM accounts WHERE kind NOT IN (%s)'
+        % ', '.join('?' for _ in ACCOUNT_KINDS),
+        tuple(ACCOUNT_KINDS),
+    ).fetchall()
+    if unknown:
+        raise RuntimeError(
+            'refusing to add the accounts.kind constraint: unrecognized kind(s) %s already stored - '
+            'reclassify or remove those accounts by hand first, since this migration cannot safely '
+            'guess whether an unknown kind counts as an asset or a liability.'
+            % sorted(row['kind'] for row in unknown)
+        )
+
+    conn.execute('PRAGMA foreign_keys = OFF')
+    try:
+        conn.execute('BEGIN')
+
+        conn.execute('''
+            CREATE TABLE accounts_new (
+              id          TEXT PRIMARY KEY,
+              label       TEXT NOT NULL,
+              institution TEXT,
+              kind        TEXT NOT NULL
+                CHECK (kind IN ('credit_card', 'chequing', 'savings', 'investment', 'bitcoin_wallet',
+                                 'line_of_credit', 'loan', 'bill')),
+              currency    TEXT NOT NULL DEFAULT 'CAD',
+              closed_at   TEXT
+            )
+        ''')
+        conn.execute('''
+            INSERT INTO accounts_new (id, label, institution, kind, currency, closed_at)
+            SELECT id, label, institution, kind, currency, closed_at FROM accounts
+        ''')
+        conn.execute('DROP TABLE accounts')
+        conn.execute('ALTER TABLE accounts_new RENAME TO accounts')
+
+        violations = conn.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            conn.execute('ROLLBACK')
+            raise RuntimeError('foreign key violations after accounts rebuild: %r' % (violations,))
+
+        conn.execute('COMMIT')
+    finally:
+        conn.execute('PRAGMA foreign_keys = ON')
 
 
 def ensure_database(path=None):
