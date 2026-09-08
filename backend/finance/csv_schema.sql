@@ -58,6 +58,29 @@
 -- its normalized CAD value, an exchange rate, and documented conversion
 -- behavior for refunds/transfers/account totals - not just relaxing this
 -- constraint.
+--
+-- Dates are 'YYYY-MM-DD' (a calendar date, no time-of-day or timezone);
+-- timestamps are 'YYYY-MM-DDTHH:MM:SSZ' (an instant, always UTC - see
+-- dates.py, the single place that formats "right now" into either
+-- shape). Every date/timestamp column here is TEXT NOT NULL with no ''
+-- sentinel for "missing" - a row that has one at all always has a real
+-- value; where the value can legitimately be absent (import_batches.
+-- date_range_start/end, accounts.closed_at) the column is nullable and
+-- NULL means "not given," never ''.
+--
+-- transactions.date/imported_at are CHECK-constrained to that shape
+-- (GLOB, not a real calendar check - see dates.is_iso_date's docstring
+-- for why that's a deliberate, not lazy, choice) since transactions.date
+-- in particular feeds db.replace_transactions_in_range's DELETE...
+-- BETWEEN boundaries directly; a malformed value there risks silently
+-- deleting the wrong rows, not just failing to match. The remaining
+-- date/timestamp columns below (account_balance_snapshots,
+-- account_terms_snapshots, import_batches, the override/exclusion
+-- tables, accounts.closed_at) follow the identical format by convention,
+-- enforced by dates.py at the handful of trusted internal call sites
+-- that write them, rather than by a CHECK constraint on every single one
+-- - unlike transactions.date, none of them is used as a destructive
+-- operation's own boundary.
 
 CREATE TABLE IF NOT EXISTS accounts (
   id          TEXT PRIMARY KEY,   -- human-assigned (e.g. 'main-credit-card') or the bank export's own account_id
@@ -78,7 +101,9 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE TABLE IF NOT EXISTS transactions (
   id            TEXT PRIMARY KEY,   -- account_id:date:content-digest:occurrence, see db.transaction_id
   account_id    TEXT NOT NULL REFERENCES accounts(id),
-  date          TEXT NOT NULL,
+  date          TEXT NOT NULL       -- YYYY-MM-DD - CHECK is shape-only (GLOB), see the classification
+                                     -- comment above for why this one column is enforced
+    CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
   description   TEXT NOT NULL,      -- merchant (credit card) or activity description (bank)
   amount        REAL NOT NULL,      -- negative = outflow, positive = inflow, CAD
   activity_type TEXT NOT NULL,      -- credit card: Purchase | Payment | Refund
@@ -96,7 +121,8 @@ CREATE TABLE IF NOT EXISTS transactions (
                                      -- db.py's migration 3, since CREATE TABLE IF NOT EXISTS is a no-op
                                      -- against a transactions table that already exists)
   source_file   TEXT NOT NULL,      -- which upload this row came from, for audit
-  imported_at   TEXT NOT NULL
+  imported_at   TEXT NOT NULL       -- YYYY-MM-DDTHH:MM:SSZ
+    CHECK (imported_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );
 
 CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(account_id, date);

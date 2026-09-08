@@ -111,6 +111,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+import dates  # noqa: E402
 import db as finance_db  # noqa: E402
 import import_csv  # noqa: E402
 
@@ -441,10 +442,6 @@ def parse_statement_text(text):
     return stype, period, rows_by_account, unparsed, stats
 
 
-def _now_iso():
-    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-
-
 def _save_import_copy(path):
     """Mirrors import_csv._save_upload_copy for audit purposes - keeps a
     timestamped copy of every imported PDF under data/finance/imports/."""
@@ -465,7 +462,7 @@ def import_shakepay_text(conn, source_file, text, imported_at=None):
     import_shakepay_pdf so tests can exercise this against plain text
     fixtures instead of real PDF binaries. Returns a summary dict."""
     stype, period, rows_by_account, unparsed, stats = parse_statement_text(text)
-    imported_at = imported_at or _now_iso()
+    imported_at = imported_at or dates.now_iso()
 
     accounts_imported = []
     with conn:
@@ -475,13 +472,13 @@ def import_shakepay_text(conn, source_file, text, imported_at=None):
             label, institution, kind = ACCOUNTS[account_id]
             finance_db.upsert_account(conn, account_id, label, institution, kind)
             dated_rows = import_csv._assign_ids(account_id, rows, source_file, imported_at)
-            dates = [r['date'] for r in dated_rows]
-            finance_db.replace_transactions_in_range(conn, account_id, min(dates), max(dates), dated_rows)
+            row_dates = [r['date'] for r in dated_rows]
+            finance_db.replace_transactions_in_range(conn, account_id, min(row_dates), max(row_dates), dated_rows)
             accounts_imported.append({
                 'account_id': account_id,
                 'rows_imported': len(dated_rows),
-                'date_start': min(dates),
-                'date_end': max(dates),
+                'date_start': min(row_dates),
+                'date_end': max(row_dates),
             })
 
     return {

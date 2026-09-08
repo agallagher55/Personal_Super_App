@@ -8,6 +8,8 @@ import hashlib
 import os
 import sqlite3
 
+import dates
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, 'data', 'finance')
 DB_PATH = os.path.join(DATA_DIR, 'finance.db')
@@ -15,7 +17,7 @@ SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csv_sche
 
 # Bumped whenever a one-time migration is added below; tracked per
 # database in PRAGMA user_version so each migration runs exactly once.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 ID_DIGEST_LENGTH = 12
 
@@ -124,6 +126,9 @@ def migrate(conn):
 
     if version < 5:
         _add_cad_only_currency_constraint(conn)
+
+    if version < 6:
+        _add_transaction_date_constraints(conn)
 
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is
@@ -354,6 +359,104 @@ def _add_cad_only_currency_constraint(conn):
         conn.execute('PRAGMA foreign_keys = ON')
 
 
+def _add_transaction_date_constraints(conn):
+    """Migration 6: adds the transactions.date/imported_at CHECK
+    constraints (shape-only - see csv_schema.sql's date/timestamp
+    classification comment and dates.is_iso_date's docstring for why).
+    Same table-rebuild procedure as the migrations above; no
+    normalization pass, for the same reason as the other two -
+    reinterpreting a malformed date without human judgment about what it
+    was supposed to be risks getting it silently wrong, which is exactly
+    what this constraint exists to catch.
+    """
+    bad_dates = conn.execute(
+        "SELECT DISTINCT date FROM transactions "
+        "WHERE date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"
+    ).fetchall()
+    bad_timestamps = conn.execute(
+        "SELECT DISTINCT imported_at FROM transactions "
+        "WHERE imported_at NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
+        "T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'"
+    ).fetchall()
+    if bad_dates or bad_timestamps:
+        raise RuntimeError(
+            'refusing to add the transactions date/imported_at constraints: malformed date(s) %s '
+            'and/or imported_at value(s) %s already stored - fix or remove those rows by hand first, '
+            'since this migration cannot safely guess what a malformed date was supposed to be.'
+            % (sorted(r['date'] for r in bad_dates), sorted(r['imported_at'] for r in bad_timestamps))
+        )
+
+    conn.execute('PRAGMA foreign_keys = OFF')
+    try:
+        conn.execute('BEGIN')
+
+        # transactions_effective (csv_schema.sql) selects from transactions
+        # by name - SQLite's automatic view-reference-rewriting on RENAME
+        # (the same mechanism that keeps tasks_new's self-referencing FK
+        # correct after its own rename, see tasks_db._add_task_domain_
+        # constraints) trips over a view whose underlying table is
+        # mid-rebuild rather than merely renamed, so the view is dropped
+        # and recreated verbatim around the rebuild instead of relying on
+        # that rewrite here. IF EXISTS: every real database has it by this
+        # point (init_schema() always runs csv_schema.sql's
+        # CREATE VIEW IF NOT EXISTS before any migration), but this
+        # function is also called directly against a hand-built fixture in
+        # tests that only stage the tables one specific migration cares
+        # about.
+        conn.execute('DROP VIEW IF EXISTS transactions_effective')
+
+        conn.execute('''
+            CREATE TABLE transactions_new (
+              id            TEXT PRIMARY KEY,
+              account_id    TEXT NOT NULL REFERENCES accounts(id),
+              date          TEXT NOT NULL
+                CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+              description   TEXT NOT NULL,
+              amount        REAL NOT NULL,
+              activity_type TEXT NOT NULL,
+              category      TEXT,
+              status        TEXT,
+              btc_quantity  REAL,
+              source_file   TEXT NOT NULL,
+              imported_at   TEXT NOT NULL
+                CHECK (imported_at GLOB
+                       '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+            )
+        ''')
+        conn.execute('''
+            INSERT INTO transactions_new (
+              id, account_id, date, description, amount, activity_type, category, status,
+              btc_quantity, source_file, imported_at
+            )
+            SELECT id, account_id, date, description, amount, activity_type, category, status,
+                   btc_quantity, source_file, imported_at
+            FROM transactions
+        ''')
+        conn.execute('DROP TABLE transactions')
+        conn.execute('ALTER TABLE transactions_new RENAME TO transactions')
+        conn.execute('CREATE INDEX idx_transactions_account_date ON transactions(account_id, date)')
+        conn.execute('CREATE INDEX idx_transactions_category ON transactions(category)')
+
+        conn.execute('''
+            CREATE VIEW transactions_effective AS
+            SELECT
+              t.*,
+              COALESCE(tco.category, mco.category, t.category) AS effective_category
+            FROM transactions t
+            LEFT JOIN transaction_category_overrides tco ON tco.transaction_id = t.id
+            LEFT JOIN merchant_category_overrides mco ON mco.description = t.description
+        ''')
+
+        violations = conn.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            conn.execute('ROLLBACK')
+            raise RuntimeError('foreign key violations after transactions rebuild: %r' % (violations,))
+
+        conn.execute('COMMIT')
+    finally:
+        conn.execute('PRAGMA foreign_keys = ON')
+
+
 def ensure_database(path=None):
     """Create the database and its schema if they don't exist yet. Called
     once at server startup, same pattern as tasks_db.ensure_database()."""
@@ -390,7 +493,23 @@ def replace_transactions_in_range(conn, account_id, date_start, date_end, rows):
     is what makes re-importing an overlapping or identical export
     idempotent instead of relying on fragile per-row matching (same-day
     duplicate amounts are common in the credit card export, e.g. two
-    separate McDonald's charges on one day)."""
+    separate McDonald's charges on one day).
+
+    date_start/date_end are validated (shape only, see dates.is_iso_date)
+    before the DELETE runs: both are typically `min(dates)`/`max(dates)`
+    over the rows just parsed, and BETWEEN compares them lexically against
+    the date column - a malformed value here (a parser regression, a stray
+    non-ISO date slipping through) wouldn't just fail to match, it could
+    silently delete a wrong, wildly different-shaped range of existing
+    rows before the also-malformed new rows are inserted in their place.
+    Refusing outright is safer than guessing at what range was meant.
+    """
+    if not dates.is_iso_date(date_start) or not dates.is_iso_date(date_end):
+        raise ValueError(
+            f'refusing to range-replace transactions for {account_id!r}: date_start={date_start!r}, '
+            f'date_end={date_end!r} must both be YYYY-MM-DD dates'
+        )
+
     conn.execute(
         'DELETE FROM transactions WHERE account_id = ? AND date BETWEEN ? AND ?',
         (account_id, date_start, date_end),

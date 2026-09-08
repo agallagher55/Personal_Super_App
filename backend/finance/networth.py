@@ -11,8 +11,8 @@ for free (ARCHITECTURE.md C2/C5c).
 
 import json
 import os
-from datetime import datetime, timezone
 
+import dates
 import db as finance_db
 
 # Which side of net worth a kind counts on - deliberately Python, not a
@@ -55,10 +55,6 @@ def net_worth_sign(kind):
     raise UnknownAccountKindError(f'Unknown account kind: {kind!r}')
 
 
-def _now_iso():
-    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-
-
 def record_balance(conn, account_id, label, institution, kind, as_of_date, balance_cad,
                     source='manual', interest_rate=None, credit_limit=None, batch_kind='manual_balance'):
     """Upserts the account, records one import_batches row for the audit
@@ -90,7 +86,7 @@ def record_balance(conn, account_id, label, institution, kind, as_of_date, balan
     credit_limit = finance_db.round_cad(credit_limit)
     interest_rate = None if interest_rate is None else round(interest_rate, finance_db.ROUND_CAD_DECIMALS)
 
-    now = _now_iso()
+    now = dates.now_iso()
     finance_db.upsert_account(conn, account_id, label, institution, kind)
     batch_id = finance_db.create_import_batch(conn, kind=batch_kind, imported_at=now)
     finance_db.insert_balance_snapshot(conn, account_id, as_of_date, balance_cad, source, batch_id, now)
@@ -193,7 +189,7 @@ def seed_from_sample_json(conn, path=None, as_of_date=None, sample=None):
         )
 
     data = sample if sample is not None else _read_sample_json(path)
-    as_of_date = as_of_date or datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    as_of_date = as_of_date or dates.today_iso()
 
     batch_ids = {}
     with conn:

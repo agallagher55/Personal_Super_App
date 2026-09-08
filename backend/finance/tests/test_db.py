@@ -513,6 +513,12 @@ class TestCadOnlyCurrencyConstraintMigration(unittest.TestCase):
               id TEXT PRIMARY KEY, label TEXT NOT NULL, institution TEXT, kind TEXT NOT NULL,
               currency TEXT NOT NULL DEFAULT 'CAD', closed_at TEXT
             );
+            CREATE TABLE transactions (
+              id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
+              date TEXT NOT NULL, description TEXT NOT NULL, amount REAL NOT NULL,
+              activity_type TEXT NOT NULL, category TEXT, status TEXT, btc_quantity REAL,
+              source_file TEXT NOT NULL, imported_at TEXT NOT NULL
+            );
         ''')
         self.conn.execute(
             "INSERT INTO accounts (id, label, institution, kind) VALUES ('acc1', 'Chequing', 'TD', 'chequing')"
@@ -554,6 +560,181 @@ class TestCadOnlyCurrencyConstraintMigration(unittest.TestCase):
 
         self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], 4)
         self.assertEqual(finance_db.get_account(self.conn, 'acc1')['currency'], 'USD')
+
+
+class TestReplaceTransactionsInRangeValidatesDates(unittest.TestCase):
+    """Issue: canonical date/timestamp validation. date_start/date_end are
+    typically min(dates)/max(dates) over freshly parsed rows and drive a
+    DELETE...BETWEEN - a malformed value here must be refused outright
+    rather than silently deleting an unintended range."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        finance_db.init_schema(self.conn)
+        finance_db.upsert_account(self.conn, 'acc1', 'Chequing', 'TD', 'chequing')
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def a_row(self):
+        return {
+            'id': 'tx1', 'account_id': 'acc1', 'date': '2026-09-01', 'description': 'Coffee',
+            'amount': -5.0, 'activity_type': 'Purchase', 'category': None, 'status': None,
+            'btc_quantity': None, 'source_file': 'v1.csv', 'imported_at': '2026-09-06T00:00:00Z',
+        }
+
+    def test_accepts_well_formed_dates(self):
+        finance_db.replace_transactions_in_range(self.conn, 'acc1', '2026-09-01', '2026-09-01', [self.a_row()])
+        self.assertTrue(finance_db.transaction_exists(self.conn, 'tx1'))
+
+    def test_rejects_a_malformed_date_start(self):
+        with self.assertRaises(ValueError):
+            finance_db.replace_transactions_in_range(self.conn, 'acc1', '09/01/2026', '2026-09-01', [self.a_row()])
+
+    def test_rejects_a_malformed_date_end(self):
+        with self.assertRaises(ValueError):
+            finance_db.replace_transactions_in_range(self.conn, 'acc1', '2026-09-01', 'not-a-date', [self.a_row()])
+
+    def test_a_rejected_call_does_not_touch_existing_rows(self):
+        finance_db.replace_transactions_in_range(self.conn, 'acc1', '2026-09-01', '2026-09-01', [self.a_row()])
+        with self.assertRaises(ValueError):
+            finance_db.replace_transactions_in_range(self.conn, 'acc1', 'garbage', 'garbage', [])
+        self.assertTrue(finance_db.transaction_exists(self.conn, 'tx1'))
+
+
+class TestTransactionDateConstraints(unittest.TestCase):
+    """Issue: canonical date/timestamp validation. A fresh database
+    rejects a malformed transactions.date/imported_at directly."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        finance_db.init_schema(self.conn)
+        finance_db.upsert_account(self.conn, 'acc1', 'Chequing', 'TD', 'chequing')
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_rejects_a_malformed_date(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                '''INSERT INTO transactions (id, account_id, date, description, amount, activity_type,
+                                              source_file, imported_at)
+                   VALUES ('tx1', 'acc1', '09/01/2026', 'Coffee', -5.0, 'Purchase', 'v1.csv',
+                           '2026-09-06T00:00:00Z')'''
+            )
+
+    def test_rejects_a_malformed_imported_at(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                '''INSERT INTO transactions (id, account_id, date, description, amount, activity_type,
+                                              source_file, imported_at)
+                   VALUES ('tx1', 'acc1', '2026-09-01', 'Coffee', -5.0, 'Purchase', 'v1.csv',
+                           '2026-09-06 00:00:00')'''
+            )
+
+
+class TestTransactionDateConstraintsMigration(unittest.TestCase):
+    """Migration 6 (db._add_transaction_date_constraints): rebuilds
+    transactions with the date/imported_at CHECK constraints, staged here
+    as the unconstrained shape every finance.db had before this migration
+    - including transactions_effective and the override tables it joins,
+    so the drop-and-recreate-the-view step has something real to survive."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        self.conn.executescript('''
+            CREATE TABLE accounts (
+              id TEXT PRIMARY KEY, label TEXT NOT NULL, institution TEXT, kind TEXT NOT NULL,
+              currency TEXT NOT NULL DEFAULT 'CAD', closed_at TEXT
+            );
+            CREATE TABLE transactions (
+              id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
+              date TEXT NOT NULL, description TEXT NOT NULL, amount REAL NOT NULL,
+              activity_type TEXT NOT NULL, category TEXT, status TEXT, btc_quantity REAL,
+              source_file TEXT NOT NULL, imported_at TEXT NOT NULL
+            );
+            CREATE TABLE transaction_category_overrides (
+              transaction_id TEXT PRIMARY KEY, category TEXT NOT NULL, updated_at TEXT NOT NULL
+            );
+            CREATE TABLE merchant_category_overrides (
+              description TEXT PRIMARY KEY, category TEXT NOT NULL, updated_at TEXT NOT NULL
+            );
+            CREATE VIEW transactions_effective AS
+            SELECT t.*, COALESCE(tco.category, mco.category, t.category) AS effective_category
+            FROM transactions t
+            LEFT JOIN transaction_category_overrides tco ON tco.transaction_id = t.id
+            LEFT JOIN merchant_category_overrides mco ON mco.description = t.description;
+        ''')
+        self.conn.execute(
+            "INSERT INTO accounts (id, label, institution, kind) VALUES ('acc1', 'CC', NULL, 'credit_card')"
+        )
+        self.conn.execute(
+            '''INSERT INTO transactions (id, account_id, date, description, amount, activity_type,
+                                          source_file, imported_at)
+               VALUES ('tx1', 'acc1', '2026-09-01', 'Coffee', -5.0, 'Purchase', 'v1.csv',
+                       '2026-09-06T00:00:00Z')'''
+        )
+        self.conn.execute("INSERT INTO transaction_category_overrides VALUES ('tx1', 'Drinks', '2026-09-06T00:00:00Z')")
+        self.conn.execute('PRAGMA user_version = 5')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_adds_the_date_check_constraints(self):
+        finance_db.migrate(self.conn)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                '''INSERT INTO transactions (id, account_id, date, description, amount, activity_type,
+                                              source_file, imported_at)
+                   VALUES ('bad', 'acc1', 'not-a-date', 'x', -1.0, 'Purchase', 'v1.csv',
+                           '2026-09-06T00:00:00Z')'''
+            )
+
+    def test_preserves_the_existing_transaction(self):
+        finance_db.migrate(self.conn)
+        self.assertTrue(finance_db.transaction_exists(self.conn, 'tx1'))
+
+    def test_the_view_still_works_and_keeps_the_override(self):
+        finance_db.migrate(self.conn)
+        row = self.conn.execute(
+            "SELECT effective_category FROM transactions_effective WHERE id = 'tx1'"
+        ).fetchone()
+        self.assertEqual(row['effective_category'], 'Drinks')
+
+    def test_indexes_survive_the_rebuild(self):
+        finance_db.migrate(self.conn)
+        names = {row['name'] for row in self.conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
+        self.assertTrue({'idx_transactions_account_date', 'idx_transactions_category'} <= names)
+
+    def test_foreign_keys_are_intact_after_the_rebuild(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA foreign_key_check').fetchall(), [])
+
+    def test_is_idempotent(self):
+        finance_db.migrate(self.conn)
+        finance_db.migrate(self.conn)
+        self.assertTrue(finance_db.transaction_exists(self.conn, 'tx1'))
+
+    def test_records_the_schema_version(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
+
+    def test_refuses_to_migrate_an_existing_malformed_date(self):
+        self.conn.execute("UPDATE transactions SET date = '09/01/2026' WHERE id = 'tx1'")
+        self.conn.commit()
+
+        with self.assertRaises(RuntimeError):
+            finance_db.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], 5)
+        self.assertTrue(finance_db.transaction_exists(self.conn, 'tx1'))
 
 
 if __name__ == '__main__':

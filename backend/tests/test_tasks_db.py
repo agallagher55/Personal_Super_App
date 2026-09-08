@@ -295,17 +295,23 @@ class TestTaskDomainConstraintsMigration(unittest.TestCase):
               id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
               position INTEGER NOT NULL, text TEXT NOT NULL, flag INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE scratchpad (
+              id INTEGER PRIMARY KEY CHECK (id = 1), text TEXT NOT NULL DEFAULT '',
+              modified TEXT NOT NULL DEFAULT ''
+            );
         ''')
         self.conn.execute("INSERT INTO sections VALUES ('s1', 0, 'Sec', 's1', '')")
         self.conn.execute(
             '''INSERT INTO tasks (id, section_id, position, "desc", status, priority, work_type,
                                    env_dev, created, modified)
-               VALUES ('parent', 's1', 0, 'Parent', 'bogus-status', 'medium', '', 0, 'x', 'x')'''
+               VALUES ('parent', 's1', 0, 'Parent', 'bogus-status', 'medium', '', 0,
+                       '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')'''
         )
         self.conn.execute(
             '''INSERT INTO tasks (id, section_id, position, "desc", status, priority, parent_id,
                                    env_qa, created, modified)
-               VALUES ('child', 's1', 1, 'Child', 'done', 'super-high', 'parent', 5, 'x', 'x')'''
+               VALUES ('child', 's1', 1, 'Child', 'done', 'super-high', 'parent', 5,
+                       '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')'''
         )
         self.conn.execute(
             "INSERT INTO tags (id, task_id, position, text, flag) VALUES ('g1', 'child', 0, 'x', 7)"
@@ -392,6 +398,154 @@ class TestTaskDomainConstraintsMigration(unittest.TestCase):
         # The original (unconstrained) tasks table must still be there,
         # untouched by the rolled-back rebuild.
         self.assertIsNotNone(tasks_db.find_task(self.conn, 'parent'))
+
+
+class TestDateFormatConstraints(DatabaseTestCase):
+    """Issue: canonical date/timestamp validation. A fresh database
+    rejects a malformed due_date/created/modified/completed directly -
+    shape-only (GLOB), not a real calendar check, see tasks_schema.sql's
+    comment for why."""
+
+    def setUp(self):
+        super().setUp()
+        self.given_section()
+
+    def test_accepts_an_empty_due_date(self):
+        tasks_db.insert_task(self.conn, a_task(due_date=''))
+
+    def test_accepts_a_well_formed_due_date(self):
+        tasks_db.insert_task(self.conn, a_task(due_date='2026-09-10'))
+
+    def test_rejects_a_malformed_due_date(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            tasks_db.insert_task(self.conn, a_task(due_date='next week'))
+
+    def test_rejects_a_timestamp_in_due_date(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            tasks_db.insert_task(self.conn, a_task(due_date='2026-09-10T00:00:00Z'))
+
+    def test_rejects_a_malformed_created(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            tasks_db.insert_task(self.conn, a_task(created='2026-09-01'))
+
+    def test_rejects_a_malformed_completed(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            tasks_db.insert_task(self.conn, a_task(status='done', completed='yesterday'))
+
+    def test_accepts_an_empty_completed(self):
+        tasks_db.insert_task(self.conn, a_task(completed=''))
+
+    def test_rejects_a_malformed_scratchpad_modified(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute("INSERT INTO scratchpad (id, text, modified) VALUES (1, 'x', 'whenever')")
+
+
+class TestDateFormatConstraintsMigration(unittest.TestCase):
+    """Migration 3 (tasks_db._add_date_format_constraints): rebuilds
+    tasks and scratchpad with the date/timestamp CHECK constraints,
+    staged here as the shape every tasks.db had before this migration."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = tasks_db.connect(os.path.join(self.tmp_dir.name, 'tasks.db'))
+        # The pre-migration-3 shape: migration 2's enum/boolean constraints
+        # already in place (that migration isn't this one's concern), but
+        # no date/timestamp constraints yet.
+        self.conn.executescript('''
+            CREATE TABLE sections (
+              id TEXT PRIMARY KEY, position INTEGER NOT NULL, label TEXT NOT NULL,
+              slug TEXT NOT NULL UNIQUE, note TEXT NOT NULL DEFAULT ''
+            );
+            CREATE TABLE tasks (
+              id TEXT PRIMARY KEY, section_id TEXT NOT NULL REFERENCES sections(id),
+              position INTEGER NOT NULL, "desc" TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
+              notes TEXT NOT NULL DEFAULT '',
+              status TEXT NOT NULL DEFAULT 'open'
+                CHECK (status IN ('open', 'in-progress', 'pending', 'done', 'cancelled')),
+              done INTEGER GENERATED ALWAYS AS (status = 'done') VIRTUAL,
+              priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+              ticket_number TEXT NOT NULL DEFAULT '', servicenow_sys_id TEXT,
+              assignment_group TEXT NOT NULL DEFAULT '', requested_by TEXT NOT NULL DEFAULT '',
+              due_date TEXT NOT NULL DEFAULT '', time_estimate TEXT NOT NULL DEFAULT '',
+              related_files TEXT NOT NULL DEFAULT '',
+              parent_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+              work_type TEXT NOT NULL DEFAULT '' CHECK (work_type IN ('', 'new-feature', 'schema-change')),
+              env_dev INTEGER NOT NULL DEFAULT 0 CHECK (env_dev IN (0, 1)),
+              env_qa INTEGER NOT NULL DEFAULT 0 CHECK (env_qa IN (0, 1)),
+              env_prod INTEGER NOT NULL DEFAULT 0 CHECK (env_prod IN (0, 1)),
+              cmdb_updated INTEGER NOT NULL DEFAULT 0 CHECK (cmdb_updated IN (0, 1)),
+              created TEXT NOT NULL, modified TEXT NOT NULL, completed TEXT NOT NULL DEFAULT ''
+            );
+            CREATE TABLE tags (
+              id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+              position INTEGER NOT NULL, text TEXT NOT NULL, flag INTEGER NOT NULL DEFAULT 0 CHECK (flag IN (0, 1))
+            );
+            CREATE TABLE scratchpad (
+              id INTEGER PRIMARY KEY CHECK (id = 1), text TEXT NOT NULL DEFAULT '',
+              modified TEXT NOT NULL DEFAULT ''
+            );
+        ''')
+        self.conn.execute("INSERT INTO sections VALUES ('s1', 0, 'Sec', 's1', '')")
+        self.conn.execute(
+            '''INSERT INTO tasks (id, section_id, position, "desc", due_date, created, modified)
+               VALUES ('parent', 's1', 0, 'Parent', '2026-09-10', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')'''
+        )
+        self.conn.execute(
+            '''INSERT INTO tasks (id, section_id, position, "desc", parent_id, created, modified)
+               VALUES ('child', 's1', 1, 'Child', 'parent', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')'''
+        )
+        self.conn.execute("INSERT INTO tags (id, task_id, position, text, flag) VALUES ('g1', 'child', 0, 'x', 0)")
+        self.conn.execute("INSERT INTO scratchpad (id, text, modified) VALUES (1, 'hi', '2026-09-01T00:00:00Z')")
+        self.conn.execute('PRAGMA user_version = 2')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_constraints_apply_once_the_rebuild_lands(self):
+        tasks_db.migrate(self.conn)
+        with self.assertRaises(sqlite3.IntegrityError):
+            tasks_db.insert_task(self.conn, a_task('bad', position=5, due_date='not-a-date'))
+
+    def test_preserves_the_parent_child_relationship(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual(tasks_db.find_task(self.conn, 'child')['parent_id'], 'parent')
+
+    def test_preserves_the_due_date(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual(tasks_db.find_task(self.conn, 'parent')['due_date'], '2026-09-10')
+
+    def test_preserves_the_tag(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual([t['text'] for t in tasks_db.tags_for_task(self.conn, 'child')], ['x'])
+
+    def test_preserves_the_scratchpad(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual(tasks_db.load_scratchpad(self.conn), 'hi')
+
+    def test_foreign_keys_are_intact_after_the_rebuild(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA foreign_key_check').fetchall(), [])
+
+    def test_is_idempotent(self):
+        tasks_db.migrate(self.conn)
+        tasks_db.migrate(self.conn)
+        self.assertEqual(tasks_db.find_task(self.conn, 'child')['parent_id'], 'parent')
+
+    def test_records_the_schema_version(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], tasks_db.SCHEMA_VERSION)
+
+    def test_refuses_to_migrate_an_existing_malformed_due_date(self):
+        self.conn.execute("UPDATE tasks SET due_date = 'next week' WHERE id = 'parent'")
+        self.conn.commit()
+
+        with self.assertRaises(RuntimeError):
+            tasks_db.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], 2)
+        self.assertEqual(tasks_db.find_task(self.conn, 'parent')['due_date'], 'next week')
 
 
 class TestGeneratedDoneColumn(DatabaseTestCase):

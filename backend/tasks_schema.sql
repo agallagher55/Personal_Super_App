@@ -30,6 +30,19 @@
 -- e.g. from data that predates that fix, still render in a fixed,
 -- deterministic order rather than whatever SQLite's scan happens to
 -- return).
+--
+-- Dates are 'YYYY-MM-DD', timestamps 'YYYY-MM-DDTHH:MM:SSZ' (an instant,
+-- always UTC) - server.py's now_iso() is the single place "right now"
+-- gets formatted into the latter. due_date/completed use '' (their
+-- DEFAULT) for "not set," matching every other optional text column
+-- here, rather than NULL; created/modified are always populated. The
+-- CHECK constraints below are shape-only (GLOB, not a real calendar
+-- check - deliberately: rejecting a value that isn't even shaped like a
+-- date is cheap, but a real calendar library buys little here). due_date
+-- specifically is safe to enforce this way because both places that set
+-- it are `<input type="date">` fields (html/tasks/task-detail.html,
+-- static/js/script.js), which the browser itself only ever hands back as
+-- '' or a well-formed YYYY-MM-DD - never free text.
 
 CREATE TABLE IF NOT EXISTS sections (
   id       TEXT PRIMARY KEY,
@@ -58,7 +71,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   servicenow_sys_id TEXT,                           -- formalizes the field service_now/sync.py already writes
   assignment_group  TEXT NOT NULL DEFAULT '',
   requested_by      TEXT NOT NULL DEFAULT '',
-  due_date          TEXT NOT NULL DEFAULT '',
+  due_date          TEXT NOT NULL DEFAULT ''
+    CHECK (due_date = '' OR due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
   time_estimate     TEXT NOT NULL DEFAULT '',
   related_files     TEXT NOT NULL DEFAULT '',
   -- ON DELETE SET NULL, not the default RESTRICT: deleting a task that has
@@ -74,9 +88,13 @@ CREATE TABLE IF NOT EXISTS tasks (
   env_qa            INTEGER NOT NULL DEFAULT 0 CHECK (env_qa IN (0, 1)),
   env_prod          INTEGER NOT NULL DEFAULT 0 CHECK (env_prod IN (0, 1)),
   cmdb_updated      INTEGER NOT NULL DEFAULT 0 CHECK (cmdb_updated IN (0, 1)),
-  created           TEXT NOT NULL,
-  modified          TEXT NOT NULL,
+  created           TEXT NOT NULL
+    CHECK (created GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+  modified          TEXT NOT NULL
+    CHECK (modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
   completed         TEXT NOT NULL DEFAULT ''
+    CHECK (completed = '' OR
+           completed GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_section ON tasks(section_id);
@@ -100,4 +118,6 @@ CREATE TABLE IF NOT EXISTS scratchpad (
   id       INTEGER PRIMARY KEY CHECK (id = 1),
   text     TEXT NOT NULL DEFAULT '',
   modified TEXT NOT NULL DEFAULT ''
+    CHECK (modified = '' OR
+           modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );

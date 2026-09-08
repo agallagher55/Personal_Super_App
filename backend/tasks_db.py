@@ -65,7 +65,7 @@ MIN_SQLITE_VERSION = (3, 31, 0)
 # in test_tasks_db.py that stages a database at the previous version (see
 # TestSchemaMigrations below) and asserts the upgrade preserves data and
 # is idempotent.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Order matters: the dicts built from these are serialized straight into
 # GET /tasks.json, and keeping the old JSON files' key order means the
@@ -136,6 +136,9 @@ def migrate(conn):
 
     if version < 2:
         _add_task_domain_constraints(conn)
+
+    if version < 3:
+        _add_date_format_constraints(conn)
 
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is our
@@ -273,6 +276,117 @@ def _add_task_domain_constraints(conn):
         if violations:
             conn.execute('ROLLBACK')
             raise RuntimeError('foreign key violations after tasks/tags rebuild: %r' % (violations,))
+
+        conn.execute('COMMIT')
+    finally:
+        conn.execute('PRAGMA foreign_keys = ON')
+
+
+_DATE_GLOB = "GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"
+_TIMESTAMP_GLOB = "GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'"
+
+
+def _add_date_format_constraints(conn):
+    """Migration 3: adds shape-only CHECK constraints (see tasks_schema.sql's
+    date/timestamp comment) for tasks.due_date/created/modified/completed
+    and scratchpad.modified. Same table-rebuild procedure as migration 2;
+    no normalization pass, for the same reason - a malformed date/
+    timestamp can't be safely reinterpreted without knowing what it was
+    supposed to be, so this refuses rather than guessing.
+    """
+    bad = conn.execute(
+        f"SELECT DISTINCT due_date AS value, 'due_date' AS column_name FROM tasks "
+        f"WHERE due_date != '' AND due_date NOT {_DATE_GLOB} "
+        f"UNION SELECT DISTINCT created, 'created' FROM tasks WHERE created NOT {_TIMESTAMP_GLOB} "
+        f"UNION SELECT DISTINCT modified, 'modified' FROM tasks WHERE modified NOT {_TIMESTAMP_GLOB} "
+        f"UNION SELECT DISTINCT completed, 'completed' FROM tasks "
+        f"WHERE completed != '' AND completed NOT {_TIMESTAMP_GLOB} "
+        f"UNION SELECT DISTINCT modified, 'scratchpad.modified' FROM scratchpad "
+        f"WHERE modified != '' AND modified NOT {_TIMESTAMP_GLOB}"
+    ).fetchall()
+    if bad:
+        raise RuntimeError(
+            'refusing to add the date/timestamp format constraints: malformed value(s) already stored '
+            '- %s - fix or remove those rows by hand first, since this migration cannot safely guess '
+            'what a malformed date or timestamp was supposed to be.'
+            % ', '.join('%s=%r' % (row['column_name'], row['value']) for row in bad)
+        )
+
+    conn.execute('PRAGMA foreign_keys = OFF')
+    try:
+        conn.execute('BEGIN')
+
+        conn.execute('''
+            CREATE TABLE tasks_new (
+              id                TEXT PRIMARY KEY,
+              section_id        TEXT NOT NULL REFERENCES sections(id),
+              position          INTEGER NOT NULL,
+              "desc"            TEXT NOT NULL,
+              note              TEXT NOT NULL DEFAULT '',
+              notes             TEXT NOT NULL DEFAULT '',
+              status            TEXT NOT NULL DEFAULT 'open'
+                                  CHECK (status IN ('open', 'in-progress', 'pending', 'done', 'cancelled')),
+              done              INTEGER GENERATED ALWAYS AS (status = 'done') VIRTUAL,
+              priority          TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+              ticket_number     TEXT NOT NULL DEFAULT '',
+              servicenow_sys_id TEXT,
+              assignment_group  TEXT NOT NULL DEFAULT '',
+              requested_by      TEXT NOT NULL DEFAULT '',
+              due_date          TEXT NOT NULL DEFAULT ''
+                CHECK (due_date = '' OR due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+              time_estimate     TEXT NOT NULL DEFAULT '',
+              related_files     TEXT NOT NULL DEFAULT '',
+              parent_id         TEXT REFERENCES tasks_new(id) ON DELETE SET NULL,
+              work_type         TEXT NOT NULL DEFAULT '' CHECK (work_type IN ('', 'new-feature', 'schema-change')),
+              env_dev           INTEGER NOT NULL DEFAULT 0 CHECK (env_dev IN (0, 1)),
+              env_qa            INTEGER NOT NULL DEFAULT 0 CHECK (env_qa IN (0, 1)),
+              env_prod          INTEGER NOT NULL DEFAULT 0 CHECK (env_prod IN (0, 1)),
+              cmdb_updated      INTEGER NOT NULL DEFAULT 0 CHECK (cmdb_updated IN (0, 1)),
+              created           TEXT NOT NULL
+                CHECK (created GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+              modified          TEXT NOT NULL
+                CHECK (modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+              completed         TEXT NOT NULL DEFAULT ''
+                CHECK (completed = '' OR
+                       completed GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+            )
+        ''')
+        conn.execute('''
+            INSERT INTO tasks_new (
+              id, section_id, position, "desc", note, notes, status, priority, ticket_number,
+              servicenow_sys_id, assignment_group, requested_by, due_date, time_estimate,
+              related_files, parent_id, work_type, env_dev, env_qa, env_prod, cmdb_updated,
+              created, modified, completed
+            )
+            SELECT
+              id, section_id, position, "desc", note, notes, status, priority, ticket_number,
+              servicenow_sys_id, assignment_group, requested_by, due_date, time_estimate,
+              related_files, parent_id, work_type, env_dev, env_qa, env_prod, cmdb_updated,
+              created, modified, completed
+            FROM tasks
+        ''')
+        conn.execute('DROP TABLE tasks')
+        conn.execute('ALTER TABLE tasks_new RENAME TO tasks')
+        conn.execute('CREATE INDEX idx_tasks_section ON tasks(section_id)')
+        conn.execute('CREATE INDEX idx_tasks_parent ON tasks(parent_id)')
+
+        conn.execute('''
+            CREATE TABLE scratchpad_new (
+              id       INTEGER PRIMARY KEY CHECK (id = 1),
+              text     TEXT NOT NULL DEFAULT '',
+              modified TEXT NOT NULL DEFAULT ''
+                CHECK (modified = '' OR
+                       modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+            )
+        ''')
+        conn.execute('INSERT INTO scratchpad_new (id, text, modified) SELECT id, text, modified FROM scratchpad')
+        conn.execute('DROP TABLE scratchpad')
+        conn.execute('ALTER TABLE scratchpad_new RENAME TO scratchpad')
+
+        violations = conn.execute('PRAGMA foreign_key_check').fetchall()
+        if violations:
+            conn.execute('ROLLBACK')
+            raise RuntimeError('foreign key violations after tasks/scratchpad rebuild: %r' % (violations,))
 
         conn.execute('COMMIT')
     finally:

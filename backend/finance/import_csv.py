@@ -13,6 +13,7 @@ import io
 import os
 from datetime import datetime, timezone
 
+import dates
 import db as finance_db
 import summary as finance_summary
 
@@ -190,21 +191,21 @@ def import_csv_text(conn, source_file, text):
     loads it into the transactions table. Returns a summary dict."""
     kind, account_id, account_label, account_kind, rows = parse_csv_text(text)
 
-    imported_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    imported_at = dates.now_iso()
     dated_rows = _assign_ids(account_id, rows, source_file, imported_at)
-    dates = [r['date'] for r in dated_rows]
+    row_dates = [r['date'] for r in dated_rows]
 
     institution = DEFAULT_CREDIT_CARD_INSTITUTION if kind == 'credit_card' else None
     with conn:
         finance_db.upsert_account(conn, account_id, account_label, institution, account_kind)
-        finance_db.replace_transactions_in_range(conn, account_id, min(dates), max(dates), dated_rows)
+        finance_db.replace_transactions_in_range(conn, account_id, min(row_dates), max(row_dates), dated_rows)
 
     return {
         'kind': kind,
         'account_id': account_id,
         'rows_imported': len(dated_rows),
-        'date_start': min(dates),
-        'date_end': max(dates),
+        'date_start': min(row_dates),
+        'date_end': max(row_dates),
     }
 
 
