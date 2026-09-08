@@ -43,6 +43,8 @@ gets a 302 to `/fitness/login` (HTML pages) or a 401 (API routes). See
 | `/finance/spending-summary.json` | JSON | — | `?window=month\|30d\|90d\|all&category=<name>` (window defaults to `month`; category narrows Top Merchants only). Category totals, a 12-month trend, and top merchants, computed live from `data/finance/finance.db` (`backend/finance/summary.py`). |
 | `/finance/cash-flow.json` | JSON | — | `?window=...` (same options as above). Income/expense/net stat tiles plus a 12-month income-vs-expense trend. |
 | `/finance/cash-flow-transactions.json` | JSON | — | `?month=YYYY-MM&kind=income\|expense`. The individual transactions behind one bar of the Cash Flow chart, each annotated `excluded`/`reason` rather than filtered out; income rows also carry a friendly `type` (Deposits/Cashback/Giveaways/Interest) and the response includes a `byType` breakdown. 400 if `month` is missing. |
+| `/finance/spend-month-transactions.json` | JSON | — | `?month=YYYY-MM`. The transactions behind one bar of the Spending chart, plus their total. 400 if `month` is missing. |
+| `/finance/shakepay-btc-by-month.json` | JSON | — | Monthly totals of BTC accumulated through Shakepay round-up purchases. |
 | `/finance/merchant-transactions.json` | JSON | — | `?merchant=<description>&window=...`. Individual transactions for one merchant/description, for the "Edit category" dialog's one-time-fix picker. 400 if `merchant` is missing. |
 | `/finance/last-imported.json` | JSON | — | `{"lastImportedAt": <ISO timestamp>\|null}` — the most recent CSV import time across every transaction, shown next to the "Import CSV Export" button. |
 | `/finance/api/prices` | JSON | — | Watchlist quotes, proxied server-side to avoid browser CORS issues (`backend/finance_prices.py`) — 6 of the 7 tickers come from Yahoo Finance's free keyless chart endpoint; the Canada 5Y yield comes from the Bank of Canada's Valet API instead, since Yahoo has no working symbol for it. Always 200; each ticker is fetched independently and comes back with `price`/`change_pct` as `null` if its own fetch failed, rather than failing the whole response. |
@@ -57,10 +59,10 @@ static file serving from the repo root (`/static/...`, etc.).
 
 | Route | Handler | Effect |
 |---|---|---|
-| `/tasks/new` | `handle_new_task` | Appends a row to `tasks.json` (`section_id` foreign key) and any tags to `tags.json`. Redirects `303` to `/tasks?added=1`. |
-| `/tasks/new-category` | `handle_new_category` | Appends a new (empty) row to `sections.json`, slugified from `label`. Redirects `303` to `/tasks/categories?added=1`. 400 if the name is empty or a category with that slug/id already exists. |
-| `/tasks/update` | `handle_update_tasks` | Bulk update by task id (desc, note, tags, notes, status, priority, ticket_number, assignment_group, requested_by, due_date, reorder). Writes `tasks.json` and, if tags changed, `tags.json`. Returns JSON. |
-| `/tasks/delete` | `handle_delete_task` | Removes a task from `tasks.json` and its tags from `tags.json`. Returns JSON. |
+| `/tasks/new` | `handle_new_task` | Inserts a row in the `tasks` table (`section_id` foreign key) and any tags in the same SQLite transaction. Redirects `303` to `/tasks?added=1`. |
+| `/tasks/new-category` | `handle_new_category` | Inserts a new empty row in `sections`, slugified from `label`. Redirects `303` to `/tasks/categories?added=1`. 400 if the name is empty or a category with that slug/id already exists. |
+| `/tasks/update` | `handle_update_tasks` | Bulk update by task id (desc, note, tags, notes, status, priority, ticket_number, assignment_group, requested_by, due_date, reorder) in `data/tasks.db`. Returns JSON. |
+| `/tasks/delete` | `handle_delete_task` | Deletes a task row; its tags are removed by the foreign-key cascade. Returns JSON. |
 | `/tasks/scratchpad` | `handle_update_scratchpad` | Overwrites the `scratchpad` table's single row with the request body's `text`. Returns JSON. |
 | `/fitness/auth/logout` | `handle_fitness_logout` | Clears the session cookie, 302 to `/fitness/login`. |
 | `/fitness/api/sync` | `fitness_api.trigger_sync(user_id)` | Pulls new data from the Google Health API into the signed-in visitor's own `data/fitness/users/<user_id>/health_data.json`. Synchronous; requires a session (401 otherwise); 409 if a sync for this visitor is already running. See `fitness/API-CONTRACT.md`. |
@@ -70,7 +72,7 @@ static file serving from the repo root (`/static/...`, etc.).
 | `/finance/cash-flow-exclusions` | `handle_set_cash_flow_exclusion` | `{transaction_id, excluded}` — marks (or unmarks) one transaction as not real income/expense for Cash Flow's totals, without affecting Spending. 404 if the transaction doesn't exist. |
 | `/finance/balance-entries` | `handle_record_balance_entry` | `{account_id, as_of_date, balance_cad, label?, institution?, kind?, interest_rate?, credit_limit?}` — the manual-entry mechanism for Cash/Bitcoin/Debt/Lines of Credit (none of which have a CSV or API), appending a dated balance snapshot rather than overwriting one. `label`/`kind` are required the first time an `account_id` is used; an existing account keeps its stored values when they're left out. See `finance/ARCHITECTURE.md` Part C8. |
 
-## Sections (current `data/sections.json`)
+## Seeded sections (current `data/sections.json` snapshot)
 
 Each section has an `id` (used by the `section` field on `/tasks/new`, the
 `section_id` foreign key on tasks, and in `tasks/update` payloads) and a
@@ -86,7 +88,7 @@ Each section has an `id` (used by the `section` field on `/tasks/new`, the
 
 New sections can be added via the `/tasks/new-category` form (from the
 "+ New Category" link on `/tasks/categories`), which slugifies the given name into
-both `id` and `slug`. They can still be added by hand by editing
-`data/sections.json` directly, as long as `id`/`slug` stay unique, since
-`/tasks/<slug>` and the `section-select` dropdown on `/tasks/new` both
-read sections from there directly.
+both `id` and `slug`. The table above describes the committed seed snapshot;
+the running app reads `data/tasks.db`, not this JSON file. For a one-off manual
+change, edit the database and then refresh the snapshot with
+`python3 backend/tasks_export.py` as described in `README.md`.

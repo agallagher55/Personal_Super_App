@@ -106,8 +106,9 @@ The data lives in `data/tasks.db`, a SQLite database. Day to day you edit
 it through the app: the status dropdowns, the Notes boxes, drag-and-drop
 reordering, **+ New task**, and **+ New category** all write to it.
 
-For a one-off change the UI can't make, use the `sqlite3` CLI (bundled with
-Python, so `python3 -c "import sqlite3"` proves you have it) or a GUI like
+For a one-off change the UI can't make, use the `sqlite3` CLI (a separate
+command-line program; Python bundles the `sqlite3` module, not necessarily the
+CLI) or a GUI like
 [DB Browser for SQLite](https://sqlitebrowser.org/):
 
 ```bash
@@ -216,7 +217,8 @@ than sorted. Nothing is lost, only reordered; after that, diffs are small.
 
 ## Behavior
 
-- Each task has a status dropdown (Open / In Progress / Done). Setting
+- Each task has a status dropdown (Open / In Progress / Pending / Done /
+  Cancelled). Setting
   a task to Done moves it out of its section and into the
   **Completed** panel on the right, grouped under its original section
   label. Setting it back to Open or In Progress there moves it back to
