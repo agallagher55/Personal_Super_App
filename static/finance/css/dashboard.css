@@ -78,6 +78,53 @@
   border-color: var(--status-red);
 }
 
+/* --- CSV import bar (finance/ARCHITECTURE.md Part A) --- */
+
+.fin-import-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.fin-import-button {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.fin-import-button:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
+.fin-import-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.fin-import-status {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.fin-import-status-error {
+  color: var(--status-red);
+}
+
+.fin-last-imported {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-left: auto;
+}
+
 /* --- Summary strip: net worth / assets / debt stat tiles --- */
 
 .fin-stat-row {
@@ -109,6 +156,10 @@
   font-weight: 600;
 }
 
+.fin-stat-value-negative {
+  color: var(--status-red);
+}
+
 @media (max-width: 640px) {
   .fin-stat-row {
     grid-template-columns: 1fr;
@@ -128,6 +179,318 @@
   margin-bottom: 8px;
 }
 
+.fin-spending-row {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* --- Spending block header (finance/ARCHITECTURE.md Part A5) --- */
+
+.fin-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 30px 0 12px;
+}
+
+.fin-block-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--ink);
+}
+
+.fin-spending-window {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.fin-bar-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Same reasoning as .fin-chart-wrap .fin-empty-note[hidden]: the explicit
+   `display: block` beats the browser's own `[hidden]` handling unless
+   restated here - without this, a "hidden" canvas stays present (just
+   invisible, since nothing's drawn on it) and keeps eating hover events
+   meant for the empty-state text on top of it. */
+.fin-bar-canvas[hidden] {
+  display: none;
+}
+
+.fin-empty-note {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin: 0;
+}
+
+.fin-chart-wrap .fin-empty-note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+}
+
+/* The explicit `display: flex` above would otherwise beat the browser's
+   default `[hidden] { display: none }` UA rule - author styles always
+   win over UA styles regardless of specificity, so `hidden` alone
+   wouldn't hide this element without restating it here. */
+.fin-chart-wrap .fin-empty-note[hidden] {
+  display: none;
+}
+
+.fin-merchants-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-bottom: 12px;
+}
+
+/* Same reasoning as .fin-chart-wrap .fin-empty-note[hidden] above: the
+   explicit `display: flex` beats the browser's own `[hidden]` handling
+   unless restated here. */
+.fin-merchants-filter[hidden] {
+  display: none;
+}
+
+.fin-filter-chip {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.fin-filter-clear {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.fin-filter-clear:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
+/* --- Editing categories (finance/ARCHITECTURE.md) --- */
+
+.fin-edit-category-btn {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 0 0 6px;
+  vertical-align: middle;
+}
+
+.fin-edit-category-btn:hover {
+  color: var(--ink);
+}
+
+.fin-category-dialog {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px 24px;
+  max-width: 480px;
+  width: calc(100% - 40px);
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+.fin-category-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.fin-category-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.fin-category-dialog-header h3 {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fin-category-dialog-close {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.fin-category-dialog-close:hover {
+  color: var(--ink);
+}
+
+.fin-category-dialog-section {
+  margin-bottom: 18px;
+}
+
+.fin-category-dialog-section-title {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+
+.fin-category-dialog-permanent-row,
+.fin-category-tx-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fin-category-tx-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.fin-category-tx-row {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.fin-category-tx-row:last-child {
+  border-bottom: none;
+}
+
+.fin-category-tx-date {
+  flex: 0 0 44px;
+  color: var(--ink-soft);
+}
+
+.fin-category-tx-amount {
+  flex: 0 0 64px;
+  text-align: right;
+}
+
+.fin-category-tx-description {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+/* Spend by Month's per-transaction dialog only (finance/README.md's
+   click-a-bar-to-see-its-transactions) - the source dot sits inline before
+   the description text here, same .fin-source-dot as Top Merchants. */
+.fin-category-tx-description .fin-source-dot {
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+.fin-category-tx-category {
+  flex: 0 0 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+/* --- Cash Flow exclusions (finance/ARCHITECTURE.md A5f) --- */
+
+.fin-cashflow-tx-row-excluded .fin-category-tx-date,
+.fin-cashflow-tx-row-excluded .fin-category-tx-description,
+.fin-cashflow-tx-row-excluded .fin-category-tx-amount {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.fin-category-dialog button.fin-cashflow-tx-toggle {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.fin-category-dialog-subtitle {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin: -8px 0 12px;
+}
+
+.fin-category-dialog input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.fin-category-dialog button[type="button"] {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fin-category-dialog button[type="button"]:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
+.fin-category-dialog-status {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin: 8px 0 0;
+}
+
+.fin-category-dialog-status-error {
+  color: var(--status-red);
+}
+
 .fin-overview-card {
   min-width: 0;
   border: 1px solid var(--line);
@@ -143,6 +506,38 @@
   text-transform: uppercase;
   color: var(--ink-soft);
   margin-bottom: 14px;
+}
+
+.fin-overview-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fin-overview-card-title-row .fin-overview-card-title {
+  margin-bottom: 0;
+}
+
+.fin-chart-legend {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.fin-chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.fin-chart-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
 }
 
 @media (max-width: 900px) {
@@ -218,6 +613,25 @@
   gap: 10px;
 }
 
+/* Spend by Month's colour-per-source legend (finance/README.md) sits
+   below a wide chart rather than beside a donut, so a compact row that
+   wraps reads better here than the default vertical list. */
+.fin-legend-horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 10px;
+  justify-content: center;
+}
+
+.fin-legend-horizontal .fin-legend-row {
+  flex: 0 0 auto;
+}
+
+.fin-legend-horizontal .fin-legend-label {
+  white-space: nowrap;
+}
+
 .fin-legend-row {
   display: flex;
   align-items: center;
@@ -241,6 +655,31 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink);
+}
+
+/* --- Click-to-filter (Spending's category -> Top Merchants drill-down,
+   finance/ARCHITECTURE.md) - scoped to the Spending donut/legend
+   specifically, not every donut/legend on the page, since only this one
+   is clickable. --- */
+
+#fin-spending-legend .fin-legend-row,
+#fin-spending-donut .donut-seg {
+  transition: opacity 0.15s ease;
+}
+
+.fin-legend-row-selected .fin-legend-label {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.fin-legend-row-selected .fin-legend-swatch {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.fin-legend-row-dimmed,
+.donut-seg-dimmed {
+  opacity: 0.4;
 }
 
 .fin-legend-value {
@@ -422,6 +861,25 @@
   font-size: 10.5px;
   color: var(--ink-soft);
   margin-top: 4px;
+}
+
+/* Which source (Shakepay, Wealthsimple, ...) a Top Merchants row or a
+   Spend by Month transaction came from - a small identity-color dot (same
+   --stock-N colors the chart itself stacks by, see spending.js's
+   currentSourceColors) plus the source's name, so it reads without a
+   hover, not just as a title-attribute tooltip. */
+.fin-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fin-source-dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
 }
 
 .fin-account-grid {

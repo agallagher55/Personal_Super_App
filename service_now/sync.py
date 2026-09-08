@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pull ServiceNow tasks into data/tasks.json.
+"""Pull ServiceNow tasks into data/tasks.db.
 
 Usage:
     python3 service_now/sync.py [--dry-run]
@@ -7,14 +7,16 @@ Usage:
 Requires service_now/.env (see .env.example) with instance + credentials.
 Fetches records from SERVICENOW_TABLE (default sc_task) assigned to you,
 maps them onto the app's task schema, and upserts them into the section
-named by SERVICENOW_SECTION_ID (matched against data/sections.json) —
-matching existing tasks in data/tasks.json by ServiceNow sys_id (falling
-back to ticket number) so re-running this doesn't create duplicates or
-clobber notes you've added locally.
+named by SERVICENOW_SECTION_ID — matching existing tasks by ServiceNow
+sys_id (falling back to ticket number) so re-running this doesn't create
+duplicates or clobber notes you've added locally.
+
+Storage moved from data/tasks.json to SQLite (see DATABASE-MIGRATION.md);
+this is the second writer besides backend/server.py, so it goes through the
+same backend/tasks_db.py helpers rather than touching the file itself.
 """
 
 import argparse
-import json
 import os
 import sys
 import uuid
@@ -26,8 +28,9 @@ from client import ServiceNowClient, ServiceNowError
 from config import load_config
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SECTIONS_FILE = os.path.join(BASE_DIR, 'data', 'sections.json')
-TASKS_FILE = os.path.join(BASE_DIR, 'data', 'tasks.json')
+sys.path.insert(0, os.path.join(BASE_DIR, 'backend'))
+
+import tasks_db  # noqa: E402 - needs the sys.path entry above
 
 STATE_TO_STATUS = {
     'open': 'open',
@@ -105,27 +108,14 @@ def map_record(record):
     }
 
 
-def load_sections():
-    with open(SECTIONS_FILE, 'r') as f:
-        return json.load(f)
-
-
-def load_tasks():
-    with open(TASKS_FILE, 'r') as f:
-        return json.load(f)
-
-
-def save_tasks(tasks):
-    with open(TASKS_FILE, 'w') as f:
-        json.dump(tasks, f, indent=2)
-        f.write('\n')
-
-
-def find_section(section_id):
-    for section in load_sections():
-        if section['id'] == section_id:
-            return section
-    raise SystemExit('No section with id=%s in data/sections.json' % section_id)
+def find_section(conn, section_id):
+    section = tasks_db.find_section(conn, section_id)
+    if section is None:
+        raise SystemExit(
+            'No section with id=%s in data/tasks.db. If the database has not been '
+            'created yet, run: python3 backend/tasks_db.py migrate' % section_id
+        )
+    return section
 
 
 def find_existing_task(tasks, section_id, mapped):
@@ -139,7 +129,11 @@ def find_existing_task(tasks, section_id, mapped):
     return None
 
 
-def upsert(tasks, section_id, mapped, dry_run):
+def upsert(tasks, section_id, mapped, dry_run, pending):
+    """Upsert one mapped record into the in-memory `tasks` list, recording
+    in `pending` which rows the caller then has to write. No 'done' key: it
+    is a generated column derived from status, so there is nothing here to
+    keep in sync by hand any more."""
     existing = find_existing_task(tasks, section_id, mapped)
     now = now_iso()
 
@@ -152,7 +146,6 @@ def upsert(tasks, section_id, mapped, dry_run):
             'desc': mapped['desc'],
             'note': mapped['note'],
             'notes': '',
-            'done': mapped['status'] == 'done',
             'status': mapped['status'],
             'priority': 'medium',
             'ticket_number': mapped['ticket_number'],
@@ -166,6 +159,7 @@ def upsert(tasks, section_id, mapped, dry_run):
         }
         if not dry_run:
             tasks.append(new_task)
+            pending['created'].append(new_task)
         return 'created'
 
     changed = False
@@ -176,12 +170,12 @@ def upsert(tasks, section_id, mapped, dry_run):
 
     if existing.get('status') != mapped['status']:
         existing['status'] = mapped['status']
-        existing['done'] = mapped['status'] == 'done'
         existing['completed'] = now if mapped['status'] == 'done' else ''
         changed = True
 
     if changed and not dry_run:
         existing['modified'] = now
+        pending['updated'].add(existing['id'])
 
     return 'updated' if changed else 'unchanged'
 
@@ -215,23 +209,39 @@ def main():
 
     print('Fetched %d record(s).' % len(records))
 
-    section = find_section(config.section_id)
-    tasks = load_tasks()
+    conn = tasks_db.connect()
 
-    counts = {'created': 0, 'updated': 0, 'unchanged': 0}
-    for record in records:
-        mapped = map_record(record)
-        outcome = upsert(tasks, section['id'], mapped, args.dry_run)
-        counts[outcome] += 1
-        print('  [%s] %s - %s' % (outcome, mapped['ticket_number'] or '(no number)', mapped['desc']))
+    try:
+        section = find_section(conn, config.section_id)
+        tasks = tasks_db.load_tasks(conn)
 
-    print('created=%d updated=%d unchanged=%d' % (counts['created'], counts['updated'], counts['unchanged']))
+        pending = {'created': [], 'updated': set()}
+        counts = {'created': 0, 'updated': 0, 'unchanged': 0}
+        for record in records:
+            mapped = map_record(record)
+            outcome = upsert(tasks, section['id'], mapped, args.dry_run, pending)
+            counts[outcome] += 1
+            print('  [%s] %s - %s' % (outcome, mapped['ticket_number'] or '(no number)', mapped['desc']))
 
-    if args.dry_run:
-        print('Dry run -- data/tasks.json was not modified.')
-    else:
-        save_tasks(tasks)
-        print('Saved to %s' % TASKS_FILE)
+        print('created=%d updated=%d unchanged=%d' % (counts['created'], counts['updated'], counts['unchanged']))
+
+        if args.dry_run:
+            print('Dry run -- data/tasks.db was not modified.')
+            return
+
+        # One transaction for the whole run: a partial sync can't leave the
+        # store half-updated the way two file writes could.
+        with conn:
+            for task in pending['created']:
+                tasks_db.insert_task(conn, task)
+
+            for task in tasks:
+                if task['id'] in pending['updated']:
+                    tasks_db.update_task(conn, task)
+
+        print('Saved to %s' % tasks_db.DB_PATH)
+    finally:
+        conn.close()
 
 
 if __name__ == '__main__':

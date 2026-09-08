@@ -40,7 +40,9 @@ function el(tag, className, html) {
 // Plaid's merchant_name/name/official_name/institution_name - strings that
 // originate outside the app. Escaping here now means that data source swap
 // doesn't need a matching audit of every template string.
-function escapeHtml(value) {
+// Exported for spending.js's merchant rows and category-edit dialog, which
+// build their own markup rather than going through renderRow/renderLegend.
+export function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -72,8 +74,9 @@ function buildSymbolColors(investmentAccounts) {
 
 // One row: label, dollar amount, and a bar showing what % of `total` this
 // row makes up. Shared by every section - cash accounts, holdings, debt
-// lines, and lines of credit all render through this.
-function renderRow(container, { label, sublabel, value, total, colorVar, meta }) {
+// lines, and lines of credit all render through this, and static/finance/js/spending.js
+// reuses it for the Top Merchants list rather than duplicating the markup.
+export function renderRow(container, { label, sublabel, value, total, colorVar, meta }) {
   const row = el("div", "fin-row");
   const percent = pct(value, total);
   row.innerHTML = `
@@ -250,7 +253,12 @@ function renderLinesOfCredit(linesOfCredit) {
   renderSectionTotal("fin-loc-limit-total", limitTotal);
 }
 
-function renderLegend(containerId, slices, total, { compact = false } = {}) {
+// Exported for spending.js's category-breakdown legend - same markup, no
+// reason to duplicate it.
+// `onClick(slice)`, if given, makes every row clickable (pointer cursor +
+// a click listener) - used by spending.js's click-a-category-to-filter-
+// merchants interaction; every other call site omits it and is unchanged.
+export function renderLegend(containerId, slices, total, { compact = false, onClick } = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = "";
@@ -267,6 +275,11 @@ function renderLegend(containerId, slices, total, { compact = false } = {}) {
       <span class="fin-legend-pct">${pct(slice.value, total).toFixed(1)}%</span>
     `
     );
+    row.dataset.label = slice.label;
+    if (onClick) {
+      row.style.cursor = "pointer";
+      row.addEventListener("click", () => onClick(slice));
+    }
     container.appendChild(row);
   }
 }

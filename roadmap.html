@@ -198,7 +198,7 @@
   <header class="top">
     <h1>Roadmap</h1>
     <p class="subtitle">A soft, living plan &mdash; priorities and rough sequencing, not a committed schedule. Revisit whenever priorities shift.</p>
-    <div class="meta-line">Last written 2026-09-04 &middot; source docs: <code>architecture_Review.md</code>, <code>finance/ARCHITECTURE.md</code>, <code>fitness/README.md</code>, <code>fitness/VISITOR-SIGNIN-PLAN.md</code></div>
+    <div class="meta-line">Last written 2026-09-07 &middot; source docs: <code>finance/ARCHITECTURE.md</code>, <code>finance/README.md</code>, <code>fitness/README.md</code>, <code>fitness/VISITOR-SIGNIN-PLAN.md</code>, <code>DATABASE-MIGRATION.md</code>, <code>architecture_Review.md</code></div>
   </header>
 
   <section class="card">
@@ -227,26 +227,33 @@
       </div>
       <div class="status-item">
         <div class="label-row">
-          <span class="name">Finance dashboard</span>
-          <span class="pill pill-next">Planned, not built</span>
+          <span class="name">Finance: Spending &amp; Cash Flow</span>
+          <span class="pill pill-done">Done</span>
         </div>
-        <div class="desc">UI is real but reads a static seed JSON file. Plaid sync layer is fully spec'd in <code>finance/ARCHITECTURE.md</code> but zero code exists yet.</div>
+        <div class="desc">Real data, not a sample file: a manual CSV import (credit card + bank activity exports, decided instead of Plaid for now) loads into <code>data/finance/finance.db</code>, driving a category donut, top merchants, a monthly spend chart, editable categories, and a Cash Flow block (income/expense trend, click a bar for that month's transactions, a per-type income breakdown, per-transaction exclusions). See <code>finance/ARCHITECTURE.md</code> Part A.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Finance: net worth</span>
+          <span class="pill pill-next">Partly built</span>
+        </div>
+        <div class="desc">Cash, Bitcoin, Debt, and Lines of Credit now have real, dated balance history (<code>account_balance_snapshots</code> etc.) and a manual-entry route, seeded from the old sample values &mdash; <code>finance/ARCHITECTURE.md</code> Part C, Phase&nbsp;1. <code>/finance</code> itself hasn't been switched over yet, so those sections (plus Investments and Net Worth Over Time) still render the old static <code>finance-dashboard.json</code>.</div>
       </div>
       <div class="status-item">
         <div class="label-row">
           <span class="name">Real database</span>
-          <span class="pill pill-next">Planned, not built</span>
+          <span class="pill pill-done">Done</span>
         </div>
-        <div class="desc">Everything today is flat JSON files. <code>finance/schema.sql</code> already defines the SQLite schema &mdash; standing it up is step one of the Plaid work, not a separate project.</div>
+        <div class="desc">Tasks moved off flat JSON onto SQLite: <code>data/tasks.db</code> with <code>sections</code>/<code>tasks</code>/<code>tags</code> tables, a generated <code>done</code> column that can't drift from <code>status</code>, and transactional writes. <code>backend/tasks_export.py</code> regenerates the committed JSON snapshot from it. See <code>DATABASE-MIGRATION.md</code>. Finance ended up with its own SQLite store too (<code>backend/finance/</code>, <code>data/finance/finance.db</code>) &mdash; built around CSV import rather than <code>finance/schema.sql</code>'s original Plaid-oriented design, which stays unused; see <code>finance/ARCHITECTURE.md</code> Part A1. Fitness stays on JSON deliberately (<code>fitness/ARCHITECTURE.md</code> &sect;6).</div>
       </div>
     </div>
   </section>
 
   <section class="card">
     <h2>Recommendation</h2>
-    <p>Fitness visitor sign-in &mdash; the item this recommendation used to point at &mdash; is done. The database question was never a separate decision to begin with: Phase&nbsp;1 of the finance plan is literally "create <code>data/finance.db</code> from <code>schema.sql</code>," so it folds into the finance work below.</p>
+    <p>Fitness visitor sign-in, the tasks database, and Finance's Spending/Cash Flow sections are all done. Finance's net worth side just got its own real tables (Part C Phase&nbsp;1) but the dashboard hasn't been pointed at them yet.</p>
     <div class="rec-box">
-      <p><strong>Start with Finance: Link + storage.</strong> A free Plaid sandbox account, this repo's first third-party dependencies (<code>plaid-python</code>, <code>cryptography</code>), and an end-to-end Link flow against sandbox data &mdash; no real bank credentials or auth gate needed yet, since sandbox data isn't real money. See the "Up next" phase below for the concrete checklist, and note that the minimal auth gate has to land before anything later touches real transactions or flips <code>PLAID_ENV</code> to production.</p>
+      <p><strong>Continue Part C: investment holdings (Phase&nbsp;2), then cut the net worth dashboard over to real data (Phase&nbsp;3).</strong> Investments is the one net-worth section still missing its own tables (<code>securities</code>/<code>investment_holdings_snapshots</code>) &mdash; landing those lets Cash/Investments/Bitcoin/Debt/Lines&nbsp;of&nbsp;Credit/Net&nbsp;Worth&nbsp;Over&nbsp;Time all switch off the static sample JSON in one cutover instead of half-migrating the page. See <code>finance/ARCHITECTURE.md</code> Part C, &sect;C10 for the full phased plan.</p>
     </div>
   </section>
 
@@ -268,14 +275,25 @@
     </div>
 
     <div class="phase">
+      <div class="phase-marker"><span class="pill pill-done">Done</span></div>
+      <div class="phase-body">
+        <h3>Finance: CSV-import pipeline, and its first real net worth tables</h3>
+        <ul>
+          <li>Decided against Plaid for now <span class="fine">(no developer account, no production-approval process, no auth gate needed yet)</span> &mdash; manual CSV export from the credit card and bank sites instead, into <code>backend/finance/</code> + <code>data/finance/finance.db</code>. See <code>finance/ARCHITECTURE.md</code> Part A.</li>
+          <li>Spending (category donut, click-to-filter top merchants, monthly chart, one-time/permanent category fixes) and Cash Flow (income/expense trend, click a bar for its transactions, per-row exclusions, a per-type income breakdown) &mdash; both reading real imported data</li>
+          <li>Transaction ids moved from file position to content-derived hashes, fixing a live bug where a re-import could silently move a category correction or Cash Flow exclusion onto the wrong transaction <span class="fine">(finance/ARCHITECTURE.md &sect;A3b)</span></li>
+          <li>Part C Phase&nbsp;1: real, dated balance history for Cash/Bitcoin/Debt/Lines of Credit (<code>account_balance_snapshots</code>, <code>account_terms_snapshots</code>), a manual-entry route (<code>POST /finance/balance-entries</code>), seeded from the old sample values</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
       <div class="phase-marker"><span class="pill pill-next">Up next</span></div>
       <div class="phase-body">
-        <h3>Finance: Link + storage</h3>
+        <h3>Finance: investment holdings (Part C, Phase 2)</h3>
         <ul>
-          <li>Plaid developer account, sandbox access <span class="fine">(instant, free)</span></li>
-          <li><code>requirements.txt</code>: <code>plaid-python</code>, <code>cryptography</code> &mdash; first third-party deps in the repo</li>
-          <li><code>data/finance.db</code> from <code>finance/schema.sql</code>, plus <code>db.py</code>, <code>crypto.py</code>, <code>plaid_client.py</code></li>
-          <li>Link flow end-to-end in Sandbox: one <code>plaid_items</code> row + its <code>accounts</code> rows</li>
+          <li><code>securities</code> + <code>investment_holdings_snapshots</code> tables, <code>POST /finance/holding-entries</code></li>
+          <li>Seed today's TFSA/RRSP/FHSA/Non-Registered holdings from the sample JSON, same as Phase 1 did for Cash/Bitcoin/Debt/Lines of Credit</li>
         </ul>
       </div>
     </div>
@@ -283,11 +301,10 @@
     <div class="phase">
       <div class="phase-marker"><span class="pill pill-later">Later</span></div>
       <div class="phase-body">
-        <h3>Finance: transactions, and the fixes it now needs</h3>
+        <h3>Finance: cut the net worth dashboard over, and the second credit card</h3>
         <ul>
-          <li><code>/transactions/sync</code> integration, real transaction list on <code>/finance</code></li>
-          <li>Atomic writes + a file lock around JSON read-modify-write <span class="fine">(cheap, closes a data-loss risk that gets worse once real bank data is involved)</span></li>
-          <li>Pull the minimal auth gate forward from Phase 5 <span class="fine">(a public URL holding real transactions needs this sooner than "eventually")</span></li>
+          <li>Part C Phase&nbsp;3: point Cash/Investments/Bitcoin/Debt/Lines of Credit/Net Worth Over Time at the real tables instead of <code>finance-dashboard.json</code>; retire that file <span class="fine">(the visible payoff of Phases 1-2 &mdash; deliberately sequenced after Investments so every section moves at once)</span></li>
+          <li>A second credit card, from a different institution <span class="fine">(documented in <code>finance/ARCHITECTURE.md</code> &sect;A9 &mdash; blocked on a real sample export to design a parser against, not on a decision)</span></li>
         </ul>
       </div>
     </div>
@@ -295,11 +312,10 @@
     <div class="phase">
       <div class="phase-marker"><span class="pill pill-later">Further out</span></div>
       <div class="phase-body">
-        <h3>Finance: investments, categorization, going live</h3>
+        <h3>Finance: raw/staging layer under CSV transactions, then an auth gate</h3>
         <ul>
-          <li>Holdings + investment transactions, net-worth/portfolio summary</li>
-          <li>User-editable transaction categories, spending-by-category view</li>
-          <li>Harden the auth gate, then flip <code>PLAID_ENV</code> from sandbox to production</li>
+          <li>Part C Phase&nbsp;4: <code>raw_credit_card_transactions</code>/<code>raw_bank_activity</code> plus the replay rule, so a parsing fix can be replayed over all history instead of only affecting new imports; backfill today's already-imported CSVs into it</li>
+          <li>A real auth gate in front of the upload/route endpoints <span class="fine">(still just the same-origin check from Part A4 &mdash; fine for a single-user personal tool today, but the actual prerequisite before Plaid/Part B could ever be revisited)</span></li>
         </ul>
       </div>
     </div>
@@ -309,10 +325,10 @@
       <div class="phase-body">
         <h3>Not urgent, but resurface before it gets expensive</h3>
         <ul>
-          <li>Flask/Django migration decision <span class="fine">(cheap to defer now, expensive to defer once finance route code piles up on stdlib <code>http.server</code>)</span></li>
-          <li>Basic test suite for <code>backend/server.py</code>'s handlers</li>
+          <li>Flask/Django migration decision <span class="fine">(cheap to defer now, expensive to defer once finance route code piles up further on stdlib <code>http.server</code>)</span></li>
+          <li>Basic test suite for <code>backend/server.py</code>'s handlers <span class="fine">(the storage layers all have one now &mdash; <code>backend/tests/test_tasks_db.py</code>, <code>backend/finance/tests/</code>; the request handlers themselves still don't)</span></li>
           <li>Shared <code>static/js/api.js</code> module to stop the 4-way duplication across tasks pages</li>
-          <li>Nightly scheduled Plaid sync, liabilities product, holdings-history table <span class="fine">(finance Phase 6, optional)</span></li>
+          <li>Plaid-based live sync <span class="fine">(kept in full as Part B of <code>finance/ARCHITECTURE.md</code>, fully deferred rather than dropped &mdash; revisit only if CSV import + manual entry stops being enough)</span></li>
           <li>Fitness OAuth client verification in Google Cloud Console <span class="fine">(removes the 7-day refresh-token expiry and 100-user Test users cap &mdash; the single biggest thing making sign-in feel unfinished past family/friends scale, see <code>fitness/google_health.md</code> &sect;9)</span></li>
           <li>Scheduled fitness sync for every visitor (<code>cli.py sync --all</code> on a cron) <span class="fine">(today, a visitor's data only refreshes on first sign-in or a manual Sync now click)</span></li>
         </ul>

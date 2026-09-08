@@ -14,6 +14,13 @@ function formatCad(value, { maximumFractionDigits = 0 } = {}) {
   return value.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits });
 }
 
+// BTC quantities here are always small (a round-up buys thousandths of a
+// cent's worth) - up to 8 decimal places (satoshi precision), trimmed of
+// trailing zeros, never a $-style fixed count of decimals.
+function formatBtc(value, { maximumFractionDigits = 8 } = {}) {
+  return `${value.toLocaleString("en-CA", { maximumFractionDigits })} BTC`;
+}
+
 function formatMonth(monthStr) {
   const d = new Date(`${monthStr}-01T00:00:00`);
   if (Number.isNaN(d.getTime())) return monthStr;
@@ -261,9 +268,13 @@ export function drawNetWorthChart(canvas, tooltipEl, points) {
  * per-account holdings donuts) - only the slices and `label` differ.
  * `label` is this chart's accessible name (aria-label) - every call site
  * must pass one distinct to that chart, since screen readers otherwise
- * can't tell the donuts apart.
+ * can't tell the donuts apart. `onSliceClick(slice)`, if given, makes
+ * every segment clickable (pointer cursor + a click listener) - used by
+ * static/finance/js/spending.js's click-a-category-to-filter-merchants
+ * interaction; every other call site simply omits it and gets today's
+ * hover-only behavior unchanged.
  */
-export function drawDonut(container, slices, { label }) {
+export function drawDonut(container, slices, { label, onSliceClick }) {
   const total = slices.reduce((s, x) => s + x.value, 0);
   const radius = 54;
   const thickness = 22;
@@ -300,11 +311,17 @@ export function drawDonut(container, slices, { label }) {
     seg.setAttribute("stroke-dashoffset", String(-offset));
     seg.setAttribute("transform", "rotate(-90 70 70)");
     seg.classList.add("donut-seg");
+    seg.dataset.label = slice.label;
 
     const title = document.createElementNS(svgNS, "title");
     const pct = (slice.value / total) * 100;
     title.textContent = `${slice.label}: ${formatCad(slice.value)} (${pct.toFixed(1)}%)`;
     seg.appendChild(title);
+
+    if (onSliceClick) {
+      seg.style.cursor = "pointer";
+      seg.addEventListener("click", () => onSliceClick(slice));
+    }
 
     svg.appendChild(seg);
     offset += length;
@@ -312,4 +329,467 @@ export function drawDonut(container, slices, { label }) {
 
   container.innerHTML = "";
   container.appendChild(svg);
+}
+
+/**
+ * Draws a month-by-month stacked bar chart (e.g. spend per month broken
+ * down by source, see static/finance/js/spending.js) on `canvas`, with
+ * the same hover crosshair/tooltip convention as drawNetWorthChart above
+ * - reuses that function's axis/resize/theme-redraw scaffolding, just
+ * stacked bars instead of a line. `points` is
+ * [{ month: "YYYY-MM", bySource: { [seriesKey]: number, ... } }, ...];
+ * `series` is [{ key, colorVar }, ...] in bottom-to-top stacking order -
+ * a month missing a given key (that source had no spend that month)
+ * contributes a zero-height segment, not a gap. A single-entry `series`
+ * degenerates to a plain single-colour bar per month. `onBarClick(month)`,
+ * if given, makes every bar clickable (pointer cursor + a click listener) -
+ * same convention as drawIncomeExpenseChart's onBarClick below, but this
+ * chart's bars stack multiple sources rather than sitting side by side, so
+ * a click resolves to the whole month rather than one segment - used by
+ * static/finance/js/spending.js's click-a-bar-to-see-its-transactions
+ * interaction.
+ */
+export function drawMonthlyBarChart(canvas, tooltipEl, points, series, { onBarClick } = {}) {
+  const ctx = canvas.getContext("2d");
+
+  let colors, gridColor, mutedColor;
+  function readThemeColors() {
+    colors = series.map((s) => themeColor(s.colorVar));
+    gridColor = themeColor("--line");
+    mutedColor = themeColor("--ink-soft");
+  }
+  readThemeColors();
+
+  const padding = { top: 14, right: 10, bottom: 22, left: 60 };
+
+  const totals = points.map((p) => series.reduce((sum, s) => sum + (p.bySource[s.key] || 0), 0));
+  const maxVal = Math.max(...totals, 0);
+  const { max: yMax, step: tickStep } = niceAxis(0, maxVal || 1, 4);
+  const yRange = yMax || 1;
+  const tickCount = Math.round(yMax / tickStep);
+
+  let cssWidth, cssHeight, innerH, barWidth, xFor, yFor;
+
+  function measure() {
+    const dpr = window.devicePixelRatio || 1;
+    cssWidth = canvas.clientWidth || canvas.width;
+    cssHeight = canvas.clientHeight || canvas.height;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const innerW = cssWidth - padding.left - padding.right;
+    innerH = cssHeight - padding.top - padding.bottom;
+    const slot = points.length > 0 ? innerW / points.length : innerW;
+    barWidth = Math.max(slot * 0.55, 4);
+    xFor = (i) => padding.left + slot * i + slot / 2;
+    yFor = (v) => padding.top + innerH - (v / yRange) * innerH;
+  }
+
+  function drawFrame(hoverIndex) {
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.fillStyle = mutedColor;
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    for (let s = 0; s <= tickCount; s++) {
+      const v = s * tickStep;
+      const y = yFor(v);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(cssWidth - padding.right, y);
+      ctx.stroke();
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(formatCad(v), padding.left - 8, y);
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    points.forEach((p, i) => {
+      ctx.fillText(formatMonth(p.month), xFor(i), cssHeight - 6);
+    });
+
+    points.forEach((p, i) => {
+      const x = xFor(i);
+      ctx.globalAlpha = hoverIndex == null || i === hoverIndex ? 1 : 0.7;
+      let cumulative = 0;
+      series.forEach((s, si) => {
+        const value = p.bySource[s.key] || 0;
+        if (value <= 0) return;
+        const yBottom = yFor(cumulative);
+        const yTop = yFor(cumulative + value);
+        ctx.fillStyle = colors[si];
+        ctx.fillRect(x - barWidth / 2, yTop, barWidth, yBottom - yTop);
+        cumulative += value;
+      });
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function render() {
+    measure();
+    drawFrame(null);
+  }
+
+  render();
+
+  const themeObserver = new MutationObserver(() => {
+    readThemeColors();
+    render();
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  let resizeTimer = null;
+  const resizeObserver = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 100);
+  });
+  resizeObserver.observe(canvas);
+
+  if (onBarClick) {
+    canvas.style.cursor = "pointer";
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      let nearest = 0;
+      let nearestDist = Infinity;
+      points.forEach((_, i) => {
+        const d = Math.abs(xFor(i) - mx);
+        if (d < nearestDist) {
+          nearestDist = d;
+          nearest = i;
+        }
+      });
+      onBarClick(points[nearest].month);
+    });
+  }
+
+  if (!tooltipEl) return;
+
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    let nearest = 0;
+    let nearestDist = Infinity;
+    points.forEach((_, i) => {
+      const d = Math.abs(xFor(i) - mx);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = i;
+      }
+    });
+    drawFrame(nearest);
+    const p = points[nearest];
+    const year = p.month.slice(0, 4);
+    const total = series.reduce((sum, s) => sum + (p.bySource[s.key] || 0), 0);
+    const breakdown = series
+      .filter((s) => (p.bySource[s.key] || 0) > 0)
+      .map((s) => `${s.key} ${formatCad(p.bySource[s.key])}`)
+      .join(" · ");
+    tooltipEl.textContent = breakdown
+      ? `${formatMonth(p.month)} ${year} — ${formatCad(total)} (${breakdown})`
+      : `${formatMonth(p.month)} ${year} — ${formatCad(total)}`;
+    tooltipEl.style.left = `${xFor(nearest)}px`;
+    tooltipEl.style.top = `${yFor(total)}px`;
+    tooltipEl.classList.add("show");
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    drawFrame(null);
+    tooltipEl.classList.remove("show");
+  });
+}
+
+/**
+ * Draws a grouped income-vs-expense bar chart (two bars per month, both
+ * rising from a shared zero baseline - income and expense are always
+ * non-negative here, so a diverging up/down layout isn't needed) on
+ * `canvas`, reusing the same axis/theme/resize/hover scaffolding as
+ * drawMonthlyBarChart above. `points` is
+ * [{ month: "YYYY-MM", income: number, expense: number }, ...].
+ * `onBarClick(month, kind)`, if given, makes every bar clickable (pointer
+ * cursor + a click listener - `kind` is "income" or "expense" depending on
+ * which of the pair was clicked) - used by static/finance/js/cashflow.js's
+ * click-a-bar-to-see-its-transactions interaction.
+ */
+export function drawIncomeExpenseChart(canvas, tooltipEl, points, { incomeColorVar = "--status-green", expenseColorVar = "--status-red", onBarClick } = {}) {
+  const ctx = canvas.getContext("2d");
+
+  let incomeColor, expenseColor, gridColor, mutedColor;
+  function readThemeColors() {
+    incomeColor = themeColor(incomeColorVar);
+    expenseColor = themeColor(expenseColorVar);
+    gridColor = themeColor("--line");
+    mutedColor = themeColor("--ink-soft");
+  }
+  readThemeColors();
+
+  const padding = { top: 14, right: 10, bottom: 22, left: 60 };
+
+  const maxVal = Math.max(...points.flatMap((p) => [p.income, p.expense]), 0);
+  const { max: yMax, step: tickStep } = niceAxis(0, maxVal || 1, 4);
+  const yRange = yMax || 1;
+  const tickCount = Math.round(yMax / tickStep);
+
+  let cssWidth, cssHeight, innerH, barWidth, gap, xForGroup, yFor;
+
+  function measure() {
+    const dpr = window.devicePixelRatio || 1;
+    cssWidth = canvas.clientWidth || canvas.width;
+    cssHeight = canvas.clientHeight || canvas.height;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const innerW = cssWidth - padding.left - padding.right;
+    innerH = cssHeight - padding.top - padding.bottom;
+    const slot = points.length > 0 ? innerW / points.length : innerW;
+    barWidth = Math.max(slot * 0.28, 3);
+    gap = barWidth * 0.25;
+    xForGroup = (i) => padding.left + slot * i + slot / 2;
+    yFor = (v) => padding.top + innerH - (v / yRange) * innerH;
+  }
+
+  function drawFrame(hoverIndex) {
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.fillStyle = mutedColor;
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    for (let s = 0; s <= tickCount; s++) {
+      const v = s * tickStep;
+      const y = yFor(v);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(cssWidth - padding.right, y);
+      ctx.stroke();
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(formatCad(v), padding.left - 8, y);
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    points.forEach((p, i) => {
+      ctx.fillText(formatMonth(p.month), xForGroup(i), cssHeight - 6);
+    });
+
+    points.forEach((p, i) => {
+      const cx = xForGroup(i);
+      ctx.globalAlpha = hoverIndex == null || i === hoverIndex ? 1 : 0.7;
+
+      const incomeTop = yFor(p.income);
+      ctx.fillStyle = incomeColor;
+      ctx.fillRect(cx - barWidth - gap / 2, incomeTop, barWidth, padding.top + innerH - incomeTop);
+
+      const expenseTop = yFor(p.expense);
+      ctx.fillStyle = expenseColor;
+      ctx.fillRect(cx + gap / 2, expenseTop, barWidth, padding.top + innerH - expenseTop);
+
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function render() {
+    measure();
+    drawFrame(null);
+  }
+
+  render();
+
+  const themeObserver = new MutationObserver(() => {
+    readThemeColors();
+    render();
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  let resizeTimer = null;
+  const resizeObserver = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 100);
+  });
+  resizeObserver.observe(canvas);
+
+  if (onBarClick) {
+    canvas.style.cursor = "pointer";
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      let nearest = 0;
+      let nearestDist = Infinity;
+      points.forEach((_, i) => {
+        const d = Math.abs(xForGroup(i) - mx);
+        if (d < nearestDist) {
+          nearestDist = d;
+          nearest = i;
+        }
+      });
+      // Which of the pair was clicked: left of center = income bar, right
+      // of center = expense bar (matches the fillRect split in drawFrame).
+      const kind = mx < xForGroup(nearest) ? "income" : "expense";
+      onBarClick(points[nearest].month, kind);
+    });
+  }
+
+  if (!tooltipEl) return;
+
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    let nearest = 0;
+    let nearestDist = Infinity;
+    points.forEach((_, i) => {
+      const d = Math.abs(xForGroup(i) - mx);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = i;
+      }
+    });
+    drawFrame(nearest);
+    const p = points[nearest];
+    const year = p.month.slice(0, 4);
+    tooltipEl.textContent = `${formatMonth(p.month)} ${year} — ${formatCad(p.income)} in, ${formatCad(p.expense)} out`;
+    tooltipEl.style.left = `${xForGroup(nearest)}px`;
+    tooltipEl.style.top = `${yFor(Math.max(p.income, p.expense))}px`;
+    tooltipEl.classList.add("show");
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    drawFrame(null);
+    tooltipEl.classList.remove("show");
+  });
+}
+
+/**
+ * Draws a month-by-month bar chart of BTC accumulated via Shakepay's
+ * round-up-your-purchase feature (see static/finance/js/spending.js),
+ * on `canvas` - same measure/render/hover/theme scaffolding as
+ * drawMonthlyBarChart, but a single BTC-quantity series (not stacked by
+ * source - a round-up's BTC value has one source by construction) with
+ * BTC-formatted axis/tooltip text instead of currency. `points` is
+ * [{ month: "YYYY-MM", btcQuantity: number }, ...]. Defaults to `--flag`,
+ * the same color the asset-allocation donut already uses for "Bitcoin".
+ */
+export function drawBtcMonthlyChart(canvas, tooltipEl, points, { colorVar = "--flag" } = {}) {
+  const ctx = canvas.getContext("2d");
+
+  let barColor, gridColor, mutedColor;
+  function readThemeColors() {
+    barColor = themeColor(colorVar);
+    gridColor = themeColor("--line");
+    mutedColor = themeColor("--ink-soft");
+  }
+  readThemeColors();
+
+  const padding = { top: 14, right: 10, bottom: 22, left: 76 };
+
+  const values = points.map((p) => p.btcQuantity);
+  const maxVal = Math.max(...values, 0);
+  const { max: yMax, step: tickStep } = niceAxis(0, maxVal || 1e-8, 4);
+  const yRange = yMax || 1;
+  const tickCount = Math.round(yMax / tickStep);
+
+  let cssWidth, cssHeight, innerH, barWidth, xFor, yFor;
+
+  function measure() {
+    const dpr = window.devicePixelRatio || 1;
+    cssWidth = canvas.clientWidth || canvas.width;
+    cssHeight = canvas.clientHeight || canvas.height;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const innerW = cssWidth - padding.left - padding.right;
+    innerH = cssHeight - padding.top - padding.bottom;
+    const slot = points.length > 0 ? innerW / points.length : innerW;
+    barWidth = Math.max(slot * 0.55, 4);
+    xFor = (i) => padding.left + slot * i + slot / 2;
+    yFor = (v) => padding.top + innerH - (v / yRange) * innerH;
+  }
+
+  function drawFrame(hoverIndex) {
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.fillStyle = mutedColor;
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    for (let s = 0; s <= tickCount; s++) {
+      const v = s * tickStep;
+      const y = yFor(v);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(cssWidth - padding.right, y);
+      ctx.stroke();
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(formatBtc(v, { maximumFractionDigits: 6 }), padding.left - 8, y);
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    points.forEach((p, i) => {
+      ctx.fillText(formatMonth(p.month), xFor(i), cssHeight - 6);
+    });
+
+    points.forEach((p, i) => {
+      const x = xFor(i);
+      const yTop = yFor(p.btcQuantity);
+      ctx.globalAlpha = hoverIndex == null || i === hoverIndex ? 1 : 0.7;
+      ctx.fillStyle = barColor;
+      ctx.fillRect(x - barWidth / 2, yTop, barWidth, padding.top + innerH - yTop);
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function render() {
+    measure();
+    drawFrame(null);
+  }
+
+  render();
+
+  const themeObserver = new MutationObserver(() => {
+    readThemeColors();
+    render();
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  let resizeTimer = null;
+  const resizeObserver = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 100);
+  });
+  resizeObserver.observe(canvas);
+
+  if (!tooltipEl) return;
+
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    let nearest = 0;
+    let nearestDist = Infinity;
+    points.forEach((_, i) => {
+      const d = Math.abs(xFor(i) - mx);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = i;
+      }
+    });
+    drawFrame(nearest);
+    const p = points[nearest];
+    const year = p.month.slice(0, 4);
+    tooltipEl.textContent = `${formatMonth(p.month)} ${year} — ${formatBtc(p.btcQuantity)}`;
+    tooltipEl.style.left = `${xFor(nearest)}px`;
+    tooltipEl.style.top = `${yFor(p.btcQuantity)}px`;
+    tooltipEl.classList.add("show");
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    drawFrame(null);
+    tooltipEl.classList.remove("show");
+  });
 }

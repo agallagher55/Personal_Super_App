@@ -6,3 +6,7 @@ venv/
 service_now/.env
 backend/fitness/config.json
 data/fitness/
+data/tasks.db
+data/tasks.db-wal
+data/tasks.db-shm
+data/finance/
