@@ -140,6 +140,78 @@ class TestSchemaMigrations(DatabaseTestCase):
         self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], after_first)
 
 
+class TestPositionCollisionSafety(DatabaseTestCase):
+    """Issue: collision-safe and deterministic position ordering.
+    next_task_position() must never hand out an already-occupied position,
+    and reads must resolve equal positions the same way every time."""
+
+    def setUp(self):
+        super().setUp()
+        self.given_section()
+
+    def test_next_position_skips_a_gap_instead_of_reusing_it(self):
+        """A section with positions 0 and 2 (e.g. after a delete that
+        skipped reposition_section) must not hand out 1 by counting rows -
+        1 belongs to nothing, but a COUNT(*) of 2 rows would suggest it's
+        free next-in-line, when in fact 2 is already occupied."""
+        tasks_db.insert_task(self.conn, a_task('t0', position=0))
+        tasks_db.insert_task(self.conn, a_task('t2', position=2))
+        self.assertEqual(tasks_db.next_task_position(self.conn, 's1'), 3)
+
+    def test_next_position_is_zero_for_an_empty_section(self):
+        self.assertEqual(tasks_db.next_task_position(self.conn, 's1'), 0)
+
+    def test_next_position_ignores_other_sections(self):
+        self.given_section('s2', position=1, label='Other')
+        tasks_db.insert_task(self.conn, a_task('t1', section_id='s2', position=0))
+        self.assertEqual(tasks_db.next_task_position(self.conn, 's1'), 0)
+
+    def test_inserting_into_a_gapped_section_repeatedly_never_collides(self):
+        tasks_db.insert_task(self.conn, a_task('t0', position=0))
+        tasks_db.insert_task(self.conn, a_task('t2', position=2))
+
+        for i in range(3, 6):
+            new_id = 't%d' % i
+            tasks_db.insert_task(self.conn, a_task(new_id, position=tasks_db.next_task_position(self.conn, 's1')))
+
+        positions = [t['position'] for t in tasks_db.load_tasks(self.conn)]
+        self.assertEqual(len(positions), len(set(positions)), 'positions collided: %r' % positions)
+
+    def test_equal_positions_render_in_a_deterministic_order(self):
+        """Legacy data predating the MAX+1 fix could still share a
+        position; reads must not depend on SQLite's unspecified scan order
+        for ties."""
+        tasks_db.insert_task(self.conn, a_task('t-z', position=0))
+        tasks_db.insert_task(self.conn, a_task('t-a', position=0))
+
+        first = [t['id'] for t in tasks_db.load_tasks(self.conn)]
+        second = [t['id'] for t in tasks_db.load_tasks(self.conn)]
+        self.assertEqual(first, second)
+        self.assertEqual(first, ['t-a', 't-z'])  # tie-break is `id`, ascending
+
+    def test_swapping_two_positions_succeeds_without_a_transient_collision_error(self):
+        """set_task_positions writes one row at a time, so a swap passes
+        through a moment where both rows would share a position under a
+        naive read - it must not raise, since positions aren't declared
+        UNIQUE (see tasks_schema.sql)."""
+        tasks_db.insert_task(self.conn, a_task('t0', position=0))
+        tasks_db.insert_task(self.conn, a_task('t1', position=1))
+
+        with self.conn:
+            tasks_db.set_task_positions(self.conn, [('t0', 1), ('t1', 0)])
+
+        self.assertEqual(tasks_db.find_task(self.conn, 't0')['position'], 1)
+        self.assertEqual(tasks_db.find_task(self.conn, 't1')['position'], 0)
+
+    def test_tags_with_equal_positions_render_deterministically(self):
+        tasks_db.insert_task(self.conn, a_task())
+        self.conn.executemany(
+            'INSERT INTO tags (id, task_id, position, text, flag) VALUES (?, ?, 0, ?, 0)',
+            [('g-z', 't1', 'zebra'), ('g-a', 't1', 'apple')],
+        )
+        self.assertEqual([t['id'] for t in tasks_db.tags_for_task(self.conn, 't1')], ['g-a', 'g-z'])
+
+
 class TestGeneratedDoneColumn(DatabaseTestCase):
 
     def setUp(self):

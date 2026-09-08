@@ -214,17 +214,17 @@ def _tag_from_row(row):
 # ---------------------------------------------------------------------------
 
 def load_sections(conn):
-    rows = conn.execute('SELECT * FROM sections ORDER BY position').fetchall()
+    rows = conn.execute('SELECT * FROM sections ORDER BY position, id').fetchall()
     return [_section_from_row(row) for row in rows]
 
 
 def load_tasks(conn):
-    rows = conn.execute('SELECT * FROM tasks ORDER BY section_id, position').fetchall()
+    rows = conn.execute('SELECT * FROM tasks ORDER BY section_id, position, id').fetchall()
     return [_task_from_row(row) for row in rows]
 
 
 def load_tags(conn):
-    rows = conn.execute('SELECT * FROM tags ORDER BY task_id, position').fetchall()
+    rows = conn.execute('SELECT * FROM tags ORDER BY task_id, position, id').fetchall()
     return [_tag_from_row(row) for row in rows]
 
 
@@ -264,7 +264,15 @@ def task_exists(conn, task_id):
 
 
 def next_task_position(conn, section_id):
-    row = conn.execute('SELECT COUNT(*) AS n FROM tasks WHERE section_id = ?', (section_id,)).fetchone()
+    """One past the section's highest current position, not a row count:
+    COUNT(*) returns an already-occupied position the moment a section has
+    a gap (e.g. positions 0 and 2 after a delete that skipped
+    reposition_section) - MAX(position) + 1 cannot collide with anything
+    already there. COALESCE covers the empty-section case, where MAX is
+    NULL rather than 0."""
+    row = conn.execute(
+        'SELECT COALESCE(MAX(position) + 1, 0) AS n FROM tasks WHERE section_id = ?', (section_id,)
+    ).fetchone()
     return row['n']
 
 
@@ -275,7 +283,7 @@ def next_section_position(conn):
 
 def tags_for_task(conn, task_id):
     rows = conn.execute(
-        'SELECT * FROM tags WHERE task_id = ? ORDER BY position', (task_id,)
+        'SELECT * FROM tags WHERE task_id = ? ORDER BY position, id', (task_id,)
     ).fetchall()
     return [_tag_from_row(row) for row in rows]
 
@@ -347,7 +355,7 @@ def reposition_section(conn, section_id):
     order. The JSON-era function of the same name did this to an in-memory
     list; this one writes it."""
     rows = conn.execute(
-        'SELECT id FROM tasks WHERE section_id = ? ORDER BY position', (section_id,)
+        'SELECT id FROM tasks WHERE section_id = ? ORDER BY position, id', (section_id,)
     ).fetchall()
     set_task_positions(conn, [(row['id'], i) for i, row in enumerate(rows)])
 

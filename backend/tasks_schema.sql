@@ -16,6 +16,20 @@
 -- `desc` is quoted everywhere because DESC is a SQL keyword. SQLite can
 -- usually disambiguate it by position, but relying on that is a subtle
 -- thing to get wrong later.
+--
+-- `position` columns (sections, tasks, tags) are deliberately not declared
+-- UNIQUE, even per-section/per-task. SQLite's UNIQUE constraints are
+-- checked immediately, not deferred until commit, and reordering (see
+-- tasks_db.set_task_positions/reposition_section) writes positions one
+-- row at a time - a two-item swap has to pass through a state where both
+-- rows briefly hold the same target position, which a UNIQUE constraint
+-- would reject mid-transaction. Collision-safety instead comes from
+-- tasks_db.next_task_position() computing MAX(position) + 1 (so a new row
+-- can never land on an already-occupied position) and every read
+-- ordering `position, id` (so two rows that do end up sharing a position,
+-- e.g. from data that predates that fix, still render in a fixed,
+-- deterministic order rather than whatever SQLite's scan happens to
+-- return).
 
 CREATE TABLE IF NOT EXISTS sections (
   id       TEXT PRIMARY KEY,
