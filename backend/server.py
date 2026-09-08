@@ -13,7 +13,10 @@ this app will eventually use in a real database:
   data/tags.json        - one row per tag (task_id foreign key)
 
 GET /tasks.json joins them back into the nested shape the frontend expects,
-the same way a database query/view would.
+the same way a database query/view would. It also includes `scratchpad`, a
+single freeform text field backed by data/scratchpad.json - the notepad
+shown alongside the task list, unrelated to any one task or section, saved
+via POST /tasks/scratchpad.
 
 data/tasks.json's columns mirror a Notion-style tasks database: desc (Task),
 status/done (Status), priority (Priority), due_date (Due Date), completed
@@ -47,6 +50,7 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 SECTIONS_FILE = os.path.join(DATA_DIR, 'sections.json')
 TASKS_FILE = os.path.join(DATA_DIR, 'tasks.json')
 TAGS_FILE = os.path.join(DATA_DIR, 'tags.json')
+SCRATCHPAD_FILE = os.path.join(DATA_DIR, 'scratchpad.json')
 # Mirrors the Notion "Weekly Tasks" database's Status options (Not started,
 # In progress, Pending, Done, Cancelled), keeping this app's existing
 # open/in-progress/done names for the three states it already had.
@@ -138,6 +142,10 @@ def load_tags():
     return load_json(TAGS_FILE, [])
 
 
+def load_scratchpad():
+    return load_json(SCRATCHPAD_FILE, {'text': '', 'modified': ''})
+
+
 def save_sections(sections):
     save_json(SECTIONS_FILE, sections)
 
@@ -148,6 +156,10 @@ def save_tasks(tasks):
 
 def save_tags(tags):
     save_json(TAGS_FILE, tags)
+
+
+def save_scratchpad(data):
+    save_json(SCRATCHPAD_FILE, data)
 
 
 def reposition_section(tasks, section_id):
@@ -199,7 +211,7 @@ def build_nested():
             nested_section['note'] = section['note']
         result_sections.append(nested_section)
 
-    return {'sections': result_sections}
+    return {'sections': result_sections, 'scratchpad': load_scratchpad().get('text', '')}
 
 
 class TaskHandler(http.server.SimpleHTTPRequestHandler):
@@ -493,6 +505,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             return self.handle_update_tasks()
         if parsed.path == '/tasks/delete':
             return self.handle_delete_task()
+        if parsed.path == '/tasks/scratchpad':
+            return self.handle_update_scratchpad()
         self.send_error(404, 'Not found')
 
     def handle_new_task(self):
@@ -821,6 +835,30 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         save_tags(tags)
 
         response_body = json.dumps({'status': 'ok', 'deleted': True}).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(response_body)))
+        self.end_headers()
+        self.wfile.write(response_body)
+
+    def handle_update_scratchpad(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+
+        try:
+            payload = json.loads(body)
+        except ValueError:
+            self.send_json_error(400, 'Invalid JSON body')
+            return
+
+        text = payload.get('text') if isinstance(payload, dict) else None
+        if not isinstance(text, str):
+            self.send_json_error(400, 'Missing text field')
+            return
+
+        save_scratchpad({'text': text, 'modified': now_iso()})
+
+        response_body = json.dumps({'status': 'ok'}).encode('utf-8')
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(response_body)))

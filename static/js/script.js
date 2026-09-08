@@ -27,6 +27,13 @@
       ' ' + today.getDate() + ', ' + today.getFullYear();
   }
 
+  var scratchpadDateEl = document.getElementById('scratchpad-date');
+  if (scratchpadDateEl) {
+    var scratchpadToday = new Date();
+    scratchpadDateEl.textContent = DAY_NAMES[scratchpadToday.getDay()] + ' ' +
+      MONTH_NAMES[scratchpadToday.getMonth()] + ' ' + scratchpadToday.getDate();
+  }
+
   var STATUS_LABELS = {
     open: 'Open',
     'in-progress': 'In Progress',
@@ -658,7 +665,60 @@
     });
   }
 
+  var scratchpadInput = document.getElementById('scratchpad-input');
+  var scratchpadStatusEl = document.getElementById('scratchpad-status');
+  var scratchpadSaveTimer = null;
+  var scratchpadStatusTimer = null;
+
+  function showScratchpadStatus(text, isError) {
+    if (!scratchpadStatusEl) {
+      return;
+    }
+    scratchpadStatusEl.textContent = text;
+    scratchpadStatusEl.classList.toggle('error', !!isError);
+    scratchpadStatusEl.classList.add('show');
+    if (scratchpadStatusTimer) {
+      clearTimeout(scratchpadStatusTimer);
+    }
+    scratchpadStatusTimer = setTimeout(function () {
+      scratchpadStatusEl.classList.remove('show');
+    }, 2000);
+  }
+
+  function saveScratchpad() {
+    fetch('/tasks/scratchpad', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: scratchpadInput.value })
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error('Save failed (status ' + response.status + ')');
+        }
+        return response.json();
+      })
+      .then(function () {
+        showScratchpadStatus('Saved', false);
+      })
+      .catch(function (err) {
+        showScratchpadStatus(err.message, true);
+      });
+  }
+
+  if (scratchpadInput) {
+    scratchpadInput.addEventListener('input', function () {
+      if (scratchpadSaveTimer) {
+        clearTimeout(scratchpadSaveTimer);
+      }
+      scratchpadSaveTimer = setTimeout(saveScratchpad, 800);
+    });
+  }
+
   function render(data) {
+    if (scratchpadInput) {
+      scratchpadInput.value = data.scratchpad || '';
+    }
+
     taskById = {};
     data.sections.forEach(function (sectionData) {
       (sectionData.tasks || []).forEach(function (taskData) {

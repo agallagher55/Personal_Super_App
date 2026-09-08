@@ -4,7 +4,10 @@ How URLs map to HTML pages, their JS, and the backend handlers in
 `backend/server.py`. Data lives in three normalized files —
 `data/sections.json`, `data/tasks.json`, `data/tags.json` — joined on the
 fly into the nested shape below and served read-only at `/tasks.json`,
-mutated only through the POST routes below.
+mutated only through the POST routes below. `data/scratchpad.json` is a
+separate, unnormalized file holding the freeform "Today's List" text shown
+on `/tasks`; its `text` field is included as a top-level `scratchpad` key
+in the `/tasks.json` response and saved through its own POST route.
 
 Every `/fitness*` route except `/fitness/login`, `/fitness/auth/*`, and
 `/fitness/api/me` now requires a signed-in session — a signed-out visitor
@@ -36,7 +39,7 @@ gets a 302 to `/fitness/login` (HTML pages) or a 401 (API routes). See
 | `/finance/api/prices` | JSON | — | Watchlist quotes, proxied server-side to avoid browser CORS issues (`backend/finance_prices.py`) — 6 of the 7 tickers come from Yahoo Finance's free keyless chart endpoint; the Canada 5Y yield comes from the Bank of Canada's Valet API instead, since Yahoo has no working symbol for it. Always 200; each ticker is fetched independently and comes back with `price`/`change_pct` as `null` if its own fetch failed, rather than failing the whole response. |
 | `/finance/api/holding-prices` | JSON | — | Live quotes for arbitrary portfolio holding symbols (`?symbols=A,B,C`, comma-separated), proxied from Yahoo the same way as `/finance/api/prices` — no Bank of Canada fallback, since these are always equity/ETF symbols. 400 if `symbols` is missing; otherwise always 200 with `{"quotes": {symbol: {"price", "change_pct"} \| null}}`, one entry per requested symbol. |
 | `/new` | — | — | 302 redirect to `/tasks/new`. |
-| `/tasks.json` | `sections.json` + `tasks.json` + `tags.json`, joined | — | `no-store` cache headers. Every task-tracker page above fetches this client-side to render. |
+| `/tasks.json` | `sections.json` + `tasks.json` + `tags.json` + `scratchpad.json`, joined | — | `no-store` cache headers. Every task-tracker page above fetches this client-side to render. |
 
 Any other path falls through to `SimpleHTTPRequestHandler`, i.e. plain
 static file serving from the repo root (`/static/...`, etc.).
@@ -49,6 +52,7 @@ static file serving from the repo root (`/static/...`, etc.).
 | `/tasks/new-category` | `handle_new_category` | Appends a new (empty) row to `sections.json`, slugified from `label`. Redirects `303` to `/tasks/categories?added=1`. 400 if the name is empty or a category with that slug/id already exists. |
 | `/tasks/update` | `handle_update_tasks` | Bulk update by task id (desc, note, tags, notes, status, priority, ticket_number, assignment_group, requested_by, due_date, reorder). Writes `tasks.json` and, if tags changed, `tags.json`. Returns JSON. |
 | `/tasks/delete` | `handle_delete_task` | Removes a task from `tasks.json` and its tags from `tags.json`. Returns JSON. |
+| `/tasks/scratchpad` | `handle_update_scratchpad` | Overwrites `scratchpad.json`'s `text` field with the request body's `text`. Returns JSON. |
 | `/fitness/auth/logout` | `handle_fitness_logout` | Clears the session cookie, 302 to `/fitness/login`. |
 | `/fitness/api/sync` | `fitness_api.trigger_sync(user_id)` | Pulls new data from the Google Health API into the signed-in visitor's own `data/fitness/users/<user_id>/health_data.json`. Synchronous; requires a session (401 otherwise); 409 if a sync for this visitor is already running. See `fitness/API-CONTRACT.md`. |
 

@@ -17,6 +17,8 @@ Files:
   split into three normalized files (one section/task/tag per row, joined by
   id) so the storage shape already looks like the tables this app will move
   to in a real database eventually
+- `data/scratchpad.json`, the freeform "Today's List" notepad shown to the
+  left of the task list on `/tasks`, unrelated to any one task or section
 
 ## Running it
 
@@ -153,3 +155,7 @@ task object in `data/tasks.json`, give it a unique `id`, and set its
   refresh, those aren't persisted. Notes and done state persist once
   you click Save Changes; tasks added through the `/tasks/new` form
   are saved immediately on submit.
+- **Today's List**, the freeform notepad on the left of `/tasks`, is
+  independent of the task list: type into it and it autosaves to
+  `data/scratchpad.json` a moment after you stop typing (no Save
+  Changes needed), showing a small "Saved" confirmation under the box.
