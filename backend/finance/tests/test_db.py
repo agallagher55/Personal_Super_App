@@ -243,5 +243,119 @@ class TestPositionalIdMigration(unittest.TestCase):
         self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
 
 
+class TestNetworthColumnsMigration(unittest.TestCase):
+    """Migration 2 (db._add_networth_account_columns): adds
+    accounts.currency/closed_at for a database created before Part C's net
+    worth tables existed, staged here as an accounts table without them -
+    the shape every database had before this migration was added."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        self.conn.executescript('''
+            CREATE TABLE accounts (
+              id TEXT PRIMARY KEY, label TEXT NOT NULL, institution TEXT, kind TEXT NOT NULL
+            );
+            CREATE TABLE transactions (
+              id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
+              date TEXT NOT NULL, description TEXT NOT NULL, amount REAL NOT NULL,
+              activity_type TEXT NOT NULL, category TEXT, status TEXT,
+              source_file TEXT NOT NULL, imported_at TEXT NOT NULL
+            );
+        ''')
+        self.conn.execute(
+            "INSERT INTO accounts (id, label, institution, kind) VALUES ('acc1', 'Chequing', 'TD', 'chequing')"
+        )
+        # Already past migration 1 (content-derived transaction ids) but not
+        # yet migration 2 - the specific gap this test targets.
+        self.conn.execute('PRAGMA user_version = 1')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_adds_currency_and_closed_at_columns(self):
+        finance_db.migrate(self.conn)
+        columns = {row[1] for row in self.conn.execute('PRAGMA table_info(accounts)')}
+        self.assertIn('currency', columns)
+        self.assertIn('closed_at', columns)
+
+    def test_existing_account_rows_survive_with_the_default_currency(self):
+        finance_db.migrate(self.conn)
+        row = finance_db.get_account(self.conn, 'acc1')
+        self.assertEqual(row['label'], 'Chequing')
+        self.assertEqual(row['currency'], 'CAD')
+        self.assertIsNone(row['closed_at'])
+
+    def test_is_idempotent(self):
+        finance_db.migrate(self.conn)
+        finance_db.migrate(self.conn)
+        columns = [row[1] for row in self.conn.execute('PRAGMA table_info(accounts)')]
+        self.assertEqual(columns.count('currency'), 1)
+
+    def test_records_the_schema_version(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
+
+
+class TestBtcQuantityColumnMigration(unittest.TestCase):
+    """Migration 3 (db._add_transaction_btc_quantity_column): adds the
+    nullable transactions.btc_quantity column, staged here as a
+    transactions table without it - the shape every database had before
+    the Shakepay round-up import needed somewhere to record it."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        self.conn.executescript('''
+            CREATE TABLE accounts (
+              id TEXT PRIMARY KEY, label TEXT NOT NULL, institution TEXT, kind TEXT NOT NULL,
+              currency TEXT NOT NULL DEFAULT 'CAD', closed_at TEXT
+            );
+            CREATE TABLE transactions (
+              id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
+              date TEXT NOT NULL, description TEXT NOT NULL, amount REAL NOT NULL,
+              activity_type TEXT NOT NULL, category TEXT, status TEXT,
+              source_file TEXT NOT NULL, imported_at TEXT NOT NULL
+            );
+        ''')
+        self.conn.execute(
+            "INSERT INTO accounts (id, label, institution, kind) VALUES ('acc1', 'Credit Card', NULL, 'credit_card')"
+        )
+        self.conn.execute(
+            '''INSERT INTO transactions
+               (id, account_id, date, description, amount, activity_type, source_file, imported_at)
+               VALUES ('tx1', 'acc1', '2026-09-01', 'Coffee', -5.0, 'Purchase', 'v1.csv', '2026-09-06T00:00:00Z')'''
+        )
+        self.conn.execute('PRAGMA user_version = 2')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_adds_btc_quantity_column(self):
+        finance_db.migrate(self.conn)
+        columns = {row[1] for row in self.conn.execute('PRAGMA table_info(transactions)')}
+        self.assertIn('btc_quantity', columns)
+
+    def test_existing_transaction_rows_survive_with_null_btc_quantity(self):
+        finance_db.migrate(self.conn)
+        row = self.conn.execute('SELECT * FROM transactions WHERE id = ?', ('tx1',)).fetchone()
+        self.assertEqual(row['description'], 'Coffee')
+        self.assertIsNone(row['btc_quantity'])
+
+    def test_is_idempotent(self):
+        finance_db.migrate(self.conn)
+        finance_db.migrate(self.conn)
+        columns = [row[1] for row in self.conn.execute('PRAGMA table_info(transactions)')]
+        self.assertEqual(columns.count('btc_quantity'), 1)
+
+    def test_records_the_schema_version(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
+
+
 if __name__ == '__main__':
     unittest.main()

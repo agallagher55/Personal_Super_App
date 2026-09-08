@@ -45,6 +45,26 @@ TAGS_FILE = os.path.join(DATA_DIR, 'tags.json')
 # of executescript() on an old system library.
 MIN_SQLITE_VERSION = (3, 31, 0)
 
+# Bumped whenever a one-time migration is added below; tracked per database
+# in PRAGMA user_version so each migration runs exactly once. Mirrors
+# finance/db.py's SCHEMA_VERSION/migrate() pattern.
+#
+# To add the next migration: bump this constant, add an
+# `if version < N: _your_migration(conn)` line to migrate() below (in
+# order, one per version), and write `_your_migration` the way
+# finance/db.py's migrations do - check what's actually there with
+# PRAGMA table_info() rather than assuming a database's starting state,
+# since CREATE TABLE IF NOT EXISTS is a no-op against a table that already
+# exists but says nothing about its columns. If the change needs more than
+# ALTER TABLE ADD COLUMN (SQLite can't ALTER TABLE to add a CHECK
+# constraint, drop a column's constraint, etc.), rebuild the table: create
+# a new one with the desired shape, copy the data across, drop the old
+# one, rename, then recreate any indexes the drop took with it. Add a test
+# in test_tasks_db.py that stages a database at the previous version (see
+# TestSchemaMigrations below) and asserts the upgrade preserves data and
+# is idempotent.
+SCHEMA_VERSION = 1
+
 # Order matters: the dicts built from these are serialized straight into
 # GET /tasks.json, and keeping the old JSON files' key order means the
 # response stays byte-for-byte what it was before the migration.
@@ -94,6 +114,29 @@ def init_schema(conn):
     # connection rather than needing to be re-set per request.
     conn.execute('PRAGMA journal_mode = WAL')
     conn.commit()
+    migrate(conn)
+
+
+def migrate(conn):
+    """Applies the migrations this database is behind on, in order. Every
+    setup path goes through init_schema (server startup, the JSON import,
+    tests), so no caller can end up on a database whose schema is current
+    but whose recorded version isn't - same pattern as finance/db.py.
+
+    Migration 1 has no DDL of its own: `CREATE TABLE IF NOT EXISTS` already
+    brought every tasks.db, old or new, to today's table shapes before this
+    module tracked a schema version at all. It exists purely to start that
+    tracking, so the *next* real migration (adding or changing a column)
+    has a version number to check against instead of probing
+    PRAGMA table_info() to guess whether it already ran.
+    """
+    version = conn.execute('PRAGMA user_version').fetchone()[0]
+
+    if version < SCHEMA_VERSION:
+        # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is our
+        # own int constant, never user input.
+        conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
+        conn.commit()
 
 
 def ensure_database(path=None):

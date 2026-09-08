@@ -92,6 +92,54 @@ class TestSchema(DatabaseTestCase):
         self.assertEqual([s['id'] for s in tasks_db.load_sections(self.conn)], ['c', 'a', 'b'])
 
 
+class TestSchemaMigrations(DatabaseTestCase):
+    """Issue: versioned schema migrations for tasks.db - PRAGMA user_version
+    tracking so a future column/constraint change has an upgrade path,
+    mirroring backend/finance/db.py's SCHEMA_VERSION/migrate() pattern."""
+
+    def test_fresh_database_starts_at_current_version(self):
+        version = self.conn.execute('PRAGMA user_version').fetchone()[0]
+        self.assertEqual(version, tasks_db.SCHEMA_VERSION)
+
+    def test_running_init_schema_repeatedly_is_idempotent(self):
+        self.given_section()
+        tasks_db.insert_task(self.conn, a_task())
+
+        tasks_db.init_schema(self.conn)
+        tasks_db.init_schema(self.conn)
+
+        self.assertEqual(len(tasks_db.load_tasks(self.conn)), 1)
+        version = self.conn.execute('PRAGMA user_version').fetchone()[0]
+        self.assertEqual(version, tasks_db.SCHEMA_VERSION)
+
+    def test_an_older_database_is_upgraded_without_losing_data(self):
+        """Stages a database the way one created before this module tracked
+        a schema version would look: tables already at today's shape (the
+        only shape tasks_schema.sql has ever had), but user_version still
+        at 0. migrate() must bring it up to date without touching the rows
+        already there."""
+        self.given_section()
+        tasks_db.insert_task(self.conn, a_task())
+        self.conn.execute('PRAGMA user_version = 0')
+        self.conn.commit()
+
+        tasks_db.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], tasks_db.SCHEMA_VERSION)
+        self.assertEqual(len(tasks_db.load_sections(self.conn)), 1)
+        self.assertEqual(len(tasks_db.load_tasks(self.conn)), 1)
+
+    def test_migrate_is_idempotent(self):
+        self.conn.execute('PRAGMA user_version = 0')
+        self.conn.commit()
+
+        tasks_db.migrate(self.conn)
+        after_first = self.conn.execute('PRAGMA user_version').fetchone()[0]
+
+        tasks_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], after_first)
+
+
 class TestGeneratedDoneColumn(DatabaseTestCase):
 
     def setUp(self):
