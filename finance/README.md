@@ -99,9 +99,10 @@ remain documented, not built.
 Plaid-based live account linking (Wealthsimple first, any Plaid-supported
 institution after that) is kept as **Part B** of `ARCHITECTURE.md`,
 deferred rather than dropped, in case account-linking is revisited later.
-[`schema.sql`](schema.sql) is that original Plaid-oriented DDL; the
-CSV-import schema is simpler and lives inline in Part A of the
-architecture doc for now (no accounts synced, no access tokens to store).
+[`schema.sql`](schema.sql) is that original Plaid-oriented DDL; the live
+CSV/manual-entry schema is maintained in
+`backend/finance/csv_schema.sql` and explained in Parts A and C of the
+architecture doc (no accounts synced and no Plaid access tokens stored).
 
 The one hard prerequisite called out for the Plaid path specifically: this
 app has no authentication today, which is fine for a task list and not

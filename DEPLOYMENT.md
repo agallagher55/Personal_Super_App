@@ -28,12 +28,14 @@ included.
 2. From the Render dashboard, click **New > Blueprint**.
 3. Select this repository. Render finds `render.yaml` at the repo
    root automatically and shows a preview of what it'll create:
-   - a **web service** named `personal-super-app` on the free plan,
+   - a **web service** named `personal-super-app`, requested on the free plan,
      running `python3 backend/server.py`
    - a **1GB persistent disk** mounted at `data/` inside the service
-4. Click **Apply** to create the service. Render builds and starts it
-   using the blueprint's config — no manual build/start command entry
-   needed.
+4. Confirm in Render's preview that the selected service plan currently
+   supports the requested persistent disk. Hosting plan features and pricing
+   change independently of this repository; if Render rejects the free-plan +
+   disk combination, select a disk-capable plan before applying. Then click
+   **Apply**. No manual build/start command entry is needed.
 
 ### What the persistent disk does
 
@@ -42,12 +44,11 @@ included.
 ephemeral filesystem is wiped on every deploy, so without a disk every
 deploy would reset your tasks back to whatever's committed in the repo.
 
-The disk in `render.yaml` is mounted directly over `data/`. On the
-**first** deploy, Render copies whatever's already at that path (the
-three seed JSON files committed to the repo) onto the new disk. After
-that, all reads/writes from `backend/server.py` go to the persistent
-disk, so edits made through the running app survive redeploys, restarts,
-and code pushes.
+The disk in `render.yaml` is mounted directly over `data/`. Treat a newly
+created disk as empty: do not assume the committed files beneath that mount
+point are copied onto it. After initialization, all reads/writes from
+`backend/server.py` go to the persistent disk, so edits made through the
+running app survive redeploys, restarts, and code pushes.
 
 ### Tasks database: the one-time migration
 
@@ -65,9 +66,12 @@ Import them once, after the first deploy of this code:
    python3 backend/tasks_db.py migrate
    ```
 
-   It reads the `data/*.json` files already seeded onto the disk, prints a
-   row count per table, and refuses to run a second time against a
-   database that already holds rows.
+   This requires `data/sections.json`, `data/tasks.json`, and `data/tags.json`
+   to be present on the mounted disk. If a new disk does not contain them,
+   copy the three committed files onto it using a Render Shell or other
+   supported transfer mechanism first. The command prints a row count per
+   table and refuses to run a second time against a database that already
+   holds rows.
 2. Verify `/tasks`, `/tasks/categories`, and one category page load with
    your real data.
 3. From then on `data/tasks.db` is the live store. The JSON files stay on
@@ -101,13 +105,14 @@ branch (`main` by default) once the Blueprint is created. Manual
 redeploys are available from the service's page in the Render
 dashboard if you need to trigger one without a new commit.
 
-### Free plan caveats
+### Plan caveats
 
-The free plan spins the service down after a period of inactivity;
-the next request after that wakes it back up, which takes a few
-seconds. This app is a personal task tracker, so that's a reasonable
-tradeoff for zero cost. Upgrade the `plan` in `render.yaml` if you
-want the service to stay warm.
+The Blueprint currently requests `plan: free`, but the repository cannot
+verify Render's current plan eligibility, pricing, disk support, spin-down
+policy, or backup features. Confirm all five in Render before applying the
+Blueprint. If the chosen plan spins down after inactivity, the first request
+afterward will have a cold-start delay; choose a disk-capable always-on plan if
+that is unacceptable.
 
 ## Fitness sign-in environment variables
 

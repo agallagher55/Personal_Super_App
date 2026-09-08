@@ -1,6 +1,6 @@
 # ServiceNow sync
 
-Pulls your assigned ServiceNow tasks into `data/tasks.json` via the
+Pulls your assigned ServiceNow tasks into `data/tasks.db` via the
 [Table API](https://developer.servicenow.com/dev.do#!/reference/api/latest/rest/c_TableAPI),
 so the "Work Tasks" list at `/tasks/work` can be kept in sync with the
 Halifax ServiceNow GIS dashboard instead of copying tasks over by hand.
@@ -29,7 +29,7 @@ this repo (`backend/server.py` is also pure stdlib).
      assuming personal Basic auth is the only route — some instances block
      Basic auth entirely.
 3. Run a dry run first to confirm the query and field mapping look right
-   without touching `data/tasks.json`:
+   without touching `data/tasks.db`:
    ```
    python3 service_now/sync.py --dry-run
    ```
@@ -66,6 +66,9 @@ future runs.
   `own-tasks`, i.e. `/tasks/work`) — matched by `servicenow_sys_id` first,
   falling back to `ticket_number`, so re-running never creates duplicates
   and never touches the `notes` field you've typed in the app yourself.
+- Uses the same `backend/tasks_db.py` storage helpers as the web app and
+  commits the entire sync in one SQLite transaction. A failed or interrupted
+  run therefore cannot leave a partially applied import.
 
 ## Known limitation
 

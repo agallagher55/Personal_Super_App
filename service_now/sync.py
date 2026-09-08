@@ -5,7 +5,7 @@ Usage:
     python3 service_now/sync.py [--dry-run]
 
 Requires service_now/.env (see .env.example) with instance + credentials.
-Fetches records from SERVICENOW_TABLE (default sc_task) assigned to you,
+Fetches records from SERVICENOW_TABLE (default task) assigned to you,
 maps them onto the app's task schema, and upserts them into the section
 named by SERVICENOW_SECTION_ID — matching existing tasks by ServiceNow
 sys_id (falling back to ticket number) so re-running this doesn't create
@@ -182,7 +182,7 @@ def upsert(tasks, section_id, mapped, dry_run, pending):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dry-run', action='store_true', help="Fetch and report, but don't write tasks.json")
+    parser.add_argument('--dry-run', action='store_true', help="Fetch and report, but don't write tasks.db")
     args = parser.parse_args()
 
     config = load_config()
