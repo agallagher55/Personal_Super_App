@@ -1,16 +1,13 @@
-import { initThemeToggle } from "../theme.js";
 import { getMe, signOut } from "../api.js";
 
 // Reusable app header: page title, the date-range filter form, and an
 // optional sync/update control. Every page (the dashboard and each metric
 // detail page) used to hand-roll this same markup; centralizing it here
 // keeps them in sync and gives each page one place to wire up listeners.
-// Also wires up the dark mode toggle (bottom-right corner) - not part of
-// the header markup itself, but every page calls this once, which makes it
-// the one shared spot to bring the toggle in on every page.
+// The dark mode toggle used to be built here too, from a fitness-only copy
+// of the theme script; every fitness page now loads the app-wide
+// static/js/theme.js instead, same as /tasks and /finance do.
 export function renderPageHeader(container, { title, showSync = false } = {}) {
-  initThemeToggle();
-
   container.innerHTML = `
     <h1>${title}</h1>
     <div class="header-right">

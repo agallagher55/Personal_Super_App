@@ -46,7 +46,7 @@ export function wireSyncButton(button, lastSyncedEl, { setStatus, onDone }) {
       const counts = Object.entries(result.synced)
         .map(([metric, count]) => `${metric}: ${count}`)
         .join(", ");
-      // A partial failure (see docs/api-contract.md's POST /api/sync) still
+      // A partial failure (see fitness/API-CONTRACT.md's POST /fitness/api/sync) still
       // means the other metrics genuinely synced - report both rather than
       // hiding the failure or treating the whole sync as an error.
       if (result.errors && Object.keys(result.errors).length > 0) {

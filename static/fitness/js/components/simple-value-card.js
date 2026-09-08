@@ -5,7 +5,7 @@ import { drawSparkline, formatShortDate } from "../charts.js";
 // steps/heart_rate/sleep/activity, which each have a different response
 // shape, all five of these follow the same api-contract.md shape, so one
 // generic renderer covers them instead of five near-duplicate files.
-export function renderSimpleValueCard(container, records, { unit = "", color = "#2563eb", decimals = 0 } = {}) {
+export function renderSimpleValueCard(container, records, { unit = "", colorVar = "--metric-steps", decimals = 0 } = {}) {
   container.innerHTML = "";
   const latest = records[records.length - 1];
 
@@ -24,7 +24,7 @@ export function renderSimpleValueCard(container, records, { unit = "", color = "
   canvas.className = "sparkline";
   container.appendChild(canvas);
   drawSparkline(canvas, records.map((r) => r.value), {
-    color,
+    colorVar,
     labels: records.map((r) => r.date),
   });
 }

@@ -1,6 +1,6 @@
 import { drawBarChart, formatShortDate } from "../charts.js";
 
-// `records` is docs/api-contract.md's steps shape: [{ date, value }].
+// `records` is fitness/API-CONTRACT.md's steps shape: [{ date, value }].
 export function renderSteps(container, records) {
   container.innerHTML = "";
   const latest = records[records.length - 1];
@@ -23,7 +23,7 @@ export function renderSteps(container, records) {
   canvas.className = "sparkline";
   container.appendChild(canvas);
   drawBarChart(canvas, records.map((r) => r.value), {
-    color: "#2563eb",
+    colorVar: "--metric-steps",
     labels: records.map((r) => r.date),
   });
 }

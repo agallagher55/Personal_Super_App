@@ -1,5 +1,11 @@
 // Small dependency-free chart helpers, drawn on <canvas> (see
-// docs/frontend-architecture.md - no charting library for v1).
+// fitness/ARCHITECTURE.md §5 - no charting library, same convention as
+// static/finance/js/charts.js).
+//
+// Colors are named as CSS custom properties (`colorVar: "--metric-steps"`)
+// and resolved against the document at draw time rather than passed as hex,
+// so every chart follows the current light/dark theme - the same approach
+// static/finance/js/charts.js takes. See DESIGN-SYSTEM.md.
 
 const DPR = window.devicePixelRatio || 1;
 
@@ -13,10 +19,26 @@ function prepareCanvas(canvas) {
   return { ctx, width: cssWidth, height: cssHeight };
 }
 
-const LABEL_COLOR = "#64748b"; // matches css/styles.css's --text-muted - labels
-// are never drawn in the series color (see the dataviz skill: text wears
-// text tokens, not the data color).
-const LABEL_FONT = "10px system-ui, sans-serif";
+function themeColor(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+// A canvas is a baked bitmap, so flipping data-theme on <html> (see
+// static/js/theme.js) leaves every chart painted in the outgoing theme's
+// colors until something redraws it. Each draw below records how to repeat
+// itself, and the one observer at the bottom of this file replays every
+// still-mounted canvas on a theme change - finance does the same with a
+// MutationObserver per chart, but a fitness page can have a dozen
+// sparklines up at once, so they share one here. Keyed weakly by canvas
+// and looked up through the DOM, so a canvas that gets thrown away (the
+// activity modal builds fresh ones every time it opens) takes its entry
+// with it.
+const themeRedraws = new WeakMap();
+
+// Text is never drawn in the series color - it wears the app's own text
+// token (see the dataviz skill), in the same mono face finance's axes use.
+const LABEL_FONT = "10px 'JetBrains Mono', ui-monospace, monospace";
+const EMPTY_FONT = "12px 'JetBrains Mono', ui-monospace, monospace";
 
 function formatValue(v) {
   return Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 1 });
@@ -52,7 +74,12 @@ export function formatTimeOfDay(isoStr) {
  * than overlap (see marks-and-anatomy.md's "when end-labels collide, don't
  * stack them").
  */
-export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, labels = null, labelExtremes = true, formatLabel = formatShortDate } = {}) {
+export function drawSparkline(canvas, values, options = {}) {
+  const { colorVar = "--metric-steps", padding = 4, labels = null, labelExtremes = true, formatLabel = formatShortDate } = options;
+  themeRedraws.set(canvas, () => drawSparkline(canvas, values, options));
+
+  const color = themeColor(colorVar);
+  const labelColor = themeColor("--ink-soft");
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
 
@@ -61,8 +88,8 @@ export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, 
     .filter((p) => typeof p.v === "number" && !Number.isNaN(p.v));
 
   if (points.length === 0) {
-    ctx.fillStyle = LABEL_COLOR;
-    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillStyle = labelColor;
+    ctx.font = EMPTY_FONT;
     ctx.textAlign = "center";
     ctx.fillText("no data", width / 2, height / 2);
     return;
@@ -122,7 +149,7 @@ export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, 
   }
 
   if (labelExtremes) {
-    ctx.fillStyle = LABEL_COLOR;
+    ctx.fillStyle = labelColor;
     ctx.font = LABEL_FONT;
 
     // Bounding-box collision check, kept separate per side of the line so a
@@ -166,7 +193,7 @@ export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, 
   }
 
   if (hasDateLabels) {
-    ctx.fillStyle = LABEL_COLOR;
+    ctx.fillStyle = labelColor;
     ctx.font = LABEL_FONT;
     const dateY = height - 2;
     const placed = [];
@@ -206,7 +233,12 @@ export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, 
  * the peak bar's value when `labelExtremes` is set, and the first/last
  * x-axis labels when `labels` (e.g. each bar's date) is provided.
  */
-export function drawBarChart(canvas, values, { color = "#3b82f6", padding = 4, labels = null, labelExtremes = true } = {}) {
+export function drawBarChart(canvas, values, options = {}) {
+  const { colorVar = "--metric-steps", padding = 4, labels = null, labelExtremes = true } = options;
+  themeRedraws.set(canvas, () => drawBarChart(canvas, values, options));
+
+  const color = themeColor(colorVar);
+  const labelColor = themeColor("--ink-soft");
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
 
@@ -215,8 +247,8 @@ export function drawBarChart(canvas, values, { color = "#3b82f6", padding = 4, l
     .filter((p) => typeof p.v === "number" && !Number.isNaN(p.v));
 
   if (points.length === 0) {
-    ctx.fillStyle = LABEL_COLOR;
-    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillStyle = labelColor;
+    ctx.font = EMPTY_FONT;
     ctx.textAlign = "center";
     ctx.fillText("no data", width / 2, height / 2);
     return;
@@ -254,14 +286,14 @@ export function drawBarChart(canvas, values, { color = "#3b82f6", padding = 4, l
   if (hasExtremeLabels) {
     const maxPoint = points.reduce((a, b) => (b.v > a.v ? b : a));
     const labelX = xFor(maxPoint.i) + barWidth / 2;
-    ctx.fillStyle = LABEL_COLOR;
+    ctx.fillStyle = labelColor;
     ctx.font = LABEL_FONT;
     ctx.textAlign = alignFor(labelX);
     ctx.fillText(formatValue(maxPoint.v), labelX, yFor(maxPoint.v) - 5);
   }
 
   if (hasDateLabels) {
-    ctx.fillStyle = LABEL_COLOR;
+    ctx.fillStyle = labelColor;
     ctx.font = LABEL_FONT;
     if (labels[0] === labels[labels.length - 1]) {
       ctx.textAlign = "center";
@@ -276,10 +308,14 @@ export function drawBarChart(canvas, values, { color = "#3b82f6", padding = 4, l
 }
 
 /**
- * Draws a horizontal stacked bar for sleep stages: segments is an array of
- * { minutes, color }, drawn left-to-right in the order given.
+ * Draws a horizontal stacked bar for sleep stages / heart rate zones:
+ * segments is an array of { minutes, colorVar }, drawn left-to-right in the
+ * order given.
  */
-export function drawStackedBar(canvas, segments, { padding = 2 } = {}) {
+export function drawStackedBar(canvas, segments, options = {}) {
+  const { padding = 2 } = options;
+  themeRedraws.set(canvas, () => drawStackedBar(canvas, segments, options));
+
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
 
@@ -288,7 +324,7 @@ export function drawStackedBar(canvas, segments, { padding = 2 } = {}) {
   const barHeight = height - padding * 2;
 
   if (total <= 0) {
-    ctx.fillStyle = "#e2e8f0";
+    ctx.fillStyle = themeColor("--line");
     ctx.fillRect(padding, padding, innerW, barHeight);
     return;
   }
@@ -297,8 +333,17 @@ export function drawStackedBar(canvas, segments, { padding = 2 } = {}) {
   for (const seg of segments) {
     const segWidth = (Math.max(seg.minutes, 0) / total) * innerW;
     if (segWidth <= 0) continue;
-    ctx.fillStyle = seg.color;
+    ctx.fillStyle = themeColor(seg.colorVar);
     ctx.fillRect(x, padding, segWidth, barHeight);
     x += segWidth;
   }
 }
+
+// Replays every mounted canvas this module has drawn, so a theme flip
+// repaints the charts along with the rest of the page.
+new MutationObserver(() => {
+  for (const canvas of document.querySelectorAll("canvas")) {
+    const redraw = themeRedraws.get(canvas);
+    if (redraw) redraw();
+  }
+}).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });

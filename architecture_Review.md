@@ -16,6 +16,16 @@ same two docs. `roadmap.html` tracks current status; everything else
 below (the tasks-tracker/backend findings and recommended priorities
 1–5) is unaffected and still applies.
 
+**Since diverged (as of 2026-09-08):** the frontend now has one design
+system rather than two — `/fitness` had kept the standalone
+`personal_health` project's own palette, type and dark mode, and has been
+moved onto the app's shared tokens; see `DESIGN-SYSTEM.md`. §3's last
+finding (no responsive/mobile layout evident) turned out to be half right
+and is now fixed: `styles.css` did have breakpoints, but no page outside
+`/fitness` declared a `<meta name="viewport">`, so none of them ever
+applied on a phone. Every page declares one now. §3's other findings are
+unaffected and still apply.
+
 ## 1. What this app actually is today
 
 Despite the "Super App" name, this is a **single-page personal task
@@ -164,9 +174,12 @@ sharing a data-access layer.
   for required-field enforcement beyond basic HTML5 `required`.
 - **No accessibility pass evident**: drag-and-drop reordering (sections
   and tasks) has no keyboard-equivalent, so reordering is mouse-only.
-- **No responsive/mobile layout indicated** in a quick pass of
-  `styles.css` — worth confirming on a phone-width viewport if this is
-  meant to be used outside a desktop browser.
+- ~~**No responsive/mobile layout indicated** in a quick pass of
+  `styles.css`~~ — *resolved 2026-09-08.* `styles.css` did carry
+  breakpoints (880px/640px), but every page except the `/fitness` ones was
+  missing `<meta name="viewport">`, so a phone laid the page out at a
+  fixed ~980px and scaled it down, and none of those breakpoints ever
+  fired. All pages declare the viewport now.
 
 ## 4. Data model (`data/tasks.json`)
 

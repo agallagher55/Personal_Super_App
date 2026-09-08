@@ -1,7 +1,7 @@
 """Minimal HTTP client so the rest of the backend doesn't care whether
 `requests` is actually present in the arcgispro-py3 environment (see
-docs/backend-architecture.md) - falls back to the standard library's
-urllib if `requests` isn't installed.
+fitness/ARCHITECTURE.md) - falls back to the standard library's urllib if
+`requests` isn't installed.
 """
 
 import json

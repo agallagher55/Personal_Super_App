@@ -7,40 +7,54 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script>
+  (function () {
+    var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
 <style>
+  /* This page is deliberately self-contained (no /static/*.css), so it
+     still renders when opened straight off disk rather than through
+     backend/server.py. The values below are the app's own palette from
+     static/styles/styles.css under local names, not a fourth palette -
+     the pill colors are the only ones tuned away from their --status-*
+     originals, darkened/lightened a step so small uppercase mono text
+     stays legible on its own soft background. See DESIGN-SYSTEM.md. */
   :root {
-    --bg: #f7f5f1;
-    --sheet: #ffffff;
-    --ink: #1f1c17;
-    --ink-dim: #6b6459;
-    --line: #e7e2d9;
-    --accent: #8a5a2b;
-    --accent-soft: #f1e4d3;
-    --green: #3f7d4f;
-    --green-soft: #e4f0e6;
-    --blue: #3b6ea5;
-    --blue-soft: #e4ecf5;
-    --amber: #a4762a;
-    --amber-soft: #f5ead3;
-    --grey-soft: #ececea;
+    --bg: oklch(97% 0.014 75);
+    --sheet: oklch(99% 0.008 75);
+    --ink: oklch(24% 0.02 75);
+    --ink-dim: oklch(48% 0.02 75);
+    --line: oklch(88% 0.015 75);
+    --accent: oklch(56% 0.16 35);
+    --accent-soft: oklch(93% 0.03 35);
+    --green: oklch(48% 0.13 145);
+    --green-soft: oklch(94% 0.035 145);
+    --blue: oklch(48% 0.13 250);
+    --blue-soft: oklch(94% 0.025 250);
+    --grey-soft: oklch(93% 0.005 75);
+    color-scheme: light;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #181613;
-      --sheet: #221f1a;
-      --ink: #eee9e0;
-      --ink-dim: #a49a8a;
-      --line: #3a352c;
-      --accent: #d8a469;
-      --accent-soft: #3a2f20;
-      --green: #7fbf8f;
-      --green-soft: #223828;
-      --blue: #8fb8e0;
-      --blue-soft: #1f2c3a;
-      --amber: #dbb46a;
-      --amber-soft: #3a3020;
-      --grey-soft: #2b2822;
-    }
+  /* Driven by the data-theme attribute the bootstrap script in <head>
+     sets from the same "theme" localStorage key every other page uses, so
+     the app-wide dark mode toggle reaches this page too. It used to answer
+     only to prefers-color-scheme, which is why flipping the app to dark
+     left the roadmap stubbornly light. */
+  :root[data-theme="dark"] {
+    --bg: oklch(20% 0.014 75);
+    --sheet: oklch(25% 0.016 75);
+    --ink: oklch(92% 0.015 75);
+    --ink-dim: oklch(68% 0.02 75);
+    --line: oklch(36% 0.02 75);
+    --accent: oklch(70% 0.17 35);
+    --accent-soft: oklch(32% 0.07 35);
+    --green: oklch(76% 0.14 145);
+    --green-soft: oklch(30% 0.06 145);
+    --blue: oklch(74% 0.13 250);
+    --blue-soft: oklch(30% 0.05 250);
+    --grey-soft: oklch(30% 0.006 75);
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   body {
@@ -60,6 +74,7 @@
   }
   h1 {
     font-family: "Newsreader", serif;
+    font-style: italic;
     font-weight: 700;
     font-size: 2.4rem;
     margin: 0 0 6px;
@@ -84,12 +99,14 @@
   }
   h2 {
     font-family: "Newsreader", serif;
+    font-style: italic;
     font-weight: 700;
     font-size: 1.35rem;
     margin: 0 0 14px;
   }
   h3 {
     font-family: "Newsreader", serif;
+    font-style: italic;
     font-weight: 600;
     font-size: 1.08rem;
     margin: 0 0 4px;
@@ -198,7 +215,7 @@
   <header class="top">
     <h1>Roadmap</h1>
     <p class="subtitle">A soft, living plan &mdash; priorities and rough sequencing, not a committed schedule. Revisit whenever priorities shift.</p>
-    <div class="meta-line">Last written 2026-09-07 &middot; source docs: <code>finance/ARCHITECTURE.md</code>, <code>finance/README.md</code>, <code>fitness/README.md</code>, <code>fitness/VISITOR-SIGNIN-PLAN.md</code>, <code>DATABASE-MIGRATION.md</code>, <code>architecture_Review.md</code></div>
+    <div class="meta-line">Last written 2026-09-08 &middot; source docs: <code>finance/ARCHITECTURE.md</code>, <code>finance/README.md</code>, <code>fitness/README.md</code>, <code>fitness/VISITOR-SIGNIN-PLAN.md</code>, <code>DATABASE-MIGRATION.md</code>, <code>DESIGN-SYSTEM.md</code>, <code>architecture_Review.md</code></div>
   </header>
 
   <section class="card">
@@ -245,6 +262,14 @@
           <span class="pill pill-done">Done</span>
         </div>
         <div class="desc">Tasks moved off flat JSON onto SQLite: <code>data/tasks.db</code> with <code>sections</code>/<code>tasks</code>/<code>tags</code> tables, a generated <code>done</code> column that can't drift from <code>status</code>, and transactional writes. <code>backend/tasks_export.py</code> regenerates the committed JSON snapshot from it. See <code>DATABASE-MIGRATION.md</code>. Finance ended up with its own SQLite store too (<code>backend/finance/</code>, <code>data/finance/finance.db</code>) &mdash; built around CSV import rather than <code>finance/schema.sql</code>'s original Plaid-oriented design, which stays unused; see <code>finance/ARCHITECTURE.md</code> Part A1. Fitness stays on JSON deliberately (<code>fitness/ARCHITECTURE.md</code> &sect;6).</div>
+      </div>
+
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">One design system</span>
+          <span class="pill pill-done">Done</span>
+        </div>
+        <div class="desc">Every section now shares one palette, type scale and set of components, in both light and dark. <code>/fitness</code> had carried the ported <code>personal_health</code> project's own slate/blue look, <code>system-ui</code> type and opposite-corner theme toggle, so it read as a different product next to <code>/finance</code>; it now loads <code>static/styles/styles.css</code> like every other page, with fitness-only components layered on top. Its charts take theme tokens instead of hex, so they follow the toggle. Every page also finally declares a <code>viewport</code> meta, without which none of the mobile breakpoints ever fired. See <code>DESIGN-SYSTEM.md</code>.</div>
       </div>
     </div>
   </section>

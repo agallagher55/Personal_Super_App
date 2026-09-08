@@ -70,8 +70,9 @@ DATA_TYPES = {
     # {physical_time|civil_start_time}" pattern the four confirmed types use,
     # but NOT cross-checked against a real API response the way steps/
     # heart_rate/sleep/activity were. Run `python cli.py sync` and inspect
-    # backend/data/health_data.json for these metrics before trusting the
-    # field names in server.py's reshapers - see docs/backend-architecture.md.
+    # data/fitness/users/<user_id>/health_data.json for these metrics before
+    # trusting the field names in api.py's reshapers - see
+    # fitness/ARCHITECTURE.md §6.
     "spo2": {
         # ghealth registry: id "oxygen-saturation", sample-based (physical time).
         "api_id": "oxygen-saturation",

@@ -2,7 +2,7 @@ import { getMetricDetail } from "../api.js";
 import { renderPageHeader } from "../components/page-header.js";
 import { loadLastSynced, wireSyncButton } from "../sync-control.js";
 
-// Matches docs/api-contract.md's per-metric detail default: last 30 days.
+// Matches fitness/API-CONTRACT.md's per-metric detail default: last 30 days.
 const RANGE_DAYS = 30;
 
 function isoDate(d) {

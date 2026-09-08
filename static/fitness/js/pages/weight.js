@@ -4,7 +4,7 @@ import { getWeightUnit, setWeightUnit, convertFromKg } from "../units.js";
 import { computeMetricStats } from "../stats.js";
 import { renderStatsPanel } from "../components/stats-panel.js";
 
-const COLOR = "#4338ca";
+const COLOR_VAR = "--metric-weight";
 
 let unit = getWeightUnit();
 let records = [];
@@ -15,7 +15,7 @@ let statsContainer = null;
 function draw() {
   if (chartCanvas) {
     drawSparkline(chartCanvas, records.map((r) => convertFromKg(r.value, unit)), {
-      color: COLOR,
+      colorVar: COLOR_VAR,
       labels: records.map((r) => r.date),
     });
   }

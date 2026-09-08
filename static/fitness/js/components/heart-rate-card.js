@@ -1,8 +1,8 @@
 import { drawSparkline, formatShortDate } from "../charts.js";
 
-// `records` is docs/api-contract.md's heart_rate shape: [{ date, resting }].
+// `records` is fitness/API-CONTRACT.md's heart_rate shape: [{ date, resting }].
 // "resting" is currently a min-of-day-samples approximation on the backend
-// side - see docs/backend-architecture.md.
+// side - see fitness/ARCHITECTURE.md.
 export function renderHeartRate(container, records) {
   container.innerHTML = "";
   const latest = records[records.length - 1];
@@ -22,7 +22,7 @@ export function renderHeartRate(container, records) {
   canvas.className = "sparkline";
   container.appendChild(canvas);
   drawSparkline(canvas, records.map((r) => r.resting), {
-    color: "#dc2626",
+    colorVar: "--metric-heart-rate",
     labels: records.map((r) => r.date),
   });
 }

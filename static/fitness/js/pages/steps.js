@@ -5,7 +5,7 @@ import { renderStatsPanel } from "../components/stats-panel.js";
 
 function renderChart(canvas, records) {
   drawBarChart(canvas, records.map((r) => r.value), {
-    color: "#2563eb",
+    colorVar: "--metric-steps",
     labels: records.map((r) => r.date),
   });
 }

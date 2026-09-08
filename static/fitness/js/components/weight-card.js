@@ -1,7 +1,7 @@
 import { drawSparkline, formatShortDate } from "../charts.js";
 import { getWeightUnit, setWeightUnit, convertFromKg } from "../units.js";
 
-const COLOR = "#4338ca";
+const COLOR_VAR = "--metric-weight";
 
 // Dashboard weight card - like the other simple {date, value} metrics
 // (see components/simple-value-card.js) but with its own kg/lbs toggle,
@@ -45,7 +45,7 @@ export function renderWeightCard(container, records) {
     canvas.className = "sparkline";
     container.appendChild(canvas);
     drawSparkline(canvas, records.map((r) => convertFromKg(r.value, unit)), {
-      color: COLOR,
+      colorVar: COLOR_VAR,
       labels: records.map((r) => r.date),
     });
   }

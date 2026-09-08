@@ -10,17 +10,20 @@ ported copy of the standalone
 project (a single-user app); per-visitor sign-in was added on top per
 [`VISITOR-SIGNIN-PLAN.md`](VISITOR-SIGNIN-PLAN.md).
 
-Unlike `/finance` (still a planning-stage stub, see `finance/`), this is a
-real, working feature, folded into this repo's single stdlib `http.server`
-process and namespaced under `/fitness` instead of running as its own
-server.
+It's folded into this repo's single stdlib `http.server` process and
+namespaced under `/fitness` instead of running as its own server, and it
+shares the app's design system (`DESIGN-SYSTEM.md`) with `/tasks` and
+`/finance` — the pages kept the standalone project's own palette and type
+until 2026-09-08, which is why `/fitness` used to look like a different
+product from the rest of the app.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how it's wired into the rest of
-this app, [`API-CONTRACT.md`](API-CONTRACT.md) for the `/fitness/api/*`
-response shapes, [`google_health.md`](google_health.md) for the one-time
-Google Cloud/OAuth setup required before anyone can sign in, and
-[`VISITOR-SIGNIN-PLAN.md`](VISITOR-SIGNIN-PLAN.md) for the sign-in design
-itself.
+this app (§5 covers the frontend), [`API-CONTRACT.md`](API-CONTRACT.md) for
+the `/fitness/api/*` response shapes, [`google_health.md`](google_health.md)
+for the one-time Google Cloud/OAuth setup required before anyone can sign
+in, [`VISITOR-SIGNIN-PLAN.md`](VISITOR-SIGNIN-PLAN.md) for the sign-in
+design itself, and [`../DESIGN-SYSTEM.md`](../DESIGN-SYSTEM.md) for the
+tokens and components these pages are built from.
 
 ## Local setup (one-time)
 
@@ -71,6 +74,7 @@ page/script's actual behavior are otherwise unchanged from the ported
 | Token/data store | `backend/config.json` + `backend/data/health_data.json`, one shared file each | `data/fitness/users/<user_id>/{tokens,user,health_data}.json`, one set per visitor |
 | Frontend pages | `frontend/index.html`, `frontend/pages/*.html` | `html/fitness/index.html`, `html/fitness/pages/*.html`, `html/fitness/login.html` |
 | Frontend assets | `frontend/css/`, `frontend/js/` | `static/fitness/css/`, `static/fitness/js/` |
+| Styling | Its own complete stylesheet | The app's shared `static/styles/styles.css`, with `static/fitness/css/styles.css` layered on top for fitness-only components (see `DESIGN-SYSTEM.md`) |
 | Page URLs | `frontend/pages/steps.html` (file path) | `/fitness/steps` (clean route, see `routes.md`) |
 
 The `KNOWN_METRICS`/`_reshape_*` functions in `backend/fitness/api.py` still

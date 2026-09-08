@@ -5,7 +5,7 @@ import { renderStatsPanel } from "../components/stats-panel.js";
 
 function renderChart(canvas, records) {
   drawSparkline(canvas, records.map((r) => r.resting), {
-    color: "#dc2626",
+    colorVar: "--metric-heart-rate",
     labels: records.map((r) => r.date),
   });
 }
