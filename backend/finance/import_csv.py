@@ -166,6 +166,11 @@ def _assign_ids(account_id, rows, source_file, imported_at):
     db.transaction_id for why. `occurrence` counts rows that are
     identical in every hashed field, so two separate same-day charges of
     the same amount at the same merchant still get distinct ids.
+
+    batch_id defaults to None here since the batch (db.create_import_batch)
+    isn't created until row_count/date_range are known from these very
+    rows - callers set it on every row afterward, once they have it, same
+    as this function's own caller does right after calling it.
     """
     occurrences = {}
     out = []
@@ -181,6 +186,7 @@ def _assign_ids(account_id, rows, source_file, imported_at):
             'source_file': source_file,
             'imported_at': imported_at,
             'btc_quantity': row.get('btc_quantity'),  # only import_shakepay.py's ROUNDUP_BUY rows set this
+            'batch_id': None,
             **row,
         })
     return out
@@ -188,24 +194,41 @@ def _assign_ids(account_id, rows, source_file, imported_at):
 
 def import_csv_text(conn, source_file, text):
     """Parses `text` (one export file's full contents) and range-replace
-    loads it into the transactions table. Returns a summary dict."""
+    loads it into the transactions table. Returns a summary dict.
+
+    One import_batches row is created per call, inside the same
+    transaction as the range-replace it audits (see db.create_import_
+    batch's `kind='csv_...'`) - if parsing above already raised
+    ImportFormatError, or the range-replace itself fails, nothing ever
+    reaches `with conn:` and no batch row exists for that attempt: a
+    batch means a successful import, not an attempted one.
+    """
     kind, account_id, account_label, account_kind, rows = parse_csv_text(text)
 
     imported_at = dates.now_iso()
     dated_rows = _assign_ids(account_id, rows, source_file, imported_at)
     row_dates = [r['date'] for r in dated_rows]
+    date_start, date_end = min(row_dates), max(row_dates)
 
     institution = DEFAULT_CREDIT_CARD_INSTITUTION if kind == 'credit_card' else None
     with conn:
         finance_db.upsert_account(conn, account_id, account_label, institution, account_kind)
-        finance_db.replace_transactions_in_range(conn, account_id, min(row_dates), max(row_dates), dated_rows)
+        batch_id = finance_db.create_import_batch(
+            conn, kind=f'csv_{kind}', imported_at=imported_at, source_file=source_file,
+            file_hash=finance_db.file_hash(text), date_range_start=date_start, date_range_end=date_end,
+            row_count=len(dated_rows),
+        )
+        for row in dated_rows:
+            row['batch_id'] = batch_id
+        finance_db.replace_transactions_in_range(conn, account_id, date_start, date_end, dated_rows)
 
     return {
         'kind': kind,
         'account_id': account_id,
+        'batch_id': batch_id,
         'rows_imported': len(dated_rows),
-        'date_start': min(row_dates),
-        'date_end': max(row_dates),
+        'date_start': date_start,
+        'date_end': date_end,
     }
 
 

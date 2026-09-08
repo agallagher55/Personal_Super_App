@@ -460,9 +460,22 @@ def import_shakepay_text(conn, source_file, text, imported_at=None):
     loads it into finance.db, one account at a time (each account's own
     date range, same as import_csv.import_csv_text). Split out from
     import_shakepay_pdf so tests can exercise this against plain text
-    fixtures instead of real PDF binaries. Returns a summary dict."""
+    fixtures instead of real PDF binaries. Returns a summary dict.
+
+    One import_batches row per account (db.create_import_batch's
+    `kind='shakepay_{stype}'`), not one per statement: a single Shakepay
+    statement covers several sub-accounts (cash, card, crypto) with
+    independent date ranges, and a batch's row_count/date_range need to
+    agree with one coherent set of inserted rows the way import_csv.py's
+    single-account batches already do. Same all-or-nothing behavior for a
+    failed import: everything here shares the one `with conn:` below, so
+    a failure partway through leaves no batch for the account it failed
+    on, and rolls back any batches already created earlier in this same
+    call along with their rows.
+    """
     stype, period, rows_by_account, unparsed, stats = parse_statement_text(text)
     imported_at = imported_at or dates.now_iso()
+    statement_hash = finance_db.file_hash(text)
 
     accounts_imported = []
     with conn:
@@ -473,12 +486,21 @@ def import_shakepay_text(conn, source_file, text, imported_at=None):
             finance_db.upsert_account(conn, account_id, label, institution, kind)
             dated_rows = import_csv._assign_ids(account_id, rows, source_file, imported_at)
             row_dates = [r['date'] for r in dated_rows]
-            finance_db.replace_transactions_in_range(conn, account_id, min(row_dates), max(row_dates), dated_rows)
+            date_start, date_end = min(row_dates), max(row_dates)
+            batch_id = finance_db.create_import_batch(
+                conn, kind=f'shakepay_{stype}', imported_at=imported_at, source_file=source_file,
+                file_hash=statement_hash, date_range_start=date_start, date_range_end=date_end,
+                row_count=len(dated_rows),
+            )
+            for row in dated_rows:
+                row['batch_id'] = batch_id
+            finance_db.replace_transactions_in_range(conn, account_id, date_start, date_end, dated_rows)
             accounts_imported.append({
                 'account_id': account_id,
+                'batch_id': batch_id,
                 'rows_imported': len(dated_rows),
-                'date_start': min(row_dates),
-                'date_end': max(row_dates),
+                'date_start': date_start,
+                'date_end': date_end,
             })
 
     return {

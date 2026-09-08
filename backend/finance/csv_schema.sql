@@ -122,7 +122,13 @@ CREATE TABLE IF NOT EXISTS transactions (
                                      -- against a transactions table that already exists)
   source_file   TEXT NOT NULL,      -- which upload this row came from, for audit
   imported_at   TEXT NOT NULL       -- YYYY-MM-DDTHH:MM:SSZ
-    CHECK (imported_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+    CHECK (imported_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+  batch_id      INTEGER REFERENCES import_batches(id)  -- which import_csv_text()/import_shakepay_text()
+                                     -- call produced this row - see import_batches below. NULL for a
+                                     -- transaction imported before this column existed (existing
+                                     -- databases get it via db.py's migration 7); no batch is
+                                     -- reconstructed retroactively for those rows, since inventing one
+                                     -- would claim provenance the data doesn't actually have.
 );
 
 CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(account_id, date);
@@ -209,11 +215,18 @@ CREATE TABLE IF NOT EXISTS cash_flow_exclusions (
 -- "current" is just "the latest one" (latest_account_balances below)
 -- and history falls out of the same table for free - see networth.py.
 
--- One row per "event that produced facts" - here, a manual balance
--- entry (kind = manual_balance/manual_holding); a future CSV import for
--- one of these sources would get its own kind. Deliberately minimal for
--- Phase 1 - source_file/file_hash/date_range_* stay unused until a real
--- import populates them (Part C, C3/C10 Phase 4).
+-- One row per "event that produced facts": a manual balance entry
+-- (kind = manual_balance/manual_holding, source_file/file_hash/
+-- date_range_* left NULL - nothing to fill them with) or, since the
+-- September 2026 database review, one per successful import_csv.py/
+-- import_shakepay.py call (kind = csv_credit_card/csv_bank_activity/
+-- shakepay_card/shakepay_account - see those modules), which do
+-- populate every column here and are what transactions.batch_id above
+-- points at. "Successful" specifically: both importers create this row
+-- inside the same transaction as the rows it describes, so a failed
+-- import - whether it fails before ever reaching that transaction, or
+-- partway through it - never leaves a batch with no matching rows, or a
+-- row_count that disagrees with what actually landed.
 CREATE TABLE IF NOT EXISTS import_batches (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   kind              TEXT NOT NULL,

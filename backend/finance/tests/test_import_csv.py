@@ -230,6 +230,37 @@ class TestImportCsvText(ImportDbTestCase):
         self.assertEqual(finance_db.account_transaction_count(self.conn, 'main-credit-card'), 5)
         self.assertEqual(finance_db.account_transaction_count(self.conn, 'WK1WPY033CAD'), 5)
 
+    def test_creates_one_import_batch_recording_the_file_and_range(self):
+        summary = import_csv.import_csv_text(self.conn, 'cc.csv', CREDIT_CARD_CSV)
+        batch = self.conn.execute(
+            'SELECT * FROM import_batches WHERE id = ?', (summary['batch_id'],)
+        ).fetchone()
+        self.assertEqual(batch['kind'], 'csv_credit_card')
+        self.assertEqual(batch['source_file'], 'cc.csv')
+        self.assertEqual(batch['file_hash'], finance_db.file_hash(CREDIT_CARD_CSV))
+        self.assertEqual(batch['row_count'], 5)
+        self.assertEqual(batch['date_range_start'], '2026-06-15')
+        self.assertEqual(batch['date_range_end'], '2026-09-05')
+
+    def test_every_inserted_row_points_at_that_batch(self):
+        summary = import_csv.import_csv_text(self.conn, 'cc.csv', CREDIT_CARD_CSV)
+        batch_ids = {
+            r['batch_id'] for r in
+            self.conn.execute('SELECT batch_id FROM transactions WHERE account_id = ?', ('main-credit-card',))
+        }
+        self.assertEqual(batch_ids, {summary['batch_id']})
+
+    def test_reimporting_creates_a_second_batch(self):
+        first = import_csv.import_csv_text(self.conn, 'cc.csv', CREDIT_CARD_CSV)
+        second = import_csv.import_csv_text(self.conn, 'cc.csv', CREDIT_CARD_CSV)
+        self.assertNotEqual(first['batch_id'], second['batch_id'])
+        self.assertEqual(self.conn.execute('SELECT COUNT(*) AS n FROM import_batches').fetchone()['n'], 2)
+
+    def test_a_failed_import_creates_no_batch(self):
+        with self.assertRaises(import_csv.ImportFormatError):
+            import_csv.import_csv_text(self.conn, 'bad.csv', 'not,a,recognized,header\n1,2,3,4\n')
+        self.assertEqual(self.conn.execute('SELECT COUNT(*) AS n FROM import_batches').fetchone()['n'], 0)
+
 
 class TestTransactionIdStability(ImportDbTestCase):
     """Ids are derived from row content, not file position (db.transaction_id).

@@ -17,7 +17,7 @@ SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csv_sche
 
 # Bumped whenever a one-time migration is added below; tracked per
 # database in PRAGMA user_version so each migration runs exactly once.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 ID_DIGEST_LENGTH = 12
 
@@ -130,6 +130,9 @@ def migrate(conn):
     if version < 6:
         _add_transaction_date_constraints(conn)
 
+    if version < 7:
+        _add_transaction_batch_id_column(conn)
+
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is
         # our own int constant, never user input.
@@ -159,6 +162,14 @@ def transaction_id(account_id, date, description, amount, activity_type, occurre
     fingerprint = f'{date}|{description}|{amount:.2f}|{activity_type}'
     digest = hashlib.sha256(fingerprint.encode('utf-8')).hexdigest()[:ID_DIGEST_LENGTH]
     return f'{account_id}:{date}:{digest}:{occurrence}'
+
+
+def file_hash(text):
+    """A full-content hash for one import_batches row's file_hash column -
+    not truncated like transaction_id's digest, since this identifies a
+    whole file for audit/dedup purposes rather than needing to stay short
+    inside a composite id."""
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
 
 def _rewrite_positional_transaction_ids(conn):
@@ -457,6 +468,23 @@ def _add_transaction_date_constraints(conn):
         conn.execute('PRAGMA foreign_keys = ON')
 
 
+def _add_transaction_batch_id_column(conn):
+    """Migration 7: adds the nullable transactions.batch_id column (see
+    csv_schema.sql). A plain ALTER TABLE ADD COLUMN suffices here, unlike
+    the CHECK-constraint migrations above - no table rebuild needed since
+    a nullable column with no CHECK is exactly what ALTER TABLE ADD
+    COLUMN can express directly. Existing transactions get NULL, not a
+    reconstructed batch: there is no way to know which long-ago import
+    call produced them, and inventing a batch would claim provenance the
+    data doesn't actually have (see the "Legacy transactions remain
+    usable with a documented null/legacy batch state" requirement this
+    satisfies)."""
+    existing = {row[1] for row in conn.execute('PRAGMA table_info(transactions)')}
+    if 'batch_id' not in existing:
+        conn.execute('ALTER TABLE transactions ADD COLUMN batch_id INTEGER REFERENCES import_batches(id)')
+    conn.commit()
+
+
 def ensure_database(path=None):
     """Create the database and its schema if they don't exist yet. Called
     once at server startup, same pattern as tasks_db.ensure_database()."""
@@ -516,8 +544,10 @@ def replace_transactions_in_range(conn, account_id, date_start, date_end, rows):
     )
     conn.executemany(
         '''INSERT INTO transactions
-           (id, account_id, date, description, amount, activity_type, category, status, btc_quantity, source_file, imported_at)
-           VALUES (:id, :account_id, :date, :description, :amount, :activity_type, :category, :status, :btc_quantity, :source_file, :imported_at)''',
+           (id, account_id, date, description, amount, activity_type, category, status, btc_quantity,
+            source_file, imported_at, batch_id)
+           VALUES (:id, :account_id, :date, :description, :amount, :activity_type, :category, :status,
+                   :btc_quantity, :source_file, :imported_at, :batch_id)''',
         rows,
     )
 

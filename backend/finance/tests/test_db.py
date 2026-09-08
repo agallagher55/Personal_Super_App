@@ -583,6 +583,7 @@ class TestReplaceTransactionsInRangeValidatesDates(unittest.TestCase):
             'id': 'tx1', 'account_id': 'acc1', 'date': '2026-09-01', 'description': 'Coffee',
             'amount': -5.0, 'activity_type': 'Purchase', 'category': None, 'status': None,
             'btc_quantity': None, 'source_file': 'v1.csv', 'imported_at': '2026-09-06T00:00:00Z',
+            'batch_id': None,
         }
 
     def test_accepts_well_formed_dates(self):
@@ -664,6 +665,11 @@ class TestTransactionDateConstraintsMigration(unittest.TestCase):
             CREATE TABLE merchant_category_overrides (
               description TEXT PRIMARY KEY, category TEXT NOT NULL, updated_at TEXT NOT NULL
             );
+            CREATE TABLE import_batches (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, source_file TEXT,
+              file_hash TEXT, date_range_start TEXT, date_range_end TEXT, row_count INTEGER NOT NULL,
+              imported_at TEXT NOT NULL, notes TEXT
+            );
             CREATE VIEW transactions_effective AS
             SELECT t.*, COALESCE(tco.category, mco.category, t.category) AS effective_category
             FROM transactions t
@@ -735,6 +741,106 @@ class TestTransactionDateConstraintsMigration(unittest.TestCase):
 
         self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], 5)
         self.assertTrue(finance_db.transaction_exists(self.conn, 'tx1'))
+
+
+class TestTransactionBatchIdColumn(unittest.TestCase):
+    """Issue: unify transaction and balance import auditing with batch
+    IDs. A fresh database has the column and its FK to import_batches."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        finance_db.init_schema(self.conn)
+        finance_db.upsert_account(self.conn, 'acc1', 'Chequing', 'TD', 'chequing')
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_batch_id_defaults_to_null(self):
+        self.conn.execute(
+            '''INSERT INTO transactions (id, account_id, date, description, amount, activity_type,
+                                          source_file, imported_at)
+               VALUES ('tx1', 'acc1', '2026-09-01', 'x', -1.0, 'Purchase', 'v1.csv', '2026-09-06T00:00:00Z')'''
+        )
+        row = self.conn.execute("SELECT batch_id FROM transactions WHERE id = 'tx1'").fetchone()
+        self.assertIsNone(row['batch_id'])
+
+    def test_rejects_a_batch_id_with_no_matching_batch(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                '''INSERT INTO transactions (id, account_id, date, description, amount, activity_type,
+                                              source_file, imported_at, batch_id)
+                   VALUES ('tx1', 'acc1', '2026-09-01', 'x', -1.0, 'Purchase', 'v1.csv',
+                           '2026-09-06T00:00:00Z', 999)'''
+            )
+
+
+class TestTransactionBatchIdColumnMigration(unittest.TestCase):
+    """Migration 7 (db._add_transaction_batch_id_column): a plain ALTER
+    TABLE ADD COLUMN, staged here as the shape every finance.db had
+    before this migration."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        self.conn.executescript('''
+            CREATE TABLE accounts (
+              id TEXT PRIMARY KEY, label TEXT NOT NULL, institution TEXT, kind TEXT NOT NULL,
+              currency TEXT NOT NULL DEFAULT 'CAD', closed_at TEXT
+            );
+            CREATE TABLE transactions (
+              id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
+              date TEXT NOT NULL, description TEXT NOT NULL, amount REAL NOT NULL,
+              activity_type TEXT NOT NULL, category TEXT, status TEXT, btc_quantity REAL,
+              source_file TEXT NOT NULL, imported_at TEXT NOT NULL
+            );
+            CREATE TABLE import_batches (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, source_file TEXT,
+              file_hash TEXT, date_range_start TEXT, date_range_end TEXT, row_count INTEGER NOT NULL,
+              imported_at TEXT NOT NULL, notes TEXT
+            );
+        ''')
+        self.conn.execute(
+            "INSERT INTO accounts (id, label, institution, kind) VALUES ('acc1', 'CC', NULL, 'credit_card')"
+        )
+        self.conn.execute(
+            '''INSERT INTO transactions (id, account_id, date, description, amount, activity_type,
+                                          source_file, imported_at)
+               VALUES ('tx1', 'acc1', '2026-09-01', 'Coffee', -5.0, 'Purchase', 'v1.csv',
+                       '2026-09-06T00:00:00Z')'''
+        )
+        self.conn.execute('PRAGMA user_version = 6')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_adds_the_batch_id_column(self):
+        finance_db.migrate(self.conn)
+        columns = {row[1] for row in self.conn.execute('PRAGMA table_info(transactions)')}
+        self.assertIn('batch_id', columns)
+
+    def test_existing_transactions_get_a_null_batch_id_not_a_fabricated_one(self):
+        finance_db.migrate(self.conn)
+        row = self.conn.execute("SELECT batch_id FROM transactions WHERE id = 'tx1'").fetchone()
+        self.assertIsNone(row['batch_id'])
+        self.assertEqual(self.conn.execute('SELECT COUNT(*) AS n FROM import_batches').fetchone()['n'], 0)
+
+    def test_foreign_keys_are_intact_after_the_migration(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA foreign_key_check').fetchall(), [])
+
+    def test_is_idempotent(self):
+        finance_db.migrate(self.conn)
+        finance_db.migrate(self.conn)
+        columns = [row[1] for row in self.conn.execute('PRAGMA table_info(transactions)')]
+        self.assertEqual(columns.count('batch_id'), 1)
+
+    def test_records_the_schema_version(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
 
 
 if __name__ == '__main__':

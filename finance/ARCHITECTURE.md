@@ -1117,6 +1117,20 @@ uniformly to every financial fact the app tracks.
 
 ### C3. Cross-cutting: import_batches
 
+> **Partially shipped, September 2026 database review.** A lighter-weight
+> subset of this landed already, well ahead of the rest of Part C:
+> `transactions.batch_id` (nullable, `NULL` for anything imported before
+> this column existed - no retroactive backfill or raw layer) points
+> straight at `import_batches` from the *existing* direct-insert
+> `import_csv.py`/`import_shakepay.py` path, with real `kind` values
+> (`csv_credit_card`, `csv_bank_activity`, `shakepay_card`,
+> `shakepay_account` - not the `credit_card_csv`/`bank_csv` names
+> sketched below, chosen before this shipped). This does NOT mean the
+> raw/staging tables, the replay rule, or the C9 backfill below exist -
+> only that `transactions` rows now carry which import produced them,
+> closing the gap where balance snapshots already had `batch_id`
+> (C2/C5c) but transactions didn't.
+
 ```sql
 -- One row per "event that produced facts" - a CSV upload OR a manual
 -- balance/holding entry. Every raw_* table below carries a batch_id FK
