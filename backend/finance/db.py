@@ -17,7 +17,7 @@ SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csv_sche
 
 # Bumped whenever a one-time migration is added below; tracked per
 # database in PRAGMA user_version so each migration runs exactly once.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 ID_DIGEST_LENGTH = 12
 
@@ -132,6 +132,9 @@ def migrate(conn):
 
     if version < 7:
         _add_transaction_batch_id_column(conn)
+
+    if version < 8:
+        _add_snapshot_append_only_triggers(conn)
 
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is
@@ -482,6 +485,58 @@ def _add_transaction_batch_id_column(conn):
     existing = {row[1] for row in conn.execute('PRAGMA table_info(transactions)')}
     if 'batch_id' not in existing:
         conn.execute('ALTER TABLE transactions ADD COLUMN batch_id INTEGER REFERENCES import_batches(id)')
+    conn.commit()
+
+
+def _add_snapshot_append_only_triggers(conn):
+    """Migration 8: adds the BEFORE UPDATE/BEFORE DELETE triggers that
+    make account_balance_snapshots/account_terms_snapshots append-only as
+    a database invariant rather than just a convention (see
+    csv_schema.sql's comment just above those tables for the full
+    reasoning and the administrative-repair procedure). CREATE TRIGGER
+    IF NOT EXISTS, not a table rebuild: a trigger isn't part of a table's
+    own shape, so unlike a CHECK constraint it can be added directly.
+
+    Guarded by an actual table-existence check, not just IF NOT EXISTS on
+    the trigger itself: CREATE TRIGGER ... ON <table> raises "no such
+    table" outright if the table isn't there yet, unlike a column's
+    REFERENCES clause (see _add_transaction_batch_id_column), which
+    SQLite never validates against the target existing. Every real
+    finance.db has had both tables since Part C shipped, but this keeps
+    the migration honest about that assumption instead of asserting it.
+    """
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+
+    if 'account_balance_snapshots' in tables:
+        conn.executescript('''
+            CREATE TRIGGER IF NOT EXISTS account_balance_snapshots_no_update
+            BEFORE UPDATE ON account_balance_snapshots
+            BEGIN
+              SELECT RAISE(ABORT, 'account_balance_snapshots is append-only - insert a new, later snapshot instead of updating an existing one');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS account_balance_snapshots_no_delete
+            BEFORE DELETE ON account_balance_snapshots
+            BEGIN
+              SELECT RAISE(ABORT, 'account_balance_snapshots is append-only - corrections are additive, never a deletion');
+            END;
+        ''')
+
+    if 'account_terms_snapshots' in tables:
+        conn.executescript('''
+            CREATE TRIGGER IF NOT EXISTS account_terms_snapshots_no_update
+            BEFORE UPDATE ON account_terms_snapshots
+            BEGIN
+              SELECT RAISE(ABORT, 'account_terms_snapshots is append-only - insert a new, later snapshot instead of updating an existing one');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS account_terms_snapshots_no_delete
+            BEFORE DELETE ON account_terms_snapshots
+            BEGIN
+              SELECT RAISE(ABORT, 'account_terms_snapshots is append-only - corrections are additive, never a deletion');
+            END;
+        ''')
+
     conn.commit()
 
 

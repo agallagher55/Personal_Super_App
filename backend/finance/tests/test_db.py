@@ -843,5 +843,119 @@ class TestTransactionBatchIdColumnMigration(unittest.TestCase):
         self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
 
 
+class TestSnapshotAppendOnlyTriggers(unittest.TestCase):
+    """Issue: append-only policy for balance history. A fresh database
+    enforces it as an invariant (BEFORE UPDATE/DELETE triggers, see
+    csv_schema.sql's comment), not just a coding convention."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        finance_db.init_schema(self.conn)
+        finance_db.upsert_account(self.conn, 'acc1', 'Chequing', 'TD', 'chequing')
+        finance_db.insert_balance_snapshot(self.conn, 'acc1', '2026-09-01', 100.0, 'manual', None, '2026-09-01T00:00:00Z')
+        finance_db.insert_terms_snapshot(self.conn, 'acc1', '2026-09-01', 5.0, 1000.0, '2026-09-01T00:00:00Z')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_inserting_a_balance_snapshot_still_works(self):
+        """The invariant blocks UPDATE/DELETE only - insert_balance_
+        snapshot's normal write path is unaffected."""
+        finance_db.insert_balance_snapshot(self.conn, 'acc1', '2026-09-02', 150.0, 'manual', None, '2026-09-02T00:00:00Z')
+        count = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM account_balance_snapshots WHERE account_id = 'acc1'"
+        ).fetchone()['n']
+        self.assertEqual(count, 2)
+
+    def test_updating_a_balance_snapshot_is_rejected(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute("UPDATE account_balance_snapshots SET balance_cad = 200.0 WHERE account_id = 'acc1'")
+
+    def test_deleting_a_balance_snapshot_is_rejected(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute("DELETE FROM account_balance_snapshots WHERE account_id = 'acc1'")
+
+    def test_updating_a_terms_snapshot_is_rejected(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute("UPDATE account_terms_snapshots SET interest_rate = 6.0 WHERE account_id = 'acc1'")
+
+    def test_deleting_a_terms_snapshot_is_rejected(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute("DELETE FROM account_terms_snapshots WHERE account_id = 'acc1'")
+
+    def test_a_rejected_update_leaves_the_original_row_intact(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute("UPDATE account_balance_snapshots SET balance_cad = 200.0 WHERE account_id = 'acc1'")
+        row = self.conn.execute("SELECT balance_cad FROM account_balance_snapshots WHERE account_id = 'acc1'").fetchone()
+        self.assertEqual(row['balance_cad'], 100.0)
+
+
+class TestSnapshotAppendOnlyTriggersMigration(unittest.TestCase):
+    """Migration 8 (db._add_snapshot_append_only_triggers): staged here
+    as the shape every finance.db had before this migration - the
+    triggers didn't exist yet, so an UPDATE/DELETE that ordinary code
+    never issues would nonetheless have silently succeeded if issued."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = finance_db.connect(os.path.join(self.tmp_dir.name, 'finance.db'))
+        self.conn.executescript('''
+            CREATE TABLE accounts (
+              id TEXT PRIMARY KEY, label TEXT NOT NULL, institution TEXT, kind TEXT NOT NULL,
+              currency TEXT NOT NULL DEFAULT 'CAD', closed_at TEXT
+            );
+            CREATE TABLE import_batches (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, source_file TEXT,
+              file_hash TEXT, date_range_start TEXT, date_range_end TEXT, row_count INTEGER NOT NULL,
+              imported_at TEXT NOT NULL, notes TEXT
+            );
+            CREATE TABLE account_balance_snapshots (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL REFERENCES accounts(id),
+              as_of_date TEXT NOT NULL, balance_cad REAL NOT NULL, source TEXT NOT NULL,
+              batch_id INTEGER REFERENCES import_batches(id), recorded_at TEXT NOT NULL
+            );
+            CREATE TABLE account_terms_snapshots (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL REFERENCES accounts(id),
+              as_of_date TEXT NOT NULL, interest_rate REAL, credit_limit REAL, recorded_at TEXT NOT NULL
+            );
+        ''')
+        self.conn.execute(
+            "INSERT INTO accounts (id, label, institution, kind) VALUES ('acc1', 'Chequing', 'TD', 'chequing')"
+        )
+        self.conn.execute(
+            "INSERT INTO account_balance_snapshots (account_id, as_of_date, balance_cad, source, recorded_at) "
+            "VALUES ('acc1', '2026-09-01', 100.0, 'manual', '2026-09-01T00:00:00Z')"
+        )
+        self.conn.execute('PRAGMA user_version = 7')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_an_update_that_would_have_succeeded_before_is_now_rejected(self):
+        finance_db.migrate(self.conn)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute("UPDATE account_balance_snapshots SET balance_cad = 999 WHERE account_id = 'acc1'")
+
+    def test_preserves_the_existing_snapshot(self):
+        finance_db.migrate(self.conn)
+        row = self.conn.execute("SELECT balance_cad FROM account_balance_snapshots WHERE account_id = 'acc1'").fetchone()
+        self.assertEqual(row['balance_cad'], 100.0)
+
+    def test_is_idempotent(self):
+        finance_db.migrate(self.conn)
+        finance_db.migrate(self.conn)  # CREATE TRIGGER IF NOT EXISTS must not raise on a second pass
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute("DELETE FROM account_balance_snapshots WHERE account_id = 'acc1'")
+
+    def test_records_the_schema_version(self):
+        finance_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], finance_db.SCHEMA_VERSION)
+
+
 if __name__ == '__main__':
     unittest.main()

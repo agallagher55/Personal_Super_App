@@ -239,6 +239,23 @@ CREATE TABLE IF NOT EXISTS import_batches (
   notes             TEXT
 );
 
+-- Both snapshot tables below are append-only as a database INVARIANT,
+-- not just a coding convention db.py happens to follow (it already did -
+-- there is no update/delete path in insert_balance_snapshot/
+-- insert_terms_snapshot, only INSERT) - enforced by the BEFORE UPDATE/
+-- BEFORE DELETE triggers just under each table, which RAISE(ABORT) on
+-- any attempt (surfaces as sqlite3.IntegrityError). A wrong entry is
+-- corrected the way ARCHITECTURE.md's C8 already documents: insert a
+-- later snapshot, never edit or remove the old one - `recorded_at`
+-- (not just `as_of_date`) is what latest_account_balances breaks a
+-- same-day correction's tie on, precisely so this stays possible.
+--
+-- Administrative repair (e.g. undoing a genuine data-entry mistake, not
+-- a normal correction): `DROP TRIGGER account_balance_snapshots_no_*`
+-- (or the terms_snapshots equivalent), make the fix by hand, then
+-- recreate the trigger from this file. Deliberately not a soft
+-- bypass - the friction is the point, so an ordinary UPDATE/DELETE
+-- never slips through by accident.
 CREATE TABLE IF NOT EXISTS account_balance_snapshots (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   account_id    TEXT NOT NULL REFERENCES accounts(id),
@@ -250,6 +267,18 @@ CREATE TABLE IF NOT EXISTS account_balance_snapshots (
   recorded_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_balance_snapshots_account_date ON account_balance_snapshots(account_id, as_of_date);
+
+CREATE TRIGGER IF NOT EXISTS account_balance_snapshots_no_update
+BEFORE UPDATE ON account_balance_snapshots
+BEGIN
+  SELECT RAISE(ABORT, 'account_balance_snapshots is append-only - insert a new, later snapshot instead of updating an existing one');
+END;
+
+CREATE TRIGGER IF NOT EXISTS account_balance_snapshots_no_delete
+BEFORE DELETE ON account_balance_snapshots
+BEGIN
+  SELECT RAISE(ABORT, 'account_balance_snapshots is append-only - corrections are additive, never a deletion');
+END;
 
 -- A line of credit's rate/limit, split from its balance because they
 -- change on a much slower cadence (a rate hike, a new limit) than the
@@ -263,6 +292,18 @@ CREATE TABLE IF NOT EXISTS account_terms_snapshots (
   recorded_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_terms_snapshots_account_date ON account_terms_snapshots(account_id, as_of_date);
+
+CREATE TRIGGER IF NOT EXISTS account_terms_snapshots_no_update
+BEFORE UPDATE ON account_terms_snapshots
+BEGIN
+  SELECT RAISE(ABORT, 'account_terms_snapshots is append-only - insert a new, later snapshot instead of updating an existing one');
+END;
+
+CREATE TRIGGER IF NOT EXISTS account_terms_snapshots_no_delete
+BEFORE DELETE ON account_terms_snapshots
+BEGIN
+  SELECT RAISE(ABORT, 'account_terms_snapshots is append-only - corrections are additive, never a deletion');
+END;
 
 -- "Current" balance per account - what Cash/Bitcoin/Debt/Lines of
 -- Credit will render (Phase 3). A view, not a cached column, so it can

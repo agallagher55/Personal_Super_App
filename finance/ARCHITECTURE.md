@@ -1507,6 +1507,12 @@ same-day correction means a second row with the same `as_of_date` - so
 `latest_account_balances` (C6) needs to break that tie on `recorded_at`,
 not just `as_of_date`. Worth getting right in the view from the start;
 it is the one place the append-only rule shows through into a query.
+As of the September 2026 database review this is a database invariant,
+not just something these two endpoints happen to respect: `BEFORE
+UPDATE`/`BEFORE DELETE` triggers on `account_balance_snapshots` and
+`account_terms_snapshots` (csv_schema.sql) reject any attempt outright,
+with a documented manual drop-trigger/fix/recreate-trigger procedure as
+the only way around it.
 
 UI: once C10 wires the dashboard sections to read from these tables,
 each account/holding row gets a small "+ Update" affordance reusing the
