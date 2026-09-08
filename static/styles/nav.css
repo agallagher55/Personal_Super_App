@@ -1,12 +1,12 @@
 /* Universal top nav bar (Tasks / Fitness / Finance + live BTC price),
    shared by every page in the app - see static/js/nav.js, which renders
    into the `<div id="site-nav">` placeholder each page includes.
-   Self-contained tokens rather than reusing styles.css's oklch tokens or
-   fitness/css/styles.css's hex tokens, so the bar looks identical on every
-   page regardless of which of those two (currently divergent) stylesheets
-   the rest of the page happens to load. Driven by the same data-theme
-   attribute + "theme" localStorage key every page's inline bootstrap
-   script sets before first paint. */
+   Self-contained tokens (hex approximations of styles.css's oklch palette)
+   rather than `var(--paper)` etc., so the bar renders identically even on
+   a page that hasn't loaded styles.css - it predates /fitness adopting the
+   shared palette, when the two stylesheets really did disagree. Driven by
+   the same data-theme attribute + "theme" localStorage key every page's
+   inline bootstrap script sets before first paint. */
 :root {
   --gnav-bg: #fffdf9;
   --gnav-border: #e7e1d6;

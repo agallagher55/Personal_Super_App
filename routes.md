@@ -8,6 +8,11 @@ through the POST routes below. See `DATABASE-MIGRATION.md` for the schema,
 the one-time import from the JSON files this replaced, and
 `backend/tasks_export.py` for regenerating those files from the database.
 
+Every page below loads `static/styles/styles.css` and
+`static/styles/nav.css` first, then its own section stylesheet if it has
+one — see `DESIGN-SYSTEM.md` for the shared shell those pages are built
+from.
+
 Every `/fitness*` route except `/fitness/login`, `/fitness/auth/*`, and
 `/fitness/api/me` now requires a signed-in session — a signed-out visitor
 gets a 302 to `/fitness/login` (HTML pages) or a 401 (API routes). See

@@ -16,11 +16,14 @@ function formatClock(isoStr) {
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+// A cool-to-hot intensity ramp built from the app's own status colors
+// (styles.css) rather than a fifth private palette - blue/green/yellow/red
+// already reads as "harder" left to right, in both themes.
 const ZONES = [
-  { key: "light", label: "Light", color: "#60a5fa" },
-  { key: "moderate", label: "Moderate", color: "#3b82f6" },
-  { key: "vigorous", label: "Vigorous", color: "#f97316" },
-  { key: "peak", label: "Peak", color: "#dc2626" },
+  { key: "light", label: "Light", colorVar: "--status-blue" },
+  { key: "moderate", label: "Moderate", colorVar: "--status-green" },
+  { key: "vigorous", label: "Vigorous", colorVar: "--status-yellow" },
+  { key: "peak", label: "Peak", colorVar: "--status-red" },
 ];
 
 function addTile(grid, label, value) {
@@ -54,7 +57,7 @@ function ensureDialog() {
   return dialog;
 }
 
-// `exercise` is one entry from docs/api-contract.md's activity shape (now
+// `exercise` is one entry from fitness/API-CONTRACT.md's activity shape (now
 // carrying start_time/end_time and the metricsSummary-derived fields - see
 // backend/server.py's _reshape_activity), plus the `date` it fell on
 // (stitched on by the caller, same as activity-card.js/pages/activity.js
@@ -136,7 +139,7 @@ export function openActivityDetail(exercise) {
       const item = document.createElement("span");
       item.className = "stage-legend-item";
       const swatch = document.createElement("i");
-      swatch.style.backgroundColor = z.color;
+      swatch.style.backgroundColor = `var(${z.colorVar})`;
       item.appendChild(swatch);
       item.appendChild(document.createTextNode(`${z.label} ${zones[z.key] || 0}m`));
       legend.appendChild(item);
@@ -164,7 +167,7 @@ export function openActivityDetail(exercise) {
   // has to happen after this, not while building the DOM.
   dlg.showModal();
   if (zoneCanvas) {
-    drawStackedBar(zoneCanvas, ZONES.map((z) => ({ minutes: zones[z.key] || 0, color: z.color })));
+    drawStackedBar(zoneCanvas, ZONES.map((z) => ({ minutes: zones[z.key] || 0, colorVar: z.colorVar })));
   }
 
   if (!exercise.start_time || !exercise.end_time) {
@@ -185,7 +188,7 @@ export function openActivityDetail(exercise) {
       }
       hrStatus.textContent = "";
       drawSparkline(hrCanvas, samples.map((s) => s.value), {
-        color: "#dc2626",
+        colorVar: "--metric-heart-rate",
         labels: samples.map((s) => s.time),
         formatLabel: formatTimeOfDay,
       });

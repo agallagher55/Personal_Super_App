@@ -5,7 +5,7 @@ import { renderStatsPanel } from "../components/stats-panel.js";
 
 function renderChart(canvas, records) {
   drawSparkline(canvas, records.map((r) => r.duration_minutes), {
-    color: "#7c3aed",
+    colorVar: "--metric-sleep",
     labels: records.map((r) => r.date),
   });
 }

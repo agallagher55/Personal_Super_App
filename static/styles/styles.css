@@ -18,10 +18,13 @@
 }
 
 /* Same warm parchment identity, lightness/hue flipped for a dark room
-   rather than a different palette - kept in sync with static/fitness/css/
-   styles.css's own :root[data-theme="dark"] override, and driven by the
-   same data-theme attribute + "theme" localStorage key (see
-   static/js/theme.js) so the preference is shared across every page. */
+   rather than a different palette. These are the app's only palette
+   tokens - every page loads this file, and the per-section stylesheets
+   (static/finance/css/*.css, static/fitness/css/styles.css) add only
+   their own accent scales on top rather than redefining the base. Driven
+   by the data-theme attribute + "theme" localStorage key (see
+   static/js/theme.js) so the preference is shared across every page.
+   See DESIGN-SYSTEM.md. */
 :root[data-theme="dark"] {
   --paper: oklch(20% 0.014 75);
   --paper-raised: oklch(25% 0.016 75);

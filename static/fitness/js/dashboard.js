@@ -37,17 +37,17 @@ const els = {
 // separately below via renderWeightCard, since it's the only one with a
 // unit toggle (kg/lbs).
 const SIMPLE_VALUE_METRICS = [
-  { key: "spo2", el: "spo2", unit: "%", color: "#0891b2", decimals: 1 },
-  { key: "hrv", el: "hrv", unit: " ms", color: "#9333ea", decimals: 1 },
-  { key: "breathing_rate", el: "breathingRate", unit: " br/min", color: "#0d9488", decimals: 1 },
-  { key: "temperature", el: "temperature", unit: "°C", color: "#ea580c", decimals: 2 },
+  { key: "spo2", el: "spo2", unit: "%", colorVar: "--metric-spo2", decimals: 1 },
+  { key: "hrv", el: "hrv", unit: " ms", colorVar: "--metric-hrv", decimals: 1 },
+  { key: "breathing_rate", el: "breathingRate", unit: " br/min", colorVar: "--metric-breathing", decimals: 1 },
+  { key: "temperature", el: "temperature", unit: "°C", colorVar: "--metric-temperature", decimals: 2 },
 ];
 
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
 
-// Matches docs/api-contract.md's dashboard default: last 7 days.
+// Matches fitness/API-CONTRACT.md's dashboard default: last 7 days.
 function defaultRange() {
   const to = new Date();
   const from = new Date();
@@ -121,7 +121,7 @@ async function loadDashboard(from, to) {
     for (const m of SIMPLE_VALUE_METRICS) {
       renderSimpleValueCard(els[m.el], data.metrics[m.key] || [], {
         unit: m.unit,
-        color: m.color,
+        colorVar: m.colorVar,
         decimals: m.decimals,
       });
     }

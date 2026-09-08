@@ -1,4 +1,4 @@
-// Maps an exercise `type` (docs/api-contract.md's activity shape, which
+// Maps an exercise `type` (fitness/API-CONTRACT.md's activity shape, which
 // passes Google Health's exerciseType/displayName straight through - see
 // backend/server.py) to a small SVG icon. Google's exercise type enum has
 // ~100 values, so this matches by keyword into a handful of icon families

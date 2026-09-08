@@ -7,10 +7,10 @@ import { renderStatsPanel } from "../components/stats-panel.js";
 // (spo2, hrv, breathing_rate, temperature, weight) - see
 // components/simple-value-card.js for why one generic implementation
 // covers all five instead of five near-duplicate page scripts.
-export function initSimpleValueDetailPage(metric, { title, unit = "", color = "#2563eb", decimals = 0 } = {}) {
+export function initSimpleValueDetailPage(metric, { title, unit = "", colorVar = "--metric-steps", decimals = 0 } = {}) {
   function renderChart(canvas, records) {
     drawSparkline(canvas, records.map((r) => r.value), {
-      color,
+      colorVar,
       labels: records.map((r) => r.date),
     });
   }

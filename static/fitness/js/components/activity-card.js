@@ -9,7 +9,7 @@ function formatType(type) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// `records` is docs/api-contract.md's activity shape:
+// `records` is fitness/API-CONTRACT.md's activity shape:
 // [{ date, exercises: [{ type, duration_minutes, calories }] }].
 export function renderActivity(container, records) {
   container.innerHTML = "";

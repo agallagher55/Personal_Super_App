@@ -1076,6 +1076,7 @@ ones worth knowing about.
 | §9: gate with `path.startswith('/fitness/api/') and path != '/fitness/api/me'` | `/fitness/api/me` is its own exact-match branch placed *above* the prefix branch in `do_GET` | Same effect, and it leaves §9's "ordering matters" rule doing all the work instead of splitting the exemption across an ordering rule and a condition |
 | §13: an eight-commit sequence | One commit, `a534108` | The plan's own caveat, that steps 4 to 6 cannot land separately without breaking `/fitness`, turned out to cover more of the sequence than expected |
 | §10: the account chip "appended to the rendered markup" | Moved to the header's top-right in `3aa8665`, then back into the date-range/sync controls row in `a1b9ff9` | Layout iteration only, no behavior change |
+| §10: add a `.login-card` / `.btn-primary` pair to `static/fitness/css/styles.css`, reusing "the existing CSS custom properties so both themes work" | `.btn-primary` survives; `.login-card` is gone, and the sign-in page is a plain `.sheet` (`.login-sheet`). The custom properties it was told to reuse are gone too — `/fitness` was moved onto the app-wide palette on 2026-09-08 | Later change, not a divergence at ship time. See `DESIGN-SYSTEM.md` and `ARCHITECTURE.md` §5 |
 
 Two things the code added that the plan did not spell out, both worth
 keeping: `session.verify()` also rejects a payload that decodes to

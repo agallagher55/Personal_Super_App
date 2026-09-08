@@ -237,19 +237,37 @@ project's own frontend beyond path rewrites:
   siblings (`../charts.js`, `../components/stats-panel.js`, etc.) needed no
   changes, since the directory structure under `static/fitness/js/` mirrors
   the original `frontend/js/` layout exactly.
+- `static/fitness/js/charts.js` and its callers no longer take hex colors.
+  Every series is named by a CSS custom property (`colorVar:
+  "--metric-sleep"`) resolved against the document at draw time, and one
+  shared `MutationObserver` on `data-theme` repaints every mounted canvas,
+  so the charts follow the light/dark toggle instead of staying painted in
+  the outgoing theme — `static/finance/js/charts.js` had already gone this
+  way. See `DESIGN-SYSTEM.md`.
 - Page-to-page links (dashboard card headings, each detail page's "←
   Dashboard" back-link) point at the clean `/fitness/<page>` routes
   `backend/server.py` now serves, instead of the standalone app's relative
   `pages/steps.html` file paths.
-- Fitness pages keep their own self-contained design system
-  (`static/fitness/css/styles.css` — card grid, dark-mode toggle, sparkline
-  charts) rather than adopting the rest of this app's "sheet of paper"
-  aesthetic (`static/styles/styles.css`); the two are deliberately not
-  merged, same as `finance/ARCHITECTURE.md`'s plan for `/finance` once that
-  lands. A `back-link` on the dashboard (`← Personal Super App`, styled with
-  the existing `.back-link` class already used on every detail page) is the
-  one navigation element added on top of the standalone app's own header,
-  so a visitor can get back to `/`.
+- Fitness pages arrived keeping the standalone project's own
+  self-contained design system (`static/fitness/css/styles.css` — a
+  slate/blue hex palette, `system-ui` type, filled cards, its own
+  bottom-right dark-mode toggle) rather than this app's "sheet of paper"
+  aesthetic. **That was merged on 2026-09-08** (see `DESIGN-SYSTEM.md`):
+  every page under `html/fitness/` now loads `static/styles/styles.css`
+  first and `static/fitness/css/styles.css` only on top of it, so the
+  palette, the three font stacks, `body`, `.page`/`.sheet`, `.back-link`
+  and the toggle all come from the shared sheet, and the fitness
+  stylesheet is reduced to fitness-specific components plus its own
+  `--metric-*`/`--sleep-*` accent scales (built to the same formula as
+  `/finance`'s `--stock-*`). The dashboard is a `.sheet` of metric cards
+  with the Activity list as a sidebar panel beside it, the same
+  arrangement `/finance` uses for its watchlist; the metric detail pages
+  are one sheet each. `static/fitness/js/theme.js` is gone — every page
+  loads the app-wide `static/js/theme.js` like `/tasks` and `/finance` do,
+  which is also why the toggle no longer jumps corners between sections.
+  The dashboard's `← Personal Super App` back-link went with it: the
+  global nav bar (`static/js/nav.js`) has led back to `/` since it
+  landed, and every detail page keeps its own `← Dashboard` link.
 - `html/fitness/login.html` + `static/fitness/js/login.js` are new: the
   sign-in page, mapping `?error=` codes to a message and forwarding `?next=`
   onto the "Continue with Google" link.

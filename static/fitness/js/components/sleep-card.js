@@ -1,10 +1,13 @@
 import { drawStackedBar, formatShortDate } from "../charts.js";
 
+// Deep/REM/Light are three lightness steps of the Sleep card's own violet
+// and Awake is the odd one out in a warm hue - see the --sleep-* tokens in
+// css/styles.css for why.
 const STAGES = [
-  { key: "deep", label: "Deep", color: "#1e3a8a" },
-  { key: "rem", label: "REM", color: "#7c3aed" },
-  { key: "light", label: "Light", color: "#60a5fa" },
-  { key: "awake", label: "Awake", color: "#f97316" },
+  { key: "deep", label: "Deep", colorVar: "--sleep-deep" },
+  { key: "rem", label: "REM", colorVar: "--sleep-rem" },
+  { key: "light", label: "Light", colorVar: "--sleep-light" },
+  { key: "awake", label: "Awake", colorVar: "--sleep-awake" },
 ];
 
 function formatDuration(minutes) {
@@ -13,7 +16,7 @@ function formatDuration(minutes) {
   return `${h}h ${m}m`;
 }
 
-// `records` is docs/api-contract.md's sleep shape:
+// `records` is fitness/API-CONTRACT.md's sleep shape:
 // [{ date, duration_minutes, stages: { light, deep, rem, awake } }].
 export function renderSleep(container, records) {
   container.innerHTML = "";
@@ -43,7 +46,7 @@ export function renderSleep(container, records) {
   container.appendChild(canvas);
   drawStackedBar(
     canvas,
-    STAGES.map((s) => ({ minutes: latest.stages[s.key] || 0, color: s.color }))
+    STAGES.map((s) => ({ minutes: latest.stages[s.key] || 0, colorVar: s.colorVar }))
   );
 
   const legend = document.createElement("div");
@@ -53,7 +56,7 @@ export function renderSleep(container, records) {
     item.className = "stage-legend-item";
 
     const swatch = document.createElement("i");
-    swatch.style.backgroundColor = stage.color;
+    swatch.style.backgroundColor = `var(${stage.colorVar})`;
     item.appendChild(swatch);
 
     item.appendChild(document.createTextNode(`${stage.label} ${latest.stages[stage.key] || 0}m`));

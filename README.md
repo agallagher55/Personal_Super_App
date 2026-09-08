@@ -1,4 +1,20 @@
-# Personal Tasks Tracker
+# Personal Super App
+
+A single small Python `http.server` process serving four sections from one
+codebase, no framework and no build step:
+
+| Section | What it is | Docs |
+|---|---|---|
+| `/` | Dashboard hub — one live summary card per section | `routes.md` |
+| `/tasks` | The task tracker, described in the rest of this file | `DATABASE-MIGRATION.md` |
+| `/fitness` | Google Health dashboard, per-visitor Google sign-in | `fitness/README.md` |
+| `/finance` | Net worth, spending and cash flow from CSV imports | `finance/README.md` |
+
+`routes.md` is the full URL-to-handler map, `architecture_Review.md` the
+system-wide review, `DESIGN-SYSTEM.md` the shared palette, type and
+components every page is built from, and `roadmap.html` the living plan.
+
+## Tasks
 
 Files:
 
@@ -7,7 +23,10 @@ Files:
 - `html/tasks/new-task.html`, the "add a task" form page, served at `/tasks/new`
 - `html/tasks/tasks-index.html` / `static/js/tasks-index.js`, the category table of
   contents page, served at `/tasks/categories`
-- `static/styles/styles.css`, all styling
+- `static/styles/styles.css`, the app-wide palette, type and page shell
+  (every section's pages load it first; see `DESIGN-SYSTEM.md`), plus all
+  of the tasks pages' own styling. `static/styles/nav.css` is the global
+  nav bar shared by every page
 - `static/js/script.js`, plain JavaScript for the main page, no modules, no build step
 - `static/js/new-task.js`, plain JavaScript that fills the form's section dropdown
 - `backend/server.py`, a small custom server (see below, this is what makes
@@ -211,13 +230,13 @@ than sorted. Nothing is lost, only reordered; after that, diffs are small.
 - Typing in a task's Notes box and clicking the floating **Save
   Changes** button (bottom right) POSTs every task's current notes
   text and checked state to `/tasks/update`, which `backend/server.py` writes
-  back into `data/tasks.json` (and `data/tags.json` if tags changed) on disk,
+  back into `data/tasks.db` (rows in `tasks`, and `tags` if tags changed),
   matched by each task's `id`. A small "Saved" confirmation appears near the
   button.
 - Each task has a small &times; button that permanently deletes it.
   Clicking it asks for confirmation first, then POSTs to
-  `/tasks/delete`, which removes that task from `data/tasks.json` (and its
-  tags from `data/tags.json`) on disk immediately, this is not undoable and
+  `/tasks/delete`, which deletes that task's row from `data/tasks.db` (and
+  its tags with it, by foreign key) immediately, this is not undoable and
   does not require pressing Save Changes first.
 - Collapsed sections and section drag order still reset on page
   refresh, those aren't persisted. Notes and done state persist once

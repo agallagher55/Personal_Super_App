@@ -1,121 +1,151 @@
+/* Fitness-specific components, layered on the app's shared design system.
+   Every html/fitness/*.html loads static/styles/styles.css first, so the
+   palette tokens (--paper/--ink/--line/--flag/--status-*), the fonts
+   (--sans/--serif/--mono), `body`, `.page`/`.sheet`, `.back-link`, and the
+   dark-mode toggle all come from there - this file only adds what's unique
+   to the health dashboard (metric cards, sparklines, the activity list,
+   detail tables). It used to carry its own slate/blue hex palette and
+   system-ui type, which is why /fitness looked like a different product
+   from /finance and /tasks; see DESIGN-SYSTEM.md. */
+
+/* Per-metric identity colors. Same construction as the finance dashboard's
+   --stock-* slots (static/finance/css/dashboard.css): one fixed hue per
+   metric, a single lightness/chroma formula across the whole family, and a
+   lighter, less saturated set for dark mode so a sparkline stays legible
+   on --paper without glowing. Hues are carried over from the pre-merge
+   hex values, so each metric keeps the color its users already associate
+   with it (steps blue, heart rate red, sleep violet, ...). */
 :root {
-  --bg: #f8fafc;
-  --surface: #ffffff;
-  --border: #e2e8f0;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --accent: #2563eb;
-  --error: #dc2626;
-  --radius: 10px;
-  color-scheme: light;
+  --metric-steps: oklch(58% 0.14 264);
+  --metric-heart-rate: oklch(58% 0.15 25);
+  --metric-sleep: oklch(58% 0.15 295);
+  --metric-activity: oklch(58% 0.14 145);
+  --metric-spo2: oklch(58% 0.12 220);
+  --metric-hrv: oklch(58% 0.15 310);
+  --metric-breathing: oklch(58% 0.12 185);
+  --metric-temperature: oklch(62% 0.15 55);
+  --metric-weight: oklch(58% 0.14 275);
+
+  /* Sleep stages: three lightness steps of the Sleep card's own violet
+     (--metric-sleep, hue 295) so the stacked bar reads as "this is what's
+     inside sleep", plus Awake in a warm hue because it isn't a depth of
+     sleep at all - same reasoning as finance's --invest-* ramp. */
+  --sleep-deep: oklch(40% 0.14 295);
+  --sleep-rem: oklch(55% 0.15 295);
+  --sleep-light: oklch(72% 0.1 295);
+  --sleep-awake: oklch(70% 0.14 55);
 }
 
 :root[data-theme="dark"] {
-  --bg: #0f172a;
-  --surface: #1e293b;
-  --border: #334155;
-  --text: #e2e8f0;
-  --text-muted: #94a3b8;
-  --accent: #3b82f6;
-  --error: #f87171;
-  color-scheme: dark;
+  --metric-steps: oklch(70% 0.12 264);
+  --metric-heart-rate: oklch(70% 0.13 25);
+  --metric-sleep: oklch(70% 0.13 295);
+  --metric-activity: oklch(70% 0.12 145);
+  --metric-spo2: oklch(70% 0.1 220);
+  --metric-hrv: oklch(70% 0.13 310);
+  --metric-temperature: oklch(74% 0.13 55);
+  --metric-breathing: oklch(70% 0.1 185);
+  --metric-weight: oklch(70% 0.12 275);
+
+  --sleep-deep: oklch(50% 0.15 295);
+  --sleep-rem: oklch(63% 0.15 295);
+  --sleep-light: oklch(80% 0.08 295);
+  --sleep-awake: oklch(76% 0.14 55);
 }
 
-* {
-  box-sizing: border-box;
+/* Like .page-finance, the fitness dashboard is wider than the ~800px
+   .sheet default - it's a card grid plus a sidebar, not a column of
+   prose. Capped rather than full-bleed so the 240px-minimum cards don't
+   stretch into letterboxes on a wide monitor. */
+.page-fitness {
+  max-width: 1440px;
 }
 
-body {
-  margin: 0;
-  padding: 1.5rem;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  transition: background-color 0.15s ease, color 0.15s ease;
+.fitness-sheet {
+  max-width: none;
 }
 
-.theme-toggle {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 1.2rem;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 100;
-}
+/* --- App header (title + account chip + date-range filter) --- */
 
-.theme-toggle:hover {
-  border-color: var(--accent);
-}
-
-h1 {
-  font-size: 1.5rem;
-  margin: 0;
-}
-
+/* The shared `header` rule (styles.css) already supplies the rule-under-
+   the-title treatment every page uses; these only add what the fitness
+   header needs on top of it. */
 .app-header {
-  display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.9rem;
+}
+
+.app-header h1 {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  line-height: 1;
+  margin: 0;
 }
 
 .header-right {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 1.1rem;
+  align-items: flex-end;
+  gap: 16px;
 }
 
 .range-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.75rem;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
 
 .range-controls label {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 4px;
 }
 
 .range-controls input[type="date"] {
-  font: inherit;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 5px 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  color: var(--text);
+  color: var(--ink);
 }
 
-.range-controls button {
-  font: inherit;
-  padding: 0.45rem 0.9rem;
-  border: 1px solid var(--border);
+.range-controls input[type="date"]:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+/* Every secondary button in the header (Apply, Sync now, Sign out) wears
+   the same outlined-mono treatment as finance's .fin-import-button. */
+.range-controls button,
+.account-chip #sign-out {
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
+  padding: 6px 12px;
   cursor: pointer;
 }
 
-.range-controls button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+.range-controls button:hover,
+.account-chip #sign-out:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
 }
 
 .range-controls button:disabled {
@@ -123,129 +153,140 @@ h1 {
   cursor: default;
 }
 
-#range-apply {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
 .account-chip {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
 }
 
 .account-email {
   white-space: nowrap;
 }
 
-.account-chip #sign-out {
-  font: inherit;
-  padding: 0.3rem 0.65rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.account-chip #sign-out:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.login-layout {
-  display: flex;
-  justify-content: center;
-  padding-top: 3rem;
-}
-
-.login-card {
-  width: min(420px, 100%);
-  text-align: center;
-}
-
-.login-card h1 {
-  margin-bottom: 0.5rem;
-}
-
-.login-card p {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.btn-primary {
-  display: inline-block;
-  margin-top: 0.75rem;
-  padding: 0.6rem 1.2rem;
-  border-radius: 6px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
-}
-
 .sync-wrap {
   position: relative;
 }
 
+/* Sits inside .range-controls, so it has to opt back out of that block's
+   uppercase label treatment - this one reads as a sentence, not a label. */
 .last-synced {
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 0.25rem;
+  margin-top: 4px;
   white-space: nowrap;
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-soft);
 }
+
+/* Absolute positioning keeps it from pushing the header's controls around
+   on a wide screen, but once the header wraps, .sync-wrap sits near the
+   left edge and a right-anchored label longer than the button overhangs
+   the sheet. Let it flow at that point. */
+@media (max-width: 880px) {
+  .last-synced {
+    position: static;
+    display: block;
+    margin-top: 6px;
+  }
+}
+
+/* --- Status line --- */
 
 .status {
   min-height: 1.2rem;
-  margin: 0 0 1.25rem;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+  margin: 0 0 20px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.2px;
+  color: var(--ink-soft);
 }
 
 .status-error {
-  color: var(--error);
+  color: var(--status-red);
 }
 
 .status-busy {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--accent);
+  color: var(--flag);
+  font-weight: 600;
 }
 
-.dashboard-layout {
-  display: flex;
-  align-items: stretch;
-  gap: 1rem;
+/* --- Sign-in page --- */
+
+.login-sheet {
+  max-width: 480px;
+  text-align: center;
 }
+
+.login-sheet h1 {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  margin: 0 0 10px;
+}
+
+.login-sheet p {
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Same pill CTA as .new-task-cta / .submit-btn on the tasks pages. */
+.btn-primary {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 13px 26px;
+  border-radius: 100px;
+  background: var(--flag);
+  color: var(--paper-raised);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.btn-primary:hover {
+  background: var(--ink);
+  color: var(--paper-raised);
+}
+
+/* --- Dashboard card grid --- */
 
 .dashboard-grid {
-  flex: 1;
   display: grid;
   /* Overridden inline by js/balanced-grid.js once it runs, to keep rows
      balanced (issue #32) - this is just the no-JS/first-paint fallback. */
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   align-content: start;
-  gap: 1rem;
+  gap: 16px;
 }
 
+/* The Activity sidebar sits beside the sheet rather than inside it, the
+   same arrangement (and the same paper-raised panel treatment) as the
+   finance dashboard's watchlist - see static/finance/css/ticker.css. */
 .activity-panel {
   flex: 0 0 280px;
   position: sticky;
-  top: 1rem;
+  top: 24px;
+  align-self: flex-start;
 }
 
 .activity-panel .card {
-  height: 100%;
+  background: var(--paper-raised);
+  border-radius: 10px;
+  padding: 18px 20px 20px;
+  max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
 }
@@ -257,19 +298,17 @@ h1 {
   flex-direction: column;
 }
 
-@media (max-width: 700px) {
-  .dashboard-layout {
-    flex-direction: column;
-  }
-
+/* Matches the shared .page stacking breakpoint (styles.css) rather than
+   the old 700px one, so the sidebar and the sheet reflow together. */
+@media (max-width: 880px) {
   .activity-panel {
-    flex-basis: auto;
+    flex: 1 1 auto;
     width: 100%;
     position: static;
   }
 
   .activity-panel .card {
-    height: auto;
+    max-height: none;
   }
 
   .activity-list {
@@ -277,28 +316,34 @@ h1 {
   }
 }
 
+/* --- Cards --- */
+
+/* Bordered, transparent-backed panels sitting on the sheet's own
+   --paper-raised, exactly like .fin-stat / .fin-overview-card / .home-card
+   - not the filled --surface boxes these used to be. */
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem 1.25rem;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px 20px 20px;
 }
 
 .card h2 {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  margin: 0 0 0.75rem;
-  font-size: 0.9rem;
-  font-weight: 600;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-muted);
+  color: var(--ink-soft);
 }
 
 .card-icon {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   flex-shrink: 0;
 }
 
@@ -308,59 +353,69 @@ h1 {
 }
 
 .card h2 a:hover {
-  color: var(--accent);
-  text-decoration: underline;
+  color: var(--flag);
 }
 
+/* The app's signature big-number treatment, shared with .fin-stat-value
+   and .home-card-metric. */
 .card-metric {
-  font-size: 1.9rem;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 26px;
   font-weight: 600;
   line-height: 1.1;
 }
 
 .card-sublabel {
-  margin-top: 0.15rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
 }
 
 canvas.sparkline {
   display: block;
   width: 100%;
   height: 80px;
-  margin-top: 0.75rem;
+  margin-top: 12px;
 }
 
 canvas.stacked-bar {
   display: block;
   width: 100%;
   height: 14px;
-  margin-top: 0.75rem;
+  margin-top: 12px;
   border-radius: 4px;
   overflow: hidden;
 }
 
+/* --- Legends (sleep stages, heart rate zones) --- */
+
 .stage-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-top: 0.6rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  gap: 6px 14px;
+  margin-top: 10px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-soft);
 }
 
 .stage-legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 6px;
 }
 
+/* Same 10px rounded swatch as finance's .fin-legend-swatch. */
 .stage-legend-item i {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
   display: inline-block;
 }
+
+/* --- Activity list --- */
 
 .activity-list {
   list-style: none;
@@ -368,7 +423,7 @@ canvas.stacked-bar {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 10px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -380,9 +435,9 @@ canvas.stacked-bar {
   flex-direction: row;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
 }
 
 .activity-list li:last-child {
@@ -393,32 +448,35 @@ canvas.stacked-bar {
 .activity-info {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 2px;
+  min-width: 0;
 }
 
 .activity-type {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 6px;
+  font-family: var(--sans);
+  font-size: 14px;
   font-weight: 600;
-  font-size: 0.95rem;
+  color: var(--ink);
 }
 
 .activity-icon {
   width: 15px;
   height: 15px;
   flex-shrink: 0;
-  color: #f59e0b;
+  color: var(--metric-activity);
 }
 
-.activity-meta {
-  font-size: 0.8rem;
-  color: var(--text-muted);
+.activity-meta,
+.activity-date {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
 }
 
 .activity-date {
-  font-size: 0.8rem;
-  color: var(--text-muted);
   white-space: nowrap;
   text-align: right;
 }
@@ -433,143 +491,151 @@ canvas.stacked-bar {
 .activity-list-item-clickable:focus-visible,
 .data-table-row-clickable:hover,
 .data-table-row-clickable:focus-visible {
-  background: var(--bg);
+  background: var(--paper);
 }
 
 .activity-list-item-clickable:focus-visible,
 .data-table-row-clickable:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--flag);
   outline-offset: -2px;
 }
 
+/* --- Activity detail modal --- */
+
+/* Mirrors finance's .fin-category-dialog (dashboard.css) - same border,
+   radius, padding, backdrop, and close button. */
 .activity-modal {
   position: relative;
   width: min(480px, calc(100vw - 2rem));
   max-height: calc(100vh - 4rem);
   overflow-y: auto;
-  padding: 1.25rem 1.5rem 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
+  padding: 20px 24px 24px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-raised);
+  color: var(--ink);
 }
 
 .activity-modal::backdrop {
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .activity-modal-close {
   position: absolute;
-  top: 0.75rem;
-  right: 0.9rem;
-  width: 28px;
-  height: 28px;
+  top: 14px;
+  right: 16px;
   border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 1.3rem;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 20px;
   line-height: 1;
+  padding: 0 4px;
   cursor: pointer;
 }
 
 .activity-modal-close:hover {
-  background: var(--bg);
-  color: var(--text);
+  color: var(--ink);
 }
 
 .activity-modal-header {
-  margin-bottom: 1rem;
-  padding-right: 1.5rem;
+  margin-bottom: 16px;
+  padding-right: 24px;
 }
 
 .activity-modal-header .activity-type {
-  font-size: 1.1rem;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .activity-modal-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .activity-modal-tile {
-  padding: 0.6rem 0.7rem;
-  border: 1px solid var(--border);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
 .activity-modal-tile-value {
-  font-size: 1.1rem;
+  font-family: var(--mono);
+  font-size: 15px;
   font-weight: 600;
+  color: var(--ink);
 }
 
 .activity-modal-tile-label {
-  margin-top: 0.1rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
 
 .activity-modal-section {
-  margin-top: 1rem;
+  margin-top: 18px;
 }
 
 .activity-modal-section h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 600;
+  margin: 0 0 8px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-muted);
+  color: var(--ink-soft);
 }
 
 .activity-modal-chart {
   height: 120px;
 }
 
+/* --- Weight card's kg/lb toggle --- */
+
 .unit-toggle {
   display: inline-flex;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
-  margin-bottom: 0.6rem;
+  margin-bottom: 10px;
 }
 
 .unit-toggle button {
-  font: inherit;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.6rem;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 10px;
   border: none;
-  background: var(--surface);
-  color: var(--text-muted);
+  background: none;
+  color: var(--ink-soft);
   cursor: pointer;
 }
 
 .unit-toggle button + button {
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--line);
 }
 
 .unit-toggle button.active {
-  background: var(--accent);
-  color: #fff;
+  background: var(--flag);
+  color: var(--paper-raised);
 }
 
 .unit-toggle button:hover:not(.active) {
-  color: var(--text);
+  color: var(--ink);
 }
 
-.back-link {
+/* --- Metric detail pages --- */
+
+/* The back-link on a detail page sits above the header, same as the tasks
+   detail page's; .back-link itself is styled in styles.css. */
+.fitness-back-link {
   display: inline-block;
-  margin-bottom: 1rem;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-.back-link:hover {
-  color: var(--accent);
-  text-decoration: underline;
+  margin-bottom: 14px;
 }
 
 canvas.detail-chart {
@@ -581,7 +647,7 @@ canvas.detail-chart {
 .detail-layout {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
+  gap: 16px;
 }
 
 .detail-main {
@@ -589,39 +655,12 @@ canvas.detail-chart {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 16px;
 }
 
 .detail-side {
   flex: 1 1 0;
   min-width: 0;
-  position: sticky;
-  top: 1rem;
-}
-
-.stats-list {
-  margin: 0;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  row-gap: 0.6rem;
-  column-gap: 0.75rem;
-  font-size: 0.9rem;
-}
-
-.stats-list dt {
-  color: var(--text-muted);
-}
-
-.stats-list dd {
-  margin: 0;
-  font-weight: 600;
-  text-align: right;
-}
-
-.stats-empty {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--text-muted);
 }
 
 @media (max-width: 700px) {
@@ -631,9 +670,38 @@ canvas.detail-chart {
 
   .detail-side {
     width: 100%;
-    position: static;
   }
 }
+
+.stats-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 8px;
+  column-gap: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.stats-list dt {
+  color: var(--ink-soft);
+}
+
+.stats-list dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: right;
+}
+
+.stats-empty {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+/* --- Detail tables --- */
 
 .table-wrap {
   overflow-x: auto;
@@ -643,40 +711,31 @@ canvas.detail-chart {
   width: 100%;
   min-width: 420px;
   border-collapse: collapse;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   overflow: hidden;
-  font-size: 0.9rem;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
 }
 
 .data-table th,
 .data-table td {
   text-align: left;
-  padding: 0.55rem 0.9rem;
-  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 
 .data-table th {
-  font-size: 0.75rem;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-muted);
-  background: var(--bg);
+  color: var(--ink-soft);
 }
 
 .data-table tbody tr:last-child td {
   border-bottom: none;
-}
-
-@media (max-width: 480px) {
-  body {
-    padding: 1rem;
-  }
-
-  .app-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
 }

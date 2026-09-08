@@ -20,7 +20,7 @@ function dayTotalMinutes(r) {
 
 function renderChart(canvas, records) {
   drawSparkline(canvas, records.map(dayTotalMinutes), {
-    color: "#16a34a",
+    colorVar: "--metric-activity",
     labels: records.map((r) => r.date),
   });
 }

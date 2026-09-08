@@ -1,13 +1,14 @@
-// Dark mode toggle (bottom-left corner) shared by every page on this site.
-// The theme is applied as data-theme on <html>, persisted in localStorage
-// under the same "theme" key the fitness pages' own toggle uses (see
-// static/fitness/js/theme.js), so the preference carries across the whole
-// app, and falls back to the OS preference on first visit. Each page's
-// <head> also runs a tiny inline copy of this same read/apply logic so the
-// theme is set before first paint - it can't wait for this script, which
-// only runs once the page's own scripts do. Bottom-left rather than
-// fitness's bottom-right, since index.html already has a fixed
-// save-changes-btn/save-status pair in that corner.
+// Dark mode toggle (bottom-left corner) shared by every page on this site,
+// /fitness included - it used to have its own bottom-right copy of this
+// file, which is why the toggle jumped corners between sections (see
+// DESIGN-SYSTEM.md). The theme is applied as data-theme on <html>,
+// persisted in localStorage under "theme", and falls back to the OS
+// preference on first visit. Each page's <head> also runs a tiny inline
+// copy of this same read/apply logic so the theme is set before first
+// paint - it can't wait for this script, which only runs once the page's
+// own scripts do. Bottom-left rather than bottom-right, since
+// html/tasks/index.html already has a fixed save-changes-btn/save-status
+// pair in that corner.
 (function () {
   var STORAGE_KEY = "theme";
 
