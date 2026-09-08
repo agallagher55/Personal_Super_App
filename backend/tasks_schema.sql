@@ -46,9 +46,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   "desc"            TEXT NOT NULL,
   note              TEXT NOT NULL DEFAULT '',
   notes             TEXT NOT NULL DEFAULT '',
-  status            TEXT NOT NULL DEFAULT 'open',   -- open|in-progress|pending|done|cancelled
+  -- CHECK constraints below mirror backend/server.py's STATUSES/
+  -- PRIORITIES/WORK_TYPES tuples exactly - if those ever change, this file
+  -- and tasks_db.py's migration 2 (_add_task_domain_constraints) both need
+  -- the same update, or the database will reject values the app allows.
+  status            TEXT NOT NULL DEFAULT 'open'
+                      CHECK (status IN ('open', 'in-progress', 'pending', 'done', 'cancelled')),
   done              INTEGER GENERATED ALWAYS AS (status = 'done') VIRTUAL,
-  priority          TEXT NOT NULL DEFAULT 'medium', -- low|medium|high
+  priority          TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
   ticket_number     TEXT NOT NULL DEFAULT '',
   servicenow_sys_id TEXT,                           -- formalizes the field service_now/sync.py already writes
   assignment_group  TEXT NOT NULL DEFAULT '',
@@ -60,11 +65,15 @@ CREATE TABLE IF NOT EXISTS tasks (
   -- subtasks succeeds today and leaves the children behind, so the children
   -- become top-level rather than the delete failing.
   parent_id         TEXT REFERENCES tasks(id) ON DELETE SET NULL,
-  work_type         TEXT NOT NULL DEFAULT '',       -- new-feature|schema-change (Work Tasks section only)
-  env_dev           INTEGER NOT NULL DEFAULT 0,
-  env_qa            INTEGER NOT NULL DEFAULT 0,
-  env_prod          INTEGER NOT NULL DEFAULT 0,
-  cmdb_updated      INTEGER NOT NULL DEFAULT 0,
+  -- '' is the sentinel for "not a Work Tasks item" (or a Work Tasks item
+  -- that hasn't picked one yet) - only own-tasks section rows ever get a
+  -- non-empty value (server.py enforces that; the constraint only rules
+  -- out a fourth, undocumented option string).
+  work_type         TEXT NOT NULL DEFAULT '' CHECK (work_type IN ('', 'new-feature', 'schema-change')),
+  env_dev           INTEGER NOT NULL DEFAULT 0 CHECK (env_dev IN (0, 1)),
+  env_qa            INTEGER NOT NULL DEFAULT 0 CHECK (env_qa IN (0, 1)),
+  env_prod          INTEGER NOT NULL DEFAULT 0 CHECK (env_prod IN (0, 1)),
+  cmdb_updated      INTEGER NOT NULL DEFAULT 0 CHECK (cmdb_updated IN (0, 1)),
   created           TEXT NOT NULL,
   modified          TEXT NOT NULL,
   completed         TEXT NOT NULL DEFAULT ''
@@ -80,7 +89,7 @@ CREATE TABLE IF NOT EXISTS tags (
   task_id  TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   position INTEGER NOT NULL,
   text     TEXT NOT NULL,
-  flag     INTEGER NOT NULL DEFAULT 0
+  flag     INTEGER NOT NULL DEFAULT 0 CHECK (flag IN (0, 1))
 );
 
 CREATE INDEX IF NOT EXISTS idx_tags_task ON tags(task_id);

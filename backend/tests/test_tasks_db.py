@@ -212,6 +212,188 @@ class TestPositionCollisionSafety(DatabaseTestCase):
         self.assertEqual([t['id'] for t in tasks_db.tags_for_task(self.conn, 't1')], ['g-a', 'g-z'])
 
 
+class TestTaskDomainConstraints(DatabaseTestCase):
+    """Issue: CHECK constraints for task enums and booleans. A fresh
+    database (tasks_schema.sql) rejects undocumented status/priority/
+    work_type values and non-0/1 booleans directly - no migration involved
+    here, that's TestTaskDomainConstraintsMigration below."""
+
+    def setUp(self):
+        super().setUp()
+        self.given_section()
+
+    def test_accepts_every_documented_status(self):
+        for i, status in enumerate(('open', 'in-progress', 'pending', 'done', 'cancelled')):
+            tasks_db.insert_task(self.conn, a_task('t%d' % i, position=i, status=status))
+
+    def test_rejects_an_undocumented_status(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            tasks_db.insert_task(self.conn, a_task(status='archived'))
+
+    def test_accepts_every_documented_priority(self):
+        for i, priority in enumerate(('low', 'medium', 'high')):
+            tasks_db.insert_task(self.conn, a_task('t%d' % i, position=i, priority=priority))
+
+    def test_rejects_an_undocumented_priority(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            tasks_db.insert_task(self.conn, a_task(priority='urgent'))
+
+    def test_accepts_every_documented_work_type_and_the_empty_sentinel(self):
+        for i, work_type in enumerate(('', 'new-feature', 'schema-change')):
+            tasks_db.insert_task(self.conn, a_task('t%d' % i, position=i, work_type=work_type))
+
+    def test_rejects_an_undocumented_work_type(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            tasks_db.insert_task(self.conn, a_task(work_type='bugfix'))
+
+    def test_rejects_a_non_01_boolean_column(self):
+        tasks_db.insert_task(self.conn, a_task())
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute("UPDATE tasks SET env_dev = 2 WHERE id = 't1'")
+
+    def test_rejects_a_non_01_tag_flag(self):
+        tasks_db.insert_task(self.conn, a_task())
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                "INSERT INTO tags (id, task_id, position, text, flag) VALUES ('g1', 't1', 0, 'x', 2)"
+            )
+
+
+class TestTaskDomainConstraintsMigration(unittest.TestCase):
+    """Migration 2 (tasks_db._add_task_domain_constraints): rebuilds tasks
+    and tags with the CHECK constraints above, staged here as the
+    unconstrained shape every tasks.db had before this migration - a
+    parent/child pair and a tag, so the rebuild's foreign keys (parent_id,
+    tags.task_id) have something real to preserve, plus one
+    already-invalid value per column to prove the pre-rebuild
+    normalization pass, not just the constraint itself."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.conn = tasks_db.connect(os.path.join(self.tmp_dir.name, 'tasks.db'))
+        self.conn.executescript('''
+            CREATE TABLE sections (
+              id TEXT PRIMARY KEY, position INTEGER NOT NULL, label TEXT NOT NULL,
+              slug TEXT NOT NULL UNIQUE, note TEXT NOT NULL DEFAULT ''
+            );
+            CREATE TABLE tasks (
+              id TEXT PRIMARY KEY, section_id TEXT NOT NULL REFERENCES sections(id),
+              position INTEGER NOT NULL, "desc" TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
+              notes TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open',
+              done INTEGER GENERATED ALWAYS AS (status = 'done') VIRTUAL,
+              priority TEXT NOT NULL DEFAULT 'medium', ticket_number TEXT NOT NULL DEFAULT '',
+              servicenow_sys_id TEXT, assignment_group TEXT NOT NULL DEFAULT '',
+              requested_by TEXT NOT NULL DEFAULT '', due_date TEXT NOT NULL DEFAULT '',
+              time_estimate TEXT NOT NULL DEFAULT '', related_files TEXT NOT NULL DEFAULT '',
+              parent_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+              work_type TEXT NOT NULL DEFAULT '', env_dev INTEGER NOT NULL DEFAULT 0,
+              env_qa INTEGER NOT NULL DEFAULT 0, env_prod INTEGER NOT NULL DEFAULT 0,
+              cmdb_updated INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL,
+              modified TEXT NOT NULL, completed TEXT NOT NULL DEFAULT ''
+            );
+            CREATE TABLE tags (
+              id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+              position INTEGER NOT NULL, text TEXT NOT NULL, flag INTEGER NOT NULL DEFAULT 0
+            );
+        ''')
+        self.conn.execute("INSERT INTO sections VALUES ('s1', 0, 'Sec', 's1', '')")
+        self.conn.execute(
+            '''INSERT INTO tasks (id, section_id, position, "desc", status, priority, work_type,
+                                   env_dev, created, modified)
+               VALUES ('parent', 's1', 0, 'Parent', 'bogus-status', 'medium', '', 0, 'x', 'x')'''
+        )
+        self.conn.execute(
+            '''INSERT INTO tasks (id, section_id, position, "desc", status, priority, parent_id,
+                                   env_qa, created, modified)
+               VALUES ('child', 's1', 1, 'Child', 'done', 'super-high', 'parent', 5, 'x', 'x')'''
+        )
+        self.conn.execute(
+            "INSERT INTO tags (id, task_id, position, text, flag) VALUES ('g1', 'child', 0, 'x', 7)"
+        )
+        self.conn.execute('PRAGMA user_version = 1')
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp_dir.cleanup()
+
+    def test_normalizes_an_undocumented_status_to_open(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual(tasks_db.find_task(self.conn, 'parent')['status'], 'open')
+
+    def test_normalizes_an_undocumented_priority_to_medium(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual(tasks_db.find_task(self.conn, 'child')['priority'], 'medium')
+
+    def test_normalizes_a_non_01_boolean_to_zero(self):
+        tasks_db.migrate(self.conn)
+        self.assertIs(tasks_db.find_task(self.conn, 'child')['env_qa'], False)
+
+    def test_normalizes_a_non_01_tag_flag_to_zero(self):
+        tasks_db.migrate(self.conn)
+        self.assertIs(tasks_db.tags_for_task(self.conn, 'child')[0]['flag'], False)
+
+    def test_preserves_the_parent_child_relationship(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual(tasks_db.find_task(self.conn, 'child')['parent_id'], 'parent')
+
+    def test_preserves_the_tag(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual([t['text'] for t in tasks_db.tags_for_task(self.conn, 'child')], ['x'])
+
+    def test_generated_done_column_still_works_after_the_rebuild(self):
+        tasks_db.migrate(self.conn)
+        self.assertIs(tasks_db.find_task(self.conn, 'child')['done'], True)
+        self.assertIs(tasks_db.find_task(self.conn, 'parent')['done'], False)
+
+    def test_indexes_survive_the_rebuild(self):
+        tasks_db.migrate(self.conn)
+        names = {row['name'] for row in self.conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
+        self.assertTrue({'idx_tasks_section', 'idx_tasks_parent', 'idx_tags_task'} <= names)
+
+    def test_foreign_keys_are_intact_after_the_rebuild(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA foreign_key_check').fetchall(), [])
+
+    def test_constraints_actually_apply_once_the_rebuild_lands(self):
+        tasks_db.migrate(self.conn)
+        with self.assertRaises(sqlite3.IntegrityError):
+            tasks_db.insert_task(self.conn, a_task('bad', section_id='s1', position=5, status='nope'))
+
+    def test_is_idempotent(self):
+        tasks_db.migrate(self.conn)
+        tasks_db.migrate(self.conn)
+        self.assertEqual(tasks_db.find_task(self.conn, 'child')['parent_id'], 'parent')
+
+    def test_records_the_schema_version(self):
+        tasks_db.migrate(self.conn)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], tasks_db.SCHEMA_VERSION)
+
+    def test_a_rejected_rebuild_leaves_the_version_and_data_untouched(self):
+        """Forces the rebuild's own integrity gate to fire (by breaking the
+        foreign_key_check it inspects before committing) and confirms the
+        documented guarantee: migrate() must not bump user_version, or a
+        later run would wrongly believe this migration already succeeded
+        and skip retrying it."""
+        # foreign_keys was on for this fixture's setUp inserts; turned off
+        # here to stage the kind of orphaned row FK enforcement would
+        # normally prevent, and that the rebuild's own foreign_key_check
+        # has to catch instead.
+        self.conn.execute('PRAGMA foreign_keys = OFF')
+        self.conn.execute(
+            "INSERT INTO tags (id, task_id, position, text, flag) VALUES ('orphan', 'no-such-task', 0, 'x', 0)"
+        )
+        self.conn.commit()
+
+        with self.assertRaises(RuntimeError):
+            tasks_db.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], 1)
+        # The original (unconstrained) tasks table must still be there,
+        # untouched by the rolled-back rebuild.
+        self.assertIsNotNone(tasks_db.find_task(self.conn, 'parent'))
+
+
 class TestGeneratedDoneColumn(DatabaseTestCase):
 
     def setUp(self):
