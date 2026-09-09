@@ -434,6 +434,61 @@ def _reshape_weight(points):
     return [{"date": d, "value": to_kg(v[-1])} for d, v in sorted(by_date.items())]
 
 
+def _point_date_food(p):
+    nutrition = p.get("nutrition")
+    if not isinstance(nutrition, dict):
+        return None
+    interval = nutrition.get("interval") or {}
+    return _civil_value_to_date(interval.get("civilStartTime")) or _local_date_from_utc(
+        interval.get("startTime"), interval.get("startUtcOffset")
+    ) or _civil_value_to_date(p.get("civilStartTime"))
+
+
+def _nutrient_number(nutrients, *keys):
+    """Read a nutrient across the scalar and unit-object API encodings.
+
+    The API has used both direct numeric fields and measurement objects in
+    examples/clients. Keeping this boundary tolerant means an unrecognised
+    optional nutrient does not hide the rest of a meal.
+    """
+    for key in keys:
+        value = nutrients.get(key)
+        if isinstance(value, dict):
+            for unit_key in ("value", "grams", "kilocalories", "calories"):
+                number = _to_number(value.get(unit_key))
+                if number is not None:
+                    return number
+        else:
+            number = _to_number(value)
+            if number is not None:
+                return number
+    return 0
+
+
+def _reshape_food(points):
+    """Sum logged calories and macronutrients into one record per day."""
+    by_date = {}
+    for p in points:
+        nutrition = p.get("nutrition")
+        if not isinstance(nutrition, dict):
+            continue
+        d = _point_date_food(p)
+        if d is None:
+            continue
+        nutrients = nutrition.get("nutrients")
+        if not isinstance(nutrients, dict):
+            nutrients = nutrition
+        daily = by_date.setdefault(d, {"calories": 0, "carbs_grams": 0, "protein_grams": 0, "fat_grams": 0})
+        daily["calories"] += _nutrient_number(nutrients, "caloriesKcal", "energyKilocalories", "energyKcal", "energy")
+        daily["carbs_grams"] += _nutrient_number(nutrients, "totalCarbohydrateGrams", "carbohydrateGrams", "carbsGrams", "totalCarbohydrate")
+        daily["protein_grams"] += _nutrient_number(nutrients, "proteinGrams", "protein")
+        daily["fat_grams"] += _nutrient_number(nutrients, "totalFatGrams", "fatGrams", "totalFat")
+    return [
+        {"date": d, **{key: round(value, 1) for key, value in totals.items()}}
+        for d, totals in sorted(by_date.items())
+    ]
+
+
 def _point_date_breathing_rate(p):
     payload = p.get("dailyRespiratoryRate")
     d = None
@@ -497,6 +552,7 @@ _RESHAPERS = {
     "breathing_rate": _reshape_breathing_rate,
     "temperature": _reshape_temperature,
     "weight": _reshape_weight,
+    "food": _reshape_food,
 }
 
 # Per-point date extractors, one per metric, each reusing the exact same
@@ -520,6 +576,7 @@ _POINT_DATE_EXTRACTORS = {
     "breathing_rate": _point_date_breathing_rate,
     "temperature": _point_date_temperature,
     "weight": functools.partial(_point_date_sample, "weight"),
+    "food": _point_date_food,
 }
 
 

@@ -26,6 +26,7 @@
   --metric-breathing: oklch(58% 0.12 185);
   --metric-temperature: oklch(62% 0.15 55);
   --metric-weight: oklch(58% 0.14 275);
+  --metric-food: oklch(58% 0.13 95);
 
   /* Sleep stages: three lightness steps of the Sleep card's own violet
      (--metric-sleep, hue 295) so the stacked bar reads as "this is what's
@@ -48,6 +49,7 @@
   --metric-temperature: oklch(74% 0.13 55);
   --metric-breathing: oklch(70% 0.1 185);
   --metric-weight: oklch(70% 0.12 275);
+  --metric-food: oklch(72% 0.11 95);
 
   --sleep-deep: oklch(50% 0.15 295);
   --sleep-rem: oklch(63% 0.15 295);
@@ -389,6 +391,32 @@ canvas.stacked-bar {
   margin-top: 12px;
   border-radius: 4px;
   overflow: hidden;
+}
+
+.food-macros {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.food-macros div {
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 2px solid var(--metric-food);
+}
+
+.food-macros dt {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.food-macros dd {
+  margin: 3px 0 0;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* --- Legends (sleep stages, heart rate zones) --- */

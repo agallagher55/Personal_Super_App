@@ -96,7 +96,8 @@ call the dashboard page makes on load. Default range: last 7 days if
     "hrv": [ { "date": "2026-08-11", "value": 45.0 } ],
     "breathing_rate": [ { "date": "2026-08-11", "value": 15.2 } ],
     "temperature": [ { "date": "2026-08-11", "value": 36.8 } ],
-    "weight": [ { "date": "2026-08-11", "value": 81.5 } ]
+    "weight": [ { "date": "2026-08-11", "value": 81.5 } ],
+    "food": [ { "date": "2026-08-11", "calories": 2140, "carbs_grams": 238, "protein_grams": 146, "fat_grams": 68 } ]
   }
 }
 ```
@@ -115,6 +116,10 @@ chart, table, and statistics therefore all operate on the same nap-free data.
 Any metric with no records in range is present as an empty array
 (`"heart_rate": []`), not omitted — keeps the frontend's widget code from
 having to check for missing keys.
+
+Food records combine all nutrition logs on the same local calendar day.
+Calories are kilocalories and each macronutrient value is grams. The
+dashboard presents the latest logged day in the selected range.
 
 Each `activity` exercise carries more than the dashboard timeline shows,
 for the per-activity detail view: `start_time`/`end_time` are raw UTC
