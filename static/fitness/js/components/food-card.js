@@ -15,7 +15,7 @@ export function renderFoodCard(container, records) {
 
   const label = document.createElement("div");
   label.className = "card-sublabel";
-  label.textContent = latest ? `Latest logged day: ${formatShortDate(latest.date)}` : "no food data in range";
+  label.textContent = latest ? `Latest logged day: ${formatShortDate(latest.date)}` : "no nutrition logs returned by Google";
   container.appendChild(label);
 
   const macros = document.createElement("dl");
