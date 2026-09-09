@@ -1,5 +1,10 @@
 # ServiceNow sync
 
+See [`TASKS-UX-REVIEW.md`](TASKS-UX-REVIEW.md) for a product/UX review of
+the complete `/tasks` workflow against the Halifax GIS dashboard and a
+prioritized improvement plan. A self-contained, printable/downloadable HTML
+version is available at [`TASKS-UX-REVIEW.html`](TASKS-UX-REVIEW.html).
+
 Pulls your assigned ServiceNow tasks into `data/tasks.db` via the
 [Table API](https://developer.servicenow.com/dev.do#!/reference/api/latest/rest/c_TableAPI),
 so the "Work Tasks" list at `/tasks/work` can be kept in sync with the
