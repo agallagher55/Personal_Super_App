@@ -1367,6 +1367,18 @@ a.field-pill-ticket:hover { border-color: var(--flag); color: var(--flag); }
 .task-view-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper-raised); }
 .view-count { margin-left: 4px; opacity: .72; }
 
+.task-view-empty {
+  margin: -8px 0 24px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
 .source-record-link {
   margin-left: 6px;
   font-size: 10px;

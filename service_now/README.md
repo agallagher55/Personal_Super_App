@@ -81,6 +81,35 @@ be toggled per task, **Waiting** includes imported awaiting/pending states,
 and **Overdue** is calculated from the due date. A follow-up date can be set
 on waiting work independently of the ServiceNow due date.
 
+## If the task list looks empty
+
+The queue pills are filters; they never delete records. Choose **All** first.
+An empty Today/Waiting/Overdue queue now says explicitly that the other tasks
+are safe, and `/tasks` defaults to All on a new visit.
+
+Before attempting a reload, check the live database without modifying it:
+
+```bash
+python3 -c "import sys; sys.path.insert(0, 'backend'); import tasks_db; c=tasks_db.connect(); print(len(tasks_db.load_tasks(c)), 'tasks'); c.close()"
+```
+
+If that reports tasks, do **not** recreate the database—the data is present and
+the UI is filtered. If it reports zero and `data/tasks.json` contains the
+expected fallback, stop the server, preserve the database and any WAL sidecars,
+and then migrate the snapshot:
+
+```bash
+backup_dir="data/tasks-backup-$(date +%Y%m%d-%H%M%S)"
+mkdir "$backup_dir"
+cp -p data/tasks.db* "$backup_dir"/
+rm -f data/tasks.db data/tasks.db-wal data/tasks.db-shm
+python3 backend/tasks_db.py migrate
+```
+
+Do not remove a populated `tasks.db`: personal notes and the scratchpad can be
+newer than the committed JSON fallback. The migration command also refuses to
+import over populated tables as an additional safeguard.
+
 ## Known limitation
 
 `additional_assignee_list` turned out to be a stock `task` table field
