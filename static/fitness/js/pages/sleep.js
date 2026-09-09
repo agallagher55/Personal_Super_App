@@ -7,6 +7,7 @@ function renderChart(canvas, records) {
   drawSparkline(canvas, records.map((r) => r.duration_minutes), {
     colorVar: "--metric-sleep",
     labels: records.map((r) => r.date),
+    yLabel: "Sleep duration (minutes)",
   });
 }
 

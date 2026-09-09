@@ -17,6 +17,7 @@ function draw() {
     drawSparkline(chartCanvas, records.map((r) => convertFromKg(r.value, unit)), {
       colorVar: COLOR_VAR,
       labels: records.map((r) => r.date),
+      yLabel: `Weight (${unit})`,
     });
   }
   if (tableBody) {

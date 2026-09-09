@@ -12,6 +12,7 @@ export function initSimpleValueDetailPage(metric, { title, unit = "", colorVar =
     drawSparkline(canvas, records.map((r) => r.value), {
       colorVar,
       labels: records.map((r) => r.date),
+      yLabel: `${title}${unit ? ` (${unit.trim()})` : ""}`,
     });
   }
 

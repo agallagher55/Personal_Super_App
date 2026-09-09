@@ -22,6 +22,7 @@ function renderChart(canvas, records) {
   drawSparkline(canvas, records.map(dayTotalMinutes), {
     colorVar: "--metric-activity",
     labels: records.map((r) => r.date),
+    yLabel: "Active time (minutes)",
   });
 }
 
