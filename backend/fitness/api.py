@@ -193,7 +193,13 @@ def _reshape_sleep(points):
     sleep.summary.stagesSummary (a list of {type, minutes, count} - types
     seen live: AWAKE, LIGHT, DEEP, REM). Stage durations default to 0 for
     any stage type absent from stagesSummary."""
-    records = []
+    # Google Health exposes each sleep session independently and does not
+    # reliably identify naps across every connected source. Sessions shorter
+    # than three hours are therefore treated as naps, and if a source reports
+    # overlapping/main sessions for one date only the longest is retained.
+    # This keeps naps from depressing the dashboard value and sleep statistics.
+    min_main_sleep_minutes = 180
+    by_date = {}
     for p in points:
         sleep = p.get("sleep")
         if not isinstance(sleep, dict):
@@ -203,6 +209,8 @@ def _reshape_sleep(points):
             continue
         summary = sleep.get("summary") or {}
         duration = _to_number(summary.get("minutesAsleep")) or 0
+        if duration < min_main_sleep_minutes:
+            continue
         stages = {"light": 0, "deep": 0, "rem": 0, "awake": 0}
         for stage in summary.get("stagesSummary") or []:
             if not isinstance(stage, dict):
@@ -210,8 +218,10 @@ def _reshape_sleep(points):
             key = str(stage.get("type", "")).lower()
             if key in stages:
                 stages[key] += _to_number(stage.get("minutes")) or 0
-        records.append({"date": d, "duration_minutes": duration, "stages": stages})
-    return sorted(records, key=lambda r: r["date"])
+        record = {"date": d, "duration_minutes": duration, "stages": stages}
+        if d not in by_date or duration > by_date[d]["duration_minutes"]:
+            by_date[d] = record
+    return [by_date[d] for d in sorted(by_date)]
 
 
 def _zone_minutes(zone_durations, key):

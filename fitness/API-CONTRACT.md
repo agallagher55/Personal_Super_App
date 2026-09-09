@@ -106,6 +106,11 @@ the last same-day reading). `spo2`, `hrv`, `breathing_rate`, and `weight`
 are confirmed live against a real account; `temperature` is still
 unverified (see `ARCHITECTURE.md` §6).
 
+Sleep records represent main sleep only: sessions shorter than 180 minutes
+are treated as naps and omitted, and when multiple qualifying sessions end on
+the same local date only the longest is returned. The dashboard card, detail
+chart, table, and statistics therefore all operate on the same nap-free data.
+
 Any metric with no records in range is present as an empty array
 (`"heart_rate": []`), not omitted — keeps the frontend's widget code from
 having to check for missing keys.

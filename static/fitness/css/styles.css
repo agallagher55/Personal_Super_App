@@ -644,6 +644,10 @@ canvas.detail-chart {
   height: 180px;
 }
 
+.detail-chart-title {
+  margin: 0 0 8px;
+}
+
 .detail-layout {
   display: flex;
   align-items: flex-start;

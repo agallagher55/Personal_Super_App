@@ -74,7 +74,7 @@ function drawLinearTrend(ctx, points, xFor, yFor, color) {
 function labelChart(canvas, ctx, width, yLabel, accessibleLabel) {
   const description = accessibleLabel || (yLabel ? `${yLabel} over time with linear trend line` : "Fitness metric over time with linear trend line");
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", description);
+  if (!canvas.hasAttribute("aria-labelledby")) canvas.setAttribute("aria-label", description);
   if (!yLabel) return;
   ctx.fillStyle = themeColor("--ink-soft");
   ctx.font = LABEL_FONT;
@@ -123,7 +123,7 @@ export function drawSparkline(canvas, values, options = {}) {
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", accessibleLabel || (yLabel ? `${yLabel} over time with linear trend line` : "Fitness metric over time with linear trend line"));
+  if (!canvas.hasAttribute("aria-labelledby")) canvas.setAttribute("aria-label", accessibleLabel || (yLabel ? `${yLabel} over time with linear trend line` : "Fitness metric over time with linear trend line"));
 
   const points = values
     .map((v, i) => ({ i, v }))
@@ -288,7 +288,7 @@ export function drawBarChart(canvas, values, options = {}) {
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", accessibleLabel || (yLabel ? `${yLabel} over time with linear trend line` : "Fitness metric over time with linear trend line"));
+  if (!canvas.hasAttribute("aria-labelledby")) canvas.setAttribute("aria-label", accessibleLabel || (yLabel ? `${yLabel} over time with linear trend line` : "Fitness metric over time with linear trend line"));
 
   const points = values
     .map((v, i) => ({ i, v }))
@@ -366,11 +366,13 @@ export function drawBarChart(canvas, values, options = {}) {
  * order given.
  */
 export function drawStackedBar(canvas, segments, options = {}) {
-  const { padding = 2 } = options;
+  const { padding = 2, accessibleLabel = "Fitness breakdown chart" } = options;
   themeRedraws.set(canvas, () => drawStackedBar(canvas, segments, options));
 
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
+  canvas.setAttribute("role", "img");
+  if (!canvas.hasAttribute("aria-labelledby")) canvas.setAttribute("aria-label", accessibleLabel);
 
   const total = segments.reduce((sum, s) => sum + (s.minutes || 0), 0);
   const innerW = width - padding * 2;

@@ -46,7 +46,8 @@ export function renderSleep(container, records) {
   container.appendChild(canvas);
   drawStackedBar(
     canvas,
-    STAGES.map((s) => ({ minutes: latest.stages[s.key] || 0, colorVar: s.colorVar }))
+    STAGES.map((s) => ({ minutes: latest.stages[s.key] || 0, colorVar: s.colorVar })),
+    { accessibleLabel: `Sleep stages for ${formatShortDate(latest.date)}` }
   );
 
   const legend = document.createElement("div");
