@@ -8,6 +8,7 @@ import { renderSleep } from "./components/sleep-card.js";
 import { renderActivity } from "./components/activity-card.js";
 import { renderSimpleValueCard } from "./components/simple-value-card.js";
 import { renderWeightCard } from "./components/weight-card.js";
+import { renderFoodCard } from "./components/food-card.js";
 
 const header = renderPageHeader(document.getElementById("page-header"), {
   title: "Personal Health",
@@ -30,6 +31,7 @@ const els = {
   breathingRate: document.getElementById("breathing-rate-card-body"),
   temperature: document.getElementById("temperature-card-body"),
   weight: document.getElementById("weight-card-body"),
+  food: document.getElementById("food-card-body"),
 };
 
 // Matches the per-metric styling used on each metric's own detail page
@@ -102,11 +104,11 @@ async function maybeRunFirstSync() {
 // touches the DOM.
 let loadSequence = 0;
 
-async function loadDashboard(from, to) {
+async function loadDashboard(from, to, { preserveStatus = false } = {}) {
   const requestId = ++loadSequence;
   const isCurrent = () => requestId === loadSequence;
 
-  setStatus("Loading…");
+  if (!preserveStatus) setStatus("Loading…");
   try {
     const data = await getMetrics(from, to);
     const isEmpty = Object.values(data.metrics).every((records) => (records || []).length === 0);
@@ -126,7 +128,8 @@ async function loadDashboard(from, to) {
       });
     }
     renderWeightCard(els.weight, data.metrics.weight || []);
-    setStatus(`Showing ${data.from} to ${data.to}`);
+    renderFoodCard(els.food, data.metrics.food || []);
+    if (!preserveStatus) setStatus(`Showing ${data.from} to ${data.to}`);
   } catch (err) {
     if (!isCurrent()) return;
     setStatus(`Failed to load: ${err.message}`, true);
@@ -148,9 +151,12 @@ function init() {
 
   wireSyncButton(els.sync, els.lastSynced, {
     setStatus,
-    onDone: () => {
+    onDone: ({ result, error }) => {
       const { from, to } = currentRange();
-      loadDashboard(from, to);
+      // Keep the sync result visible while refreshing the cards. Previously
+      // loadDashboard immediately replaced useful failures (including a
+      // missing nutrition permission or invalid data type) with "Showing…".
+      loadDashboard(from, to, { preserveStatus: Boolean(result || error) });
     },
   });
 

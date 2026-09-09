@@ -103,14 +103,34 @@ scopes so sign-in can identify *who's* signing in:
 | Steps, distance, floors, altitude (activity) | `https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly` |
 | Sleep | `https://www.googleapis.com/auth/googlehealth.sleep.readonly` |
 | Weight and other health metrics/measurements | `https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly` |
+| Food logs, calories, and macronutrients | `https://www.googleapis.com/auth/googlehealth.nutrition.readonly` |
 
-Add `openid`/`email`/`profile` alongside the three readonly health scopes to
+Add `openid`/`email`/`profile` alongside the four readonly health scopes to
 the OAuth consent screen's scope list, and request the same scopes when
 starting the auth flow in code (already set in
 `backend/fitness/config.json.example`, and in `config.py`'s
 `DEFAULT_SCOPES`). Double-check the current full scope list at
 `developers.google.com/health/scopes` and the data types each one covers at
 `developers.google.com/health/data-types` before finalizing.
+
+Existing visitors must sign out and sign in again after the nutrition scope
+is added. A refresh token only retains the scopes granted when it was issued;
+the app's `prompt=consent` authorization flow will show the new nutrition
+permission during that re-consent.
+
+### If the Food card is still empty
+
+Click **Sync now** and read the status line above the cards. It reports the
+number of `food` points returned and now keeps the full Google error visible
+when only nutrition fails. `food: 0` means Google successfully answered but
+returned no nutrition logs for the sync window; the API does not infer meals
+from activity, so confirm food was actually logged in the connected
+Google/Fitbit account. A `food: 403`/permission error means the stored token
+does not contain the nutrition scope: sign out, sign back in, approve the new
+permission, and sync again. If `FITNESS_OAUTH_SCOPES` or a `scopes` array in
+`backend/fitness/config.json` is configured, it overrides the defaults and
+must explicitly include
+`https://www.googleapis.com/auth/googlehealth.nutrition.readonly`.
 
 ## 6. Get a first token and sanity-check the API (before signing in through the app)
 
