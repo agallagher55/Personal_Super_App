@@ -77,6 +77,7 @@ call the dashboard page makes on load. Default range: last 7 days if
   "from": "2026-08-11",
   "to": "2026-08-17",
   "metrics": {
+    "calories": [ { "date": "2026-08-11", "value": 2240 } ],
     "steps": [
       { "date": "2026-08-11", "value": 8421 },
       { "date": "2026-08-12", "value": 6310 }
@@ -130,7 +131,7 @@ Single-metric detail, for per-metric pages (e.g. `/fitness/heart-rate`)
 that want more than the dashboard summary gives. Default range: last 30
 days if omitted.
 
-`{metric}` is one of: `steps`, `heart_rate`, `sleep`, `activity`, `spo2`,
+`{metric}` is one of: `steps`, `calories`, `heart_rate`, `sleep`, `activity`, `spo2`,
 `hrv`, `breathing_rate`, `temperature`, `weight` (keep in sync with
 `backend/fitness/api.py`'s `KNOWN_METRICS`).
 

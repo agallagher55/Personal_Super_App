@@ -17,6 +17,7 @@
    with it (steps blue, heart rate red, sleep violet, ...). */
 :root {
   --metric-steps: oklch(58% 0.14 264);
+  --metric-calories: oklch(62% 0.15 55);
   --metric-heart-rate: oklch(58% 0.15 25);
   --metric-sleep: oklch(58% 0.15 295);
   --metric-activity: oklch(58% 0.14 145);
@@ -38,6 +39,7 @@
 
 :root[data-theme="dark"] {
   --metric-steps: oklch(70% 0.12 264);
+  --metric-calories: oklch(74% 0.13 55);
   --metric-heart-rate: oklch(70% 0.13 25);
   --metric-sleep: oklch(70% 0.13 295);
   --metric-activity: oklch(70% 0.12 145);

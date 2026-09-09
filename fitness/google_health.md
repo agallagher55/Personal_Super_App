@@ -112,6 +112,21 @@ starting the auth flow in code (already set in
 `developers.google.com/health/scopes` and the data types each one covers at
 `developers.google.com/health/data-types` before finalizing.
 
+## Calories burned versus nutrition intake
+
+The Google Health API exposes **calories burned** as its own data type, and
+this app syncs its daily rollup for the Calories Burned dashboard card. This
+is energy expenditure, not calories consumed. See Google's [Calories data
+type](https://developers.google.com/health/data-types/calories).
+
+The API does not accept `nutrition` as a literal parent data-type ID: a live
+request to `/v4/users/me/dataTypes/nutrition/dataPoints` returned
+`INVALID_PARENT_DATA_TYPE_COLLECTION`. Do not infer endpoint IDs from the
+nutrition category page URL. Food calories, carbohydrates, protein, and fat
+remain separate from the calories-burned metric; see Google's [Nutrition data
+types](https://developers.google.com/health/data-types/nutrition) before
+adding any concrete nutrition collection.
+
 ## 6. Get a first token and sanity-check the API (before signing in through the app)
 
 Google provides a codelab for this — do it once by hand to confirm the
