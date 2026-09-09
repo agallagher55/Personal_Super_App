@@ -41,6 +41,17 @@ DATA_TYPES = {
         "page_size": 10000,
         "read_method": "daily_rollup",
     },
+    "calories": {
+        # Google documents daily energy expenditure as the calories-burned
+        # data type (distinct from food/nutrition intake). Fitbit commonly
+        # exposes this as a daily total, so use the same dailyRollUp path as
+        # steps rather than depending on raw intraday points.
+        "api_id": "calories-burned",
+        "filter_field": "calories_burned.interval.civil_start_time",
+        "time_kind": "civil",
+        "page_size": 10000,
+        "read_method": "daily_rollup",
+    },
     "heart_rate": {
         "api_id": "heart-rate",
         "filter_field": "heart_rate.sample_time.physical_time",

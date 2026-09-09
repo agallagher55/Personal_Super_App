@@ -113,24 +113,20 @@ starting the auth flow in code (already set in
 `developers.google.com/health/scopes` and the data types each one covers at
 `developers.google.com/health/data-types` before finalizing.
 
-Existing visitors must sign out and sign in again after the nutrition scope
-is added. A refresh token only retains the scopes granted when it was issued;
-the app's `prompt=consent` authorization flow will show the new nutrition
-permission during that re-consent.
+## Calories burned versus nutrition intake
 
-### If the Food card is still empty
+The Google Health API exposes **calories burned** as its own data type, and
+this app syncs its daily rollup for the Calories Burned dashboard card. This
+is energy expenditure, not calories consumed. See Google's [Calories data
+type](https://developers.google.com/health/data-types/calories).
 
-Click **Sync now** and read the status line above the cards. It reports the
-number of `food` points returned and now keeps the full Google error visible
-when only nutrition fails. `food: 0` means Google successfully answered but
-returned no nutrition logs for the sync window; the API does not infer meals
-from activity, so confirm food was actually logged in the connected
-Google/Fitbit account. A `food: 403`/permission error means the stored token
-does not contain the nutrition scope: sign out, sign back in, approve the new
-permission, and sync again. If `FITNESS_OAUTH_SCOPES` or a `scopes` array in
-`backend/fitness/config.json` is configured, it overrides the defaults and
-must explicitly include
-`https://www.googleapis.com/auth/googlehealth.nutrition.readonly`.
+The API does not accept `nutrition` as a literal parent data-type ID: a live
+request to `/v4/users/me/dataTypes/nutrition/dataPoints` returned
+`INVALID_PARENT_DATA_TYPE_COLLECTION`. Do not infer endpoint IDs from the
+nutrition category page URL. Food calories, carbohydrates, protein, and fat
+remain separate from the calories-burned metric; see Google's [Nutrition data
+types](https://developers.google.com/health/data-types/nutrition) before
+adding any concrete nutrition collection.
 
 ## 6. Get a first token and sanity-check the API (before signing in through the app)
 

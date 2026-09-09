@@ -23,6 +23,7 @@ const els = {
   lastSynced: header.lastSynced,
   status: document.getElementById("status"),
   steps: document.getElementById("steps-card-body"),
+  calories: document.getElementById("calories-card-body"),
   heartRate: document.getElementById("heart-rate-card-body"),
   sleep: document.getElementById("sleep-card-body"),
   activity: document.getElementById("activity-card-body"),
@@ -117,6 +118,9 @@ async function loadDashboard(from, to, { preserveStatus = false } = {}) {
     }
     if (!isCurrent()) return;
     renderSteps(els.steps, data.metrics.steps);
+    renderSimpleValueCard(els.calories, data.metrics.calories || [], {
+      unit: " cal", colorVar: "--metric-calories", decimals: 0,
+    });
     renderHeartRate(els.heartRate, data.metrics.heart_rate);
     renderSleep(els.sleep, data.metrics.sleep);
     renderActivity(els.activity, data.metrics.activity);
@@ -128,7 +132,6 @@ async function loadDashboard(from, to, { preserveStatus = false } = {}) {
       });
     }
     renderWeightCard(els.weight, data.metrics.weight || []);
-    renderFoodCard(els.food, data.metrics.food || []);
     if (!preserveStatus) setStatus(`Showing ${data.from} to ${data.to}`);
   } catch (err) {
     if (!isCurrent()) return;
@@ -154,8 +157,8 @@ function init() {
     onDone: ({ result, error }) => {
       const { from, to } = currentRange();
       // Keep the sync result visible while refreshing the cards. Previously
-      // loadDashboard immediately replaced useful failures (including a
-      // missing nutrition permission or invalid data type) with "Showing…".
+      // loadDashboard immediately replaced useful per-metric failures with
+      // "Showing…".
       loadDashboard(from, to, { preserveStatus: Boolean(result || error) });
     },
   });

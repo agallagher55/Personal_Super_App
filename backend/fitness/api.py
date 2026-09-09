@@ -24,7 +24,7 @@ import store
 import sync
 import users
 
-KNOWN_METRICS = ("steps", "heart_rate", "sleep", "activity", "spo2", "hrv", "breathing_rate", "temperature", "weight", "food")
+KNOWN_METRICS = ("steps", "calories", "heart_rate", "sleep", "activity", "spo2", "hrv", "breathing_rate", "temperature", "weight")
 
 # Default lookback window, in days (inclusive of `to`), when a request omits
 # `from` - per API-CONTRACT.md ("last 7 days" for the dashboard summary,
@@ -139,6 +139,33 @@ def _reshape_steps(points):
             continue
         totals[d] = totals.get(d, 0) + count
     return [{"date": d, "value": v} for d, v in sorted(totals.items())]
+
+
+def _point_date_calories(p):
+    payload = p.get("caloriesBurned") or p.get("calories") or {}
+    interval = payload.get("interval") if isinstance(payload, dict) else {}
+    return _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(
+        (interval or {}).get("civilStartTime")
+    )
+
+
+def _reshape_calories(points):
+    """Daily calories burned in kilocalories from dailyRollUp responses."""
+    totals = {}
+    for p in points:
+        payload = p.get("caloriesBurned") or p.get("calories")
+        if not isinstance(payload, dict):
+            continue
+        value = None
+        for key in ("kilocaloriesSum", "caloriesKcalSum", "caloriesKcal", "kilocalories", "value"):
+            value = _to_number(payload.get(key))
+            if value is not None:
+                break
+        d = _point_date_calories(p)
+        if d is None or value is None:
+            continue
+        totals[d] = totals.get(d, 0) + value
+    return [{"date": d, "value": round(value, 1)} for d, value in sorted(totals.items())]
 
 
 def _point_date_heart_rate(p):
@@ -516,6 +543,7 @@ def _parse_datetime(value):
 
 _RESHAPERS = {
     "steps": _reshape_steps,
+    "calories": _reshape_calories,
     "heart_rate": _reshape_heart_rate,
     "sleep": _reshape_sleep,
     "activity": _reshape_activity,
@@ -539,6 +567,7 @@ _RESHAPERS = {
 # history instead of the requested range.
 _POINT_DATE_EXTRACTORS = {
     "steps": _point_date_steps,
+    "calories": _point_date_calories,
     "heart_rate": _point_date_heart_rate,
     "sleep": _point_date_sleep,
     "activity": _point_date_activity,
