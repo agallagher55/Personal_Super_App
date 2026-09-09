@@ -29,7 +29,7 @@ gets a 302 to `/fitness/login` (HTML pages) or a 401 (API routes). See
 | `/tasks/new-category` | `html/tasks/new-category.html` | — | New category (section) form. |
 | `/tasks/<slug>` | `html/tasks/index.html` | `static/js/script.js` | Same page as `/tasks`, but `script.js` reads the slug from the URL and renders only the matching section. 404 if `<slug>` doesn't match any section's `slug` (checked after the `/tasks/new`, `/tasks/new-category`, and `/tasks/categories` exact matches above). |
 | `/task/<id>` | `html/tasks/task-detail.html` | `static/js/task-detail.js` | Edit/delete a single task by id. 404 if `<id>` doesn't exist. |
-| `/fitness` | `html/fitness/index.html` | `static/fitness/js/dashboard.js` | Personal Health dashboard — see `fitness/README.md`. Requires a session cookie; 302 to `/fitness/login` otherwise. |
+| `/fitness` | `html/fitness/index.html` | `static/fitness/js/dashboard.js` | Personal Health dashboard, including daily food calories and macronutrients — see `fitness/README.md`. Requires a session cookie; 302 to `/fitness/login` otherwise. |
 | `/fitness/<page>` | `html/fitness/pages/<page>.html` | `static/fitness/js/pages/<page>.js` | Per-metric detail view. `<page>` is one of `steps`, `heart-rate`, `sleep`, `activity`, `spo2`, `hrv`, `breathing-rate`, `temperature`, `weight` (`FITNESS_PAGES` in `backend/server.py`). 404 if unknown; 302 to `/fitness/login?next=/fitness/<page>` if signed out. |
 | `/fitness/login` | `html/fitness/login.html` | `static/fitness/js/login.js` | Sign-in page. 302 to `/fitness` if already signed in. |
 | `/fitness/auth/start` | — | — | 302 to Google's consent screen, sets a short-lived signed state cookie. `?next=` (validated to a `/fitness*` path) carries where to land after sign-in. |

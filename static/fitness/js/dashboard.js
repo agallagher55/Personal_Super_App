@@ -8,6 +8,7 @@ import { renderSleep } from "./components/sleep-card.js";
 import { renderActivity } from "./components/activity-card.js";
 import { renderSimpleValueCard } from "./components/simple-value-card.js";
 import { renderWeightCard } from "./components/weight-card.js";
+import { renderFoodCard } from "./components/food-card.js";
 
 const header = renderPageHeader(document.getElementById("page-header"), {
   title: "Personal Health",
@@ -30,6 +31,7 @@ const els = {
   breathingRate: document.getElementById("breathing-rate-card-body"),
   temperature: document.getElementById("temperature-card-body"),
   weight: document.getElementById("weight-card-body"),
+  food: document.getElementById("food-card-body"),
 };
 
 // Matches the per-metric styling used on each metric's own detail page
@@ -126,6 +128,7 @@ async function loadDashboard(from, to) {
       });
     }
     renderWeightCard(els.weight, data.metrics.weight || []);
+    renderFoodCard(els.food, data.metrics.food || []);
     setStatus(`Showing ${data.from} to ${data.to}`);
   } catch (err) {
     if (!isCurrent()) return;
