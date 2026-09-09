@@ -41,8 +41,10 @@ export function wireSyncButton(button, lastSyncedEl, { setStatus, onDone }) {
   button.addEventListener("click", async () => {
     button.disabled = true;
     setStatus("Syncing…");
+    let result = null;
+    let syncError = null;
     try {
-      const result = await triggerSync();
+      result = await triggerSync();
       const counts = Object.entries(result.synced)
         .map(([metric, count]) => `${metric}: ${count}`)
         .join(", ");
@@ -50,17 +52,20 @@ export function wireSyncButton(button, lastSyncedEl, { setStatus, onDone }) {
       // means the other metrics genuinely synced - report both rather than
       // hiding the failure or treating the whole sync as an error.
       if (result.errors && Object.keys(result.errors).length > 0) {
-        const failed = Object.keys(result.errors).join(", ");
+        const failed = Object.entries(result.errors)
+          .map(([metric, message]) => `${metric}: ${message}`)
+          .join("; ");
         setStatus(`Synced (${counts}) — failed: ${failed}`, true);
       } else {
         setStatus(`Synced (${counts})`);
       }
       setLastSynced(lastSyncedEl, result.synced_at);
     } catch (err) {
+      syncError = err;
       setStatus(`Sync failed: ${err.message}`, true);
     } finally {
       button.disabled = false;
-      onDone();
+      onDone({ result, error: syncError });
     }
   });
 }

@@ -102,11 +102,11 @@ async function maybeRunFirstSync() {
 // touches the DOM.
 let loadSequence = 0;
 
-async function loadDashboard(from, to) {
+async function loadDashboard(from, to, { preserveStatus = false } = {}) {
   const requestId = ++loadSequence;
   const isCurrent = () => requestId === loadSequence;
 
-  setStatus("Loading…");
+  if (!preserveStatus) setStatus("Loading…");
   try {
     const data = await getMetrics(from, to);
     const isEmpty = Object.values(data.metrics).every((records) => (records || []).length === 0);
@@ -126,7 +126,7 @@ async function loadDashboard(from, to) {
       });
     }
     renderWeightCard(els.weight, data.metrics.weight || []);
-    setStatus(`Showing ${data.from} to ${data.to}`);
+    if (!preserveStatus) setStatus(`Showing ${data.from} to ${data.to}`);
   } catch (err) {
     if (!isCurrent()) return;
     setStatus(`Failed to load: ${err.message}`, true);
@@ -148,9 +148,12 @@ function init() {
 
   wireSyncButton(els.sync, els.lastSynced, {
     setStatus,
-    onDone: () => {
+    onDone: ({ result, error }) => {
       const { from, to } = currentRange();
-      loadDashboard(from, to);
+      // Keep the sync result visible while refreshing the cards. Previously
+      // loadDashboard immediately replaced useful per-metric failures with
+      // "Showing…".
+      loadDashboard(from, to, { preserveStatus: Boolean(result || error) });
     },
   });
 

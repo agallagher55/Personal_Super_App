@@ -67,9 +67,9 @@ export function initMetricDetailPage(metric, { title, renderChart, renderTable, 
   // loadDashboard() for the same guard and the full explanation.
   let loadSequence = 0;
 
-  async function load(from, to) {
+  async function load(from, to, { preserveStatus = false } = {}) {
     const requestId = ++loadSequence;
-    setStatus("Loading…");
+    if (!preserveStatus) setStatus("Loading…");
     try {
       const data = await getMetricDetail(metric, from, to);
       if (requestId !== loadSequence) return;
@@ -77,7 +77,9 @@ export function initMetricDetailPage(metric, { title, renderChart, renderTable, 
       renderTable(els.tableBody, data.records);
       if (renderStats) renderStats(els.stats, data.records);
       const count = data.records.length;
-      setStatus(`Showing ${data.from} to ${data.to} (${count} record${count === 1 ? "" : "s"})`);
+      if (!preserveStatus) {
+        setStatus(`Showing ${data.from} to ${data.to} (${count} record${count === 1 ? "" : "s"})`);
+      }
     } catch (err) {
       if (requestId !== loadSequence) return;
       setStatus(`Failed to load: ${err.message}`, true);
@@ -92,9 +94,9 @@ export function initMetricDetailPage(metric, { title, renderChart, renderTable, 
 
   wireSyncButton(els.sync, els.lastSynced, {
     setStatus,
-    onDone: () => {
+    onDone: ({ result, error }) => {
       const { from, to } = currentRange();
-      load(from, to);
+      load(from, to, { preserveStatus: Boolean(result || error) });
     },
   });
 
