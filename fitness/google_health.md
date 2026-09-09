@@ -103,14 +103,20 @@ scopes so sign-in can identify *who's* signing in:
 | Steps, distance, floors, altitude (activity) | `https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly` |
 | Sleep | `https://www.googleapis.com/auth/googlehealth.sleep.readonly` |
 | Weight and other health metrics/measurements | `https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly` |
+| Food logs, calories, and macronutrients | `https://www.googleapis.com/auth/googlehealth.nutrition.readonly` |
 
-Add `openid`/`email`/`profile` alongside the three readonly health scopes to
+Add `openid`/`email`/`profile` alongside the four readonly health scopes to
 the OAuth consent screen's scope list, and request the same scopes when
 starting the auth flow in code (already set in
 `backend/fitness/config.json.example`, and in `config.py`'s
 `DEFAULT_SCOPES`). Double-check the current full scope list at
 `developers.google.com/health/scopes` and the data types each one covers at
 `developers.google.com/health/data-types` before finalizing.
+
+Existing visitors must sign out and sign in again after the nutrition scope
+is added. A refresh token only retains the scopes granted when it was issued;
+the app's `prompt=consent` authorization flow will show the new nutrition
+permission during that re-consent.
 
 ## 6. Get a first token and sanity-check the API (before signing in through the app)
 
