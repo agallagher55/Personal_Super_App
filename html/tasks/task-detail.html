@@ -41,7 +41,7 @@
 
         <div class="field-row">
           <label class="field">
-            <span class="field-label">Ticket number</span>
+            <span class="field-label">Ticket number <a id="servicenow-record-link" class="source-record-link" target="_blank" rel="noopener noreferrer" hidden>Open in ServiceNow ↗</a></span>
             <input type="text" name="ticket_number" id="field-ticket-number" placeholder="e.g. TASK0329104">
           </label>
 
@@ -87,6 +87,18 @@
               <option value="medium">Medium</option>
               <option value="high">High</option>
             </select>
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field field-inline">
+            <input type="checkbox" name="focus_today" id="field-focus-today">
+            <span class="field-label">In today's queue</span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Follow-up date</span>
+            <input type="date" name="follow_up_date" id="field-follow-up-date">
           </label>
         </div>
 

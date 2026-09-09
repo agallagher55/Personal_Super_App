@@ -34,7 +34,10 @@ import tasks_db  # noqa: E402 - needs the sys.path entry above
 
 STATE_TO_STATUS = {
     'open': 'open',
-    'pending': 'open',
+    'pending': 'pending',
+    'awaiting user info': 'pending',
+    'awaiting user information': 'pending',
+    'on hold': 'pending',
     'work in progress': 'in-progress',
     'in progress': 'in-progress',
 }

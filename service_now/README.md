@@ -1,5 +1,10 @@
 # ServiceNow sync
 
+See [`TASKS-UX-REVIEW.md`](TASKS-UX-REVIEW.md) for a product/UX review of
+the complete `/tasks` workflow against the Halifax GIS dashboard and a
+prioritized improvement plan. A self-contained, printable/downloadable HTML
+version is available at [`TASKS-UX-REVIEW.html`](TASKS-UX-REVIEW.html).
+
 Pulls your assigned ServiceNow tasks into `data/tasks.db` via the
 [Table API](https://developer.servicenow.com/dev.do#!/reference/api/latest/rest/c_TableAPI),
 so the "Work Tasks" list at `/tasks/work` can be kept in sync with the
@@ -69,6 +74,12 @@ future runs.
 - Uses the same `backend/tasks_db.py` storage helpers as the web app and
   commits the entire sync in one SQLite transaction. A failed or interrupted
   run therefore cannot leave a partially applied import.
+
+The `/tasks` UI adds a personal triage layer without writing those choices
+back to ServiceNow: ticket pills link to their source records, **Today** can
+be toggled per task, **Waiting** includes imported awaiting/pending states,
+and **Overdue** is calculated from the due date. A follow-up date can be set
+on waiting work independently of the ServiceNow due date.
 
 ## Known limitation
 
