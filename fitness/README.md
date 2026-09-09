@@ -3,7 +3,7 @@
 `/fitness` is a personal health dashboard: any allowed visitor signs in
 with their own Google account and sees their own Google Health data (steps,
 heart rate, sleep, SpO2, HRV, breathing rate, temperature variation,
-weight, activity/exercise sessions), synced from the Google Health API,
+weight, food/nutrition, activity/exercise sessions), synced from the Google Health API,
 cached locally per visitor, and charted in the browser. It started as a
 ported copy of the standalone
 [`personal_health`](https://github.com/agallagher55/personal_health)

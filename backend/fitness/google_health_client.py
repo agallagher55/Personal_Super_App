@@ -139,6 +139,15 @@ DATA_TYPES = {
         "time_kind": "physical",
         "page_size": 10000,
     },
+    "food": {
+        # Food logs are exposed by the nutrition data type. Nutrition is an
+        # interval because one log can represent a meal rather than an
+        # instantaneous sensor reading.
+        "api_id": "nutrition",
+        "filter_field": "nutrition.interval.civil_start_time",
+        "time_kind": "civil",
+        "page_size": 10000,
+    },
 }
 
 
