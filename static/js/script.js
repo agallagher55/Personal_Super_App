@@ -8,6 +8,12 @@
   var completedCountEl = document.getElementById('completed-count');
   var completedFilterBar = document.getElementById('completed-filter-bar');
   var completedCategoryFilter = 'all';
+  var requestedTaskView = new URLSearchParams(window.location.search).get('view');
+  // All remains the safe default. A focused queue can legitimately contain
+  // zero items; opening on one made a populated database look empty.
+  var activeTaskView = requestedTaskView || 'all';
+  var taskViewBar = document.getElementById('task-view-bar');
+  var taskViewEmpty = document.getElementById('task-view-empty');
 
   var sectionListMap = {};    // sectionId -> main <ol> in the left column
   var sectionLabelMap = {};   // sectionId -> section label text
@@ -77,6 +83,9 @@
     li.dataset.taskId = taskData.id || '';
     li.dataset.status = status;
     li.dataset.priority = priority;
+    li.dataset.focusToday = taskData.focus_today ? 'true' : 'false';
+    li.dataset.dueDate = taskData.due_date || '';
+    li.dataset.followUpDate = taskData.follow_up_date || '';
 
     var handle = document.createElement('span');
     handle.className = 'drag-handle';
@@ -165,10 +174,19 @@
       var fields = document.createElement('div');
       fields.className = 'task-fields';
       fieldEntries.forEach(function (entry) {
-        var pill = document.createElement('span');
+        var pill = document.createElement(
+          entry.key === 'ticket_number' && taskData.servicenow_sys_id ? 'a' : 'span'
+        );
         pill.className = 'field-pill field-pill-' + entry.className;
         var value = entry.value !== undefined ? entry.value : taskData[entry.key];
         pill.textContent = entry.label + value;
+        if (pill.tagName === 'A') {
+          pill.href = 'https://halifaxprod.service-now.com/nav_to.do?uri=task.do?sys_id=' +
+            encodeURIComponent(taskData.servicenow_sys_id);
+          pill.target = '_blank';
+          pill.rel = 'noopener noreferrer';
+          pill.title = 'Open in ServiceNow';
+        }
         fields.appendChild(pill);
       });
       details.appendChild(fields);
@@ -204,6 +222,32 @@
     estimateField.appendChild(estimateInput);
 
     quickFields.appendChild(dueField);
+
+    var todayField = document.createElement('label');
+    todayField.className = 'quick-field today-field';
+    var todayInput = document.createElement('input');
+    todayInput.type = 'checkbox';
+    todayInput.className = 'focus-today-input';
+    todayInput.checked = !!taskData.focus_today;
+    var todayLabel = document.createElement('span');
+    todayLabel.className = 'quick-field-label';
+    todayLabel.textContent = 'Today';
+    todayField.appendChild(todayInput);
+    todayField.appendChild(todayLabel);
+    quickFields.appendChild(todayField);
+
+    var followUpField = document.createElement('label');
+    followUpField.className = 'quick-field';
+    var followUpLabel = document.createElement('span');
+    followUpLabel.className = 'quick-field-label';
+    followUpLabel.textContent = 'Follow up';
+    var followUpInput = document.createElement('input');
+    followUpInput.type = 'date';
+    followUpInput.className = 'follow-up-date-input';
+    followUpInput.value = taskData.follow_up_date || '';
+    followUpField.appendChild(followUpLabel);
+    followUpField.appendChild(followUpInput);
+    quickFields.appendChild(followUpField);
     quickFields.appendChild(estimateField);
     details.appendChild(quickFields);
 
@@ -328,6 +372,12 @@
       li.classList.add('priority-' + prioritySelect.value);
     });
 
+    todayInput.addEventListener('change', function () {
+      li.dataset.focusToday = todayInput.checked ? 'true' : 'false';
+      updateViewCounts();
+      applySearchFilter();
+    });
+
     statusSelect.addEventListener('change', function () {
       var newStatus = statusSelect.value;
       var wasInCompleted = completedBody.contains(li);
@@ -336,6 +386,7 @@
       li.classList.toggle('in-progress', newStatus === 'in-progress');
       li.classList.toggle('pending', newStatus === 'pending');
       li.classList.toggle('cancelled', newStatus === 'cancelled');
+      updateViewCounts();
 
       if (newStatus === 'done') {
         moveToCompleted(li, sectionId);
@@ -558,7 +609,7 @@
       }
     });
 
-    if (!getFilterSlugFromPath()) {
+    if (!getFilterSlugFromPath() && activeTaskView === 'all') {
       header.classList.add('collapsed');
       list.classList.add('collapsed');
     }
@@ -767,6 +818,7 @@
     });
     updateCompletedCount();
     buildCompletedFilterBar(sectionsToRender);
+    updateViewCounts();
 
     // Completed panel starts collapsed.
     completedHeader.classList.add('collapsed');
@@ -837,23 +889,81 @@
 
   function applySearchFilter() {
     var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    var today = new Date();
+    var localToday = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' +
+      String(today.getDate()).padStart(2, '0');
 
     document.querySelectorAll('.task').forEach(function (li) {
       var matchesSearch = !query || taskMatchesQuery(li, query);
       var inCompleted = completedBody.contains(li);
       var matchesCategory = !inCompleted || completedCategoryFilter === 'all' ||
         li.dataset.section === completedCategoryFilter;
-      li.classList.toggle('search-hidden', !(matchesSearch && matchesCategory));
+      var matchesView = activeTaskView === 'all' ||
+        (activeTaskView === 'today' && (li.dataset.focusToday === 'true' || li.dataset.dueDate === localToday || li.dataset.status === 'in-progress')) ||
+        (activeTaskView === 'waiting' && li.dataset.status === 'pending') ||
+        (activeTaskView === 'overdue' && li.dataset.dueDate && li.dataset.dueDate < localToday && !inCompleted);
+      li.classList.toggle('search-hidden', !(matchesSearch && matchesCategory && matchesView));
     });
 
     document.querySelectorAll('.section').forEach(function (section) {
       var list = section.querySelector('ol.tasks');
-      section.classList.toggle('search-hidden', !!query && !groupHasVisibleTask(list));
+      section.classList.toggle('search-hidden', !groupHasVisibleTask(list));
     });
 
     document.querySelectorAll('.completed-group').forEach(function (group) {
       var list = group.querySelector('ol.tasks');
       group.classList.toggle('search-hidden', !!query && !groupHasVisibleTask(list));
+    });
+
+    if (taskViewEmpty) {
+      var visibleActiveTasks = sectionsContainer.querySelectorAll('.task:not(.search-hidden)').length;
+      taskViewEmpty.hidden = visibleActiveTasks > 0;
+      if (!visibleActiveTasks) {
+        var labels = { today: 'Today', waiting: 'Waiting', overdue: 'Overdue', all: 'All' };
+        taskViewEmpty.textContent = activeTaskView === 'all'
+          ? (query ? 'No tasks match this search.' : 'No active tasks are stored yet.')
+          : 'No tasks are in ' + labels[activeTaskView] + '. Your other tasks are safe — choose All to see them.';
+      }
+    }
+  }
+
+  function updateViewCounts() {
+    var today = new Date();
+    var localToday = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' +
+      String(today.getDate()).padStart(2, '0');
+    var activeTasks = Array.prototype.slice.call(sectionsContainer.querySelectorAll('.task'));
+    var counts = {
+      today: activeTasks.filter(function (li) { return li.dataset.focusToday === 'true' || li.dataset.dueDate === localToday || li.dataset.status === 'in-progress'; }).length,
+      waiting: activeTasks.filter(function (li) { return li.dataset.status === 'pending'; }).length,
+      overdue: activeTasks.filter(function (li) { return li.dataset.dueDate && li.dataset.dueDate < localToday; }).length
+    };
+    Object.keys(counts).forEach(function (view) {
+      var el = document.getElementById(view + '-count');
+      if (el) { el.textContent = counts[view]; }
+    });
+  }
+
+  if (taskViewBar) {
+    if (!['all', 'today', 'waiting', 'overdue'].includes(activeTaskView)) { activeTaskView = 'all'; }
+    taskViewBar.querySelectorAll('.task-view-pill').forEach(function (pill) {
+      pill.classList.toggle('active', pill.dataset.view === activeTaskView);
+      pill.addEventListener('click', function () {
+        activeTaskView = pill.dataset.view;
+        taskViewBar.querySelectorAll('.task-view-pill').forEach(function (p) {
+          p.classList.toggle('active', p === pill);
+        });
+        var url = new URL(window.location.href);
+        url.searchParams.set('view', activeTaskView);
+        window.history.replaceState({}, '', url.pathname + url.search);
+        if (activeTaskView !== 'all') {
+          document.querySelectorAll('.section-header.collapsed').forEach(function (header) {
+            header.classList.remove('collapsed');
+            var list = header.parentElement.querySelector('ol.tasks');
+            if (list) { list.classList.remove('collapsed'); }
+          });
+        }
+        applySearchFilter();
+      });
     });
   }
 
@@ -897,12 +1007,16 @@
       var textarea = li.querySelector('.notes-input');
       var dueInput = li.querySelector('.due-date-input');
       var estimateInput = li.querySelector('.time-estimate-input');
+      var todayInput = li.querySelector('.focus-today-input');
+      var followUpInput = li.querySelector('.follow-up-date-input');
       var update = {
         id: taskId,
         notes: textarea ? textarea.value : '',
         status: li.dataset.status || 'open',
         priority: li.dataset.priority || 'medium',
         due_date: dueInput ? dueInput.value : '',
+        focus_today: todayInput ? todayInput.checked : false,
+        follow_up_date: followUpInput ? followUpInput.value : '',
         time_estimate: estimateInput ? estimateInput.value : ''
       };
       ENVIRONMENTS.forEach(function (env) {

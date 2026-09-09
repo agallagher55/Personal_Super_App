@@ -14,9 +14,12 @@
   var fieldTags = document.getElementById('field-tags');
   var fieldNotes = document.getElementById('field-notes');
   var fieldTicketNumber = document.getElementById('field-ticket-number');
+  var serviceNowRecordLink = document.getElementById('servicenow-record-link');
   var fieldAssignmentGroup = document.getElementById('field-assignment-group');
   var fieldRequestedBy = document.getElementById('field-requested-by');
   var fieldDueDate = document.getElementById('field-due-date');
+  var fieldFocusToday = document.getElementById('field-focus-today');
+  var fieldFollowUpDate = document.getElementById('field-follow-up-date');
   var fieldTimeEstimate = document.getElementById('field-time-estimate');
   var fieldRelatedFiles = document.getElementById('field-related-files');
   var fieldParentId = document.getElementById('field-parent-id');
@@ -110,9 +113,16 @@
     fieldPriority.value = task.priority || 'medium';
     fieldNotes.value = task.notes || '';
     fieldTicketNumber.value = task.ticket_number || '';
+    if (task.servicenow_sys_id) {
+      serviceNowRecordLink.href = 'https://halifaxprod.service-now.com/nav_to.do?uri=task.do?sys_id=' +
+        encodeURIComponent(task.servicenow_sys_id);
+      serviceNowRecordLink.hidden = false;
+    }
     fieldAssignmentGroup.value = task.assignment_group || '';
     fieldRequestedBy.value = task.requested_by || '';
     fieldDueDate.value = task.due_date || '';
+    fieldFocusToday.checked = !!task.focus_today;
+    fieldFollowUpDate.value = task.follow_up_date || '';
     fieldTimeEstimate.value = task.time_estimate || '';
     fieldRelatedFiles.value = task.related_files || '';
     setWorkType(task.work_type);
@@ -208,6 +218,8 @@
           assignment_group: fieldAssignmentGroup.value,
           requested_by: fieldRequestedBy.value,
           due_date: fieldDueDate.value,
+          focus_today: fieldFocusToday.checked,
+          follow_up_date: fieldFollowUpDate.value,
           time_estimate: fieldTimeEstimate.value,
           related_files: fieldRelatedFiles.value,
           parent_id: fieldParentId.value,

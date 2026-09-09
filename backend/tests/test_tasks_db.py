@@ -29,6 +29,8 @@ def a_task(task_id='t1', **overrides):
         'assignment_group': '',
         'requested_by': '',
         'due_date': '',
+        'focus_today': False,
+        'follow_up_date': '',
         'time_estimate': '',
         'related_files': '',
         'parent_id': '',
@@ -516,6 +518,12 @@ class TestDateFormatConstraintsMigration(unittest.TestCase):
         tasks_db.migrate(self.conn)
         self.assertEqual(tasks_db.find_task(self.conn, 'parent')['due_date'], '2026-09-10')
 
+    def test_adds_triage_fields_with_safe_defaults(self):
+        tasks_db.migrate(self.conn)
+        task = tasks_db.find_task(self.conn, 'parent')
+        self.assertIs(task['focus_today'], False)
+        self.assertEqual(task['follow_up_date'], '')
+
     def test_preserves_the_tag(self):
         tasks_db.migrate(self.conn)
         self.assertEqual([t['text'] for t in tasks_db.tags_for_task(self.conn, 'child')], ['x'])
@@ -596,6 +604,8 @@ class TestTaskRoundTrip(DatabaseTestCase):
             assignment_group='GIS',
             requested_by='Someone',
             due_date='2026-02-01',
+            focus_today=True,
+            follow_up_date='2026-02-02',
             time_estimate='2h',
             related_files='a.py, b.py',
             work_type='new-feature',
@@ -614,8 +624,17 @@ class TestTaskRoundTrip(DatabaseTestCase):
         tasks_db.insert_task(self.conn, a_task(env_dev=True, cmdb_updated=True))
         stored = tasks_db.find_task(self.conn, 't1')
 
-        for field in ('env_dev', 'env_qa', 'env_prod', 'cmdb_updated', 'done'):
+        for field in ('focus_today', 'env_dev', 'env_qa', 'env_prod', 'cmdb_updated', 'done'):
             self.assertIsInstance(stored[field], bool, field)
+
+    def test_triage_fields_validate_and_round_trip(self):
+        tasks_db.insert_task(self.conn, a_task(focus_today=True, follow_up_date='2026-09-12'))
+        stored = tasks_db.find_task(self.conn, 't1')
+        self.assertIs(stored['focus_today'], True)
+        self.assertEqual(stored['follow_up_date'], '2026-09-12')
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute("UPDATE tasks SET follow_up_date = 'next week' WHERE id = 't1'")
 
     def test_empty_parent_id_round_trips_as_empty_string(self):
         tasks_db.insert_task(self.conn, a_task(parent_id=''))
