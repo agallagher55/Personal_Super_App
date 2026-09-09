@@ -7,6 +7,7 @@ function renderChart(canvas, records) {
   drawSparkline(canvas, records.map((r) => r.resting), {
     colorVar: "--metric-heart-rate",
     labels: records.map((r) => r.date),
+    yLabel: "Resting heart rate (bpm)",
   });
 }
 
