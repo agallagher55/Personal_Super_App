@@ -113,20 +113,23 @@ starting the auth flow in code (already set in
 `developers.google.com/health/scopes` and the data types each one covers at
 `developers.google.com/health/data-types` before finalizing.
 
-## Calories burned versus nutrition intake
+## Nutrition data availability
 
-The Google Health API exposes **calories burned** as its own data type, and
-this app syncs its daily rollup for the Calories Burned dashboard card. This
-is energy expenditure, not calories consumed. See Google's [Calories data
-type](https://developers.google.com/health/data-types/calories).
+The Google Health API currently does **not** expose a `nutrition` data type.
+A live request to
+`/v4/users/me/dataTypes/nutrition/dataPoints` returns
+`INVALID_PARENT_DATA_TYPE_COLLECTION` with "The data type ID 'nutrition' is
+not supported." Health Connect on Android has a Nutrition record type, but
+that does not make it available through this server-side Google Health API.
+Do not add `googlehealth.nutrition.readonly` or a `nutrition` entry to
+`DATA_TYPES`: an OAuth scope alone does not establish that a corresponding
+API data-type collection exists.
 
-The API does not accept `nutrition` as a literal parent data-type ID: a live
-request to `/v4/users/me/dataTypes/nutrition/dataPoints` returned
-`INVALID_PARENT_DATA_TYPE_COLLECTION`. Do not infer endpoint IDs from the
-nutrition category page URL. Food calories, carbohydrates, protein, and fat
-remain separate from the calories-burned metric; see Google's [Nutrition data
-types](https://developers.google.com/health/data-types/nutrition) before
-adding any concrete nutrition collection.
+A Food section therefore needs a different source, such as a direct export or
+API from the food-logging application, an Android Health Connect companion
+that uploads Nutrition records to this app, or manual entry. The fitness sync
+must not call an unsupported Google Health endpoint because one failed metric
+otherwise creates a misleading partial-sync warning on every refresh.
 
 ## 6. Get a first token and sanity-check the API (before signing in through the app)
 
