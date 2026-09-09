@@ -770,6 +770,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         assignment_group = fields.get('assignment_group', [''])[0].strip()
         requested_by = fields.get('requested_by', [''])[0].strip()
         due_date = fields.get('due_date', [''])[0].strip()
+        focus_today = 'focus_today' in fields
+        follow_up_date = fields.get('follow_up_date', [''])[0].strip()
         time_estimate = fields.get('time_estimate', [''])[0].strip()
         related_files = fields.get('related_files', [''])[0].strip()
         parent_id = fields.get('parent_id', [''])[0].strip()
@@ -816,6 +818,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 'assignment_group': assignment_group,
                 'requested_by': requested_by,
                 'due_date': due_date,
+                'focus_today': focus_today,
+                'follow_up_date': follow_up_date,
                 'time_estimate': time_estimate,
                 'related_files': related_files,
                 'parent_id': parent_id,
@@ -980,12 +984,18 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                         changed = True
 
                 for field in ('ticket_number', 'assignment_group', 'requested_by', 'due_date',
-                              'time_estimate', 'related_files'):
+                              'follow_up_date', 'time_estimate', 'related_files'):
                     if field in update:
                         new_value = update[field].strip() if isinstance(update[field], str) else ''
                         if new_value != task.get(field, ''):
                             task[field] = new_value
                             changed = True
+
+                if 'focus_today' in update:
+                    new_value = bool(update['focus_today'])
+                    if new_value != bool(task.get('focus_today', False)):
+                        task['focus_today'] = new_value
+                        changed = True
 
                 if 'parent_id' in update:
                     new_parent_id = update['parent_id'].strip() if isinstance(update['parent_id'], str) else ''

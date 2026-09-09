@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   requested_by      TEXT NOT NULL DEFAULT '',
   due_date          TEXT NOT NULL DEFAULT ''
     CHECK (due_date = '' OR due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  focus_today       INTEGER NOT NULL DEFAULT 0 CHECK (focus_today IN (0, 1)),
+  follow_up_date    TEXT NOT NULL DEFAULT ''
+    CHECK (follow_up_date = '' OR follow_up_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
   time_estimate     TEXT NOT NULL DEFAULT '',
   related_files     TEXT NOT NULL DEFAULT '',
   -- ON DELETE SET NULL, not the default RESTRICT: deleting a task that has

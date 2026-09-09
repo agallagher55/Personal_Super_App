@@ -65,7 +65,7 @@ MIN_SQLITE_VERSION = (3, 31, 0)
 # in test_tasks_db.py that stages a database at the previous version (see
 # TestSchemaMigrations below) and asserts the upgrade preserves data and
 # is idempotent.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Order matters: the dicts built from these are serialized straight into
 # GET /tasks.json, and keeping the old JSON files' key order means the
@@ -73,7 +73,8 @@ SCHEMA_VERSION = 3
 TASK_COLUMNS = (
     'id', 'section_id', 'position', 'desc', 'note', 'notes', 'status', 'done',
     'created', 'modified', 'completed', 'priority', 'ticket_number',
-    'assignment_group', 'requested_by', 'due_date', 'time_estimate',
+    'assignment_group', 'requested_by', 'due_date', 'focus_today',
+    'follow_up_date', 'time_estimate',
     'related_files', 'parent_id', 'work_type', 'env_dev', 'env_qa', 'env_prod',
     'cmdb_updated', 'servicenow_sys_id',
 )
@@ -82,7 +83,7 @@ TASK_COLUMNS = (
 # column to write to.
 TASK_WRITE_COLUMNS = tuple(c for c in TASK_COLUMNS if c != 'done')
 
-TASK_BOOL_COLUMNS = ('env_dev', 'env_qa', 'env_prod', 'cmdb_updated')
+TASK_BOOL_COLUMNS = ('focus_today', 'env_dev', 'env_qa', 'env_prod', 'cmdb_updated')
 
 SECTION_COLUMNS = ('id', 'label', 'slug', 'note')
 
@@ -140,11 +141,35 @@ def migrate(conn):
     if version < 3:
         _add_date_format_constraints(conn)
 
+    if version < 4:
+        _add_personal_triage_fields(conn)
+
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is our
         # own int constant, never user input.
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
         conn.commit()
+
+
+def _add_personal_triage_fields(conn):
+    """Migration 4: add the personal Today flag and waiting follow-up date.
+
+    These are additive columns, so SQLite can preserve existing rows without
+    rebuilding the tasks table. Fresh databases already get both columns from
+    tasks_schema.sql; column inspection keeps that path idempotent.
+    """
+    columns = {row['name'] for row in conn.execute('PRAGMA table_info(tasks)')}
+    if 'focus_today' not in columns:
+        conn.execute(
+            'ALTER TABLE tasks ADD COLUMN focus_today INTEGER NOT NULL DEFAULT 0 '
+            'CHECK (focus_today IN (0, 1))'
+        )
+    if 'follow_up_date' not in columns:
+        conn.execute(
+            "ALTER TABLE tasks ADD COLUMN follow_up_date TEXT NOT NULL DEFAULT '' "
+            "CHECK (follow_up_date = '' OR follow_up_date GLOB "
+            "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')"
+        )
 
 
 def _normalize_task_domain_values(conn):
@@ -411,9 +436,13 @@ def ensure_database(path=None):
 
 def _task_from_row(row):
     task = {}
+    available_columns = set(row.keys())
 
     for column in TASK_COLUMNS:
-        value = row[column]
+        # A failed migration intentionally leaves the previous schema in
+        # place. Reads remain useful for recovery/diagnostics even when a
+        # newly introduced optional column is not present yet.
+        value = row[column] if column in available_columns else None
         if column == 'done' or column in TASK_BOOL_COLUMNS:
             task[column] = bool(value)
         elif column == 'parent_id':

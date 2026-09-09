@@ -902,6 +902,9 @@ a.num:hover {
   border: 1px solid var(--line);
 }
 
+a.field-pill-ticket { text-decoration: none; }
+a.field-pill-ticket:hover { border-color: var(--flag); color: var(--flag); }
+
 .field-pill-group,
 .field-pill-requester,
 .field-pill-due,
@@ -956,6 +959,7 @@ a.num:hover {
 }
 
 .due-date-input,
+.follow-up-date-input,
 .time-estimate-input {
   font-family: var(--mono);
   font-size: 11.5px;
@@ -969,13 +973,17 @@ a.num:hover {
 }
 
 .due-date-input:focus,
+.follow-up-date-input:focus,
 .time-estimate-input:focus {
   border-color: var(--ink);
 }
 
-.due-date-input {
+.due-date-input,
+.follow-up-date-input {
   width: 132px;
 }
+
+.today-field input { accent-color: var(--flag); }
 
 .time-estimate-input {
   width: 56px;
@@ -1332,6 +1340,38 @@ a.num:hover {
 
 .task-search-wrap {
   margin: 0 0 24px;
+}
+
+.task-view-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 24px;
+}
+
+.task-view-pill {
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.task-view-pill:hover { border-color: var(--ink-soft); }
+.task-view-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper-raised); }
+.view-count { margin-left: 4px; opacity: .72; }
+
+.source-record-link {
+  margin-left: 6px;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .task-search {
