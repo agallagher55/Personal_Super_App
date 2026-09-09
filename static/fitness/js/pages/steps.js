@@ -7,6 +7,7 @@ function renderChart(canvas, records) {
   drawBarChart(canvas, records.map((r) => r.value), {
     colorVar: "--metric-steps",
     labels: records.map((r) => r.date),
+    yLabel: "Daily steps",
   });
 }
 

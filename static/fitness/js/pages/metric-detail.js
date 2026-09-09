@@ -40,6 +40,16 @@ export function initMetricDetailPage(metric, { title, renderChart, renderTable, 
     stats: document.getElementById("stats"),
   };
 
+  // Keep the chart's identity in ordinary HTML rather than relying only on
+  // text painted into the canvas. This remains visible at every canvas size
+  // and gives the canvas a stable accessible name.
+  const chartTitle = document.createElement("h2");
+  chartTitle.className = "detail-chart-title";
+  chartTitle.id = `${metric.replace(/_/g, "-")}-chart-title`;
+  chartTitle.textContent = `${title} trend`;
+  els.chart.before(chartTitle);
+  els.chart.setAttribute("aria-labelledby", chartTitle.id);
+
   function setStatus(message, isError = false) {
     els.status.textContent = message;
     els.status.classList.toggle("status-error", isError);

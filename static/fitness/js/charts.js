@@ -44,6 +44,46 @@ function formatValue(v) {
   return Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 1 });
 }
 
+function drawLinearTrend(ctx, points, xFor, yFor, color) {
+  if (points.length < 2) return;
+  const count = points.length;
+  const sumX = points.reduce((sum, point) => sum + point.i, 0);
+  const sumY = points.reduce((sum, point) => sum + point.v, 0);
+  const sumXY = points.reduce((sum, point) => sum + point.i * point.v, 0);
+  const sumXX = points.reduce((sum, point) => sum + point.i * point.i, 0);
+  const denominator = count * sumXX - sumX * sumX;
+  if (!denominator) return;
+
+  const slope = (count * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / count;
+  const firstIndex = points[0].i;
+  const lastIndex = points[points.length - 1].i;
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.65;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(xFor(firstIndex), yFor(intercept + slope * firstIndex));
+  ctx.lineTo(xFor(lastIndex), yFor(intercept + slope * lastIndex));
+  ctx.stroke();
+  ctx.restore();
+}
+
+function labelChart(canvas, ctx, width, yLabel, accessibleLabel) {
+  const description = accessibleLabel || (yLabel ? `${yLabel} over time with linear trend line` : "Fitness metric over time with linear trend line");
+  canvas.setAttribute("role", "img");
+  if (!canvas.hasAttribute("aria-labelledby")) canvas.setAttribute("aria-label", description);
+  if (!yLabel) return;
+  ctx.fillStyle = themeColor("--ink-soft");
+  ctx.font = LABEL_FONT;
+  ctx.textAlign = "left";
+  ctx.fillText(yLabel, 4, 10);
+  ctx.textAlign = "right";
+  ctx.fillText("— — Trend", width - 4, 10);
+}
+
 export function formatShortDate(dateStr) {
   const d = new Date(`${dateStr}T00:00:00`);
   if (Number.isNaN(d.getTime())) return dateStr;
@@ -75,13 +115,15 @@ export function formatTimeOfDay(isoStr) {
  * stack them").
  */
 export function drawSparkline(canvas, values, options = {}) {
-  const { colorVar = "--metric-steps", padding = 4, labels = null, labelExtremes = true, formatLabel = formatShortDate } = options;
+  const { colorVar = "--metric-steps", padding = 4, labels = null, labelExtremes = true, formatLabel = formatShortDate, yLabel = "", accessibleLabel = "", showTrend = true } = options;
   themeRedraws.set(canvas, () => drawSparkline(canvas, values, options));
 
   const color = themeColor(colorVar);
   const labelColor = themeColor("--ink-soft");
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
+  canvas.setAttribute("role", "img");
+  if (!canvas.hasAttribute("aria-labelledby")) canvas.setAttribute("aria-label", accessibleLabel || (yLabel ? `${yLabel} over time with linear trend line` : "Fitness metric over time with linear trend line"));
 
   const points = values
     .map((v, i) => ({ i, v }))
@@ -104,7 +146,8 @@ export function drawSparkline(canvas, values, options = {}) {
   // label at that same edge. See the dataviz skill's guidance against
   // colliding direct labels.
   const bottomDatePad = hasDateLabels ? 12 : 0;
-  const topValuePad = hasExtremeLabels ? 14 : 0;
+  const chartLabelPad = yLabel ? 14 : 0;
+  const topValuePad = (hasExtremeLabels ? 14 : 0) + chartLabelPad;
   const bottomValuePad = hasExtremeLabels ? 14 : 0;
 
   const min = Math.min(...points.map((p) => p.v));
@@ -134,6 +177,9 @@ export function drawSparkline(canvas, values, options = {}) {
     }
   }
   ctx.stroke();
+
+  if (showTrend) drawLinearTrend(ctx, points, xFor, yFor, color);
+  labelChart(canvas, ctx, width, yLabel, accessibleLabel);
 
   // Dot on the last real point.
   const last = points[points.length - 1];
@@ -234,13 +280,15 @@ export function drawSparkline(canvas, values, options = {}) {
  * x-axis labels when `labels` (e.g. each bar's date) is provided.
  */
 export function drawBarChart(canvas, values, options = {}) {
-  const { colorVar = "--metric-steps", padding = 4, labels = null, labelExtremes = true } = options;
+  const { colorVar = "--metric-steps", padding = 4, labels = null, labelExtremes = true, yLabel = "", accessibleLabel = "", showTrend = true } = options;
   themeRedraws.set(canvas, () => drawBarChart(canvas, values, options));
 
   const color = themeColor(colorVar);
   const labelColor = themeColor("--ink-soft");
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
+  canvas.setAttribute("role", "img");
+  if (!canvas.hasAttribute("aria-labelledby")) canvas.setAttribute("aria-label", accessibleLabel || (yLabel ? `${yLabel} over time with linear trend line` : "Fitness metric over time with linear trend line"));
 
   const points = values
     .map((v, i) => ({ i, v }))
@@ -257,7 +305,7 @@ export function drawBarChart(canvas, values, options = {}) {
   const hasDateLabels = Array.isArray(labels) && labels.length === values.length;
   const hasExtremeLabels = labelExtremes && points.length >= 1;
   const bottomDatePad = hasDateLabels ? 12 : 0;
-  const topValuePad = hasExtremeLabels ? 14 : 0;
+  const topValuePad = (hasExtremeLabels ? 14 : 0) + (yLabel ? 14 : 0);
 
   const max = Math.max(...points.map((p) => p.v)) || 1;
   const innerW = width - padding * 2;
@@ -276,6 +324,11 @@ export function drawBarChart(canvas, values, options = {}) {
     const y = yFor(p.v);
     ctx.fillRect(x, y, barWidth, baseline - y);
   }
+
+
+  const centerXFor = (i) => xFor(i) + barWidth / 2;
+  if (showTrend) drawLinearTrend(ctx, points, centerXFor, yFor, color);
+  labelChart(canvas, ctx, width, yLabel, accessibleLabel);
 
   function alignFor(x) {
     if (x < width * 0.15) return "left";
@@ -313,11 +366,13 @@ export function drawBarChart(canvas, values, options = {}) {
  * order given.
  */
 export function drawStackedBar(canvas, segments, options = {}) {
-  const { padding = 2 } = options;
+  const { padding = 2, accessibleLabel = "Fitness breakdown chart" } = options;
   themeRedraws.set(canvas, () => drawStackedBar(canvas, segments, options));
 
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
+  canvas.setAttribute("role", "img");
+  if (!canvas.hasAttribute("aria-labelledby")) canvas.setAttribute("aria-label", accessibleLabel);
 
   const total = segments.reduce((sum, s) => sum + (s.minutes || 0), 0);
   const innerW = width - padding * 2;
