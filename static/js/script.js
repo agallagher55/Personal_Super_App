@@ -967,6 +967,46 @@
     });
   }
 
+  function updateViewCounts() {
+    var today = new Date();
+    var localToday = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' +
+      String(today.getDate()).padStart(2, '0');
+    var activeTasks = Array.prototype.slice.call(sectionsContainer.querySelectorAll('.task'));
+    var counts = {
+      today: activeTasks.filter(function (li) { return li.dataset.focusToday === 'true' || li.dataset.dueDate === localToday || li.dataset.status === 'in-progress'; }).length,
+      waiting: activeTasks.filter(function (li) { return li.dataset.status === 'pending'; }).length,
+      overdue: activeTasks.filter(function (li) { return li.dataset.dueDate && li.dataset.dueDate < localToday; }).length
+    };
+    Object.keys(counts).forEach(function (view) {
+      var el = document.getElementById(view + '-count');
+      if (el) { el.textContent = counts[view]; }
+    });
+  }
+
+  if (taskViewBar) {
+    if (!['all', 'today', 'waiting', 'overdue'].includes(activeTaskView)) { activeTaskView = 'all'; }
+    taskViewBar.querySelectorAll('.task-view-pill').forEach(function (pill) {
+      pill.classList.toggle('active', pill.dataset.view === activeTaskView);
+      pill.addEventListener('click', function () {
+        activeTaskView = pill.dataset.view;
+        taskViewBar.querySelectorAll('.task-view-pill').forEach(function (p) {
+          p.classList.toggle('active', p === pill);
+        });
+        var url = new URL(window.location.href);
+        url.searchParams.set('view', activeTaskView);
+        window.history.replaceState({}, '', url.pathname + url.search);
+        if (activeTaskView !== 'all') {
+          document.querySelectorAll('.section-header.collapsed').forEach(function (header) {
+            header.classList.remove('collapsed');
+            var list = header.parentElement.querySelector('ol.tasks');
+            if (list) { list.classList.remove('collapsed'); }
+          });
+        }
+        applySearchFilter();
+      });
+    });
+  }
+
   if (searchInput) {
     searchInput.addEventListener('input', applySearchFilter);
   }
