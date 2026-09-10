@@ -35,7 +35,7 @@ function el(tag, className, html) {
 
 // Every row/legend/card builder below interpolates data straight into an
 // innerHTML template string. Today that data all comes from the static
-// data/finance-dashboard.json, but finance/ARCHITECTURE.md's Plaid sync
+// static/finance/finance-dashboard.json, but finance/ARCHITECTURE.md's Plaid sync
 // will populate the same fields (institution/account/holding names) from
 // Plaid's merchant_name/name/official_name/institution_name - strings that
 // originate outside the app. Escaping here now means that data source swap
