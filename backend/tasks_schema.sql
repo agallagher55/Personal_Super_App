@@ -91,6 +91,12 @@ CREATE TABLE IF NOT EXISTS tasks (
   env_qa            INTEGER NOT NULL DEFAULT 0 CHECK (env_qa IN (0, 1)),
   env_prod          INTEGER NOT NULL DEFAULT 0 CHECK (env_prod IN (0, 1)),
   cmdb_updated      INTEGER NOT NULL DEFAULT 0 CHECK (cmdb_updated IN (0, 1)),
+  source_opened_at  TEXT NOT NULL DEFAULT ''
+    CHECK (source_opened_at = '' OR source_opened_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+  source_updated_at TEXT NOT NULL DEFAULT ''
+    CHECK (source_updated_at = '' OR source_updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+  last_seen_at      TEXT NOT NULL DEFAULT ''
+    CHECK (last_seen_at = '' OR last_seen_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
   created           TEXT NOT NULL
     CHECK (created GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
   modified          TEXT NOT NULL
@@ -124,3 +130,23 @@ CREATE TABLE IF NOT EXISTS scratchpad (
     CHECK (modified = '' OR
            modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );
+
+-- One row per real ServiceNow sync attempt. The source data and this audit
+-- trail are deliberately separate: a local task edit must never make the
+-- source look fresher, and an upstream failure must remain visible.
+CREATE TABLE IF NOT EXISTS sync_runs (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  started_at        TEXT NOT NULL
+    CHECK (started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+  finished_at       TEXT NOT NULL
+    CHECK (finished_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+  result            TEXT NOT NULL CHECK (result IN ('ok', 'error')),
+  records_seen      INTEGER NOT NULL DEFAULT 0 CHECK (records_seen >= 0),
+  created_count     INTEGER NOT NULL DEFAULT 0 CHECK (created_count >= 0),
+  updated_count     INTEGER NOT NULL DEFAULT 0 CHECK (updated_count >= 0),
+  unchanged_count   INTEGER NOT NULL DEFAULT 0 CHECK (unchanged_count >= 0),
+  query_fingerprint TEXT NOT NULL DEFAULT '',
+  error             TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_runs_started ON sync_runs(started_at DESC);
