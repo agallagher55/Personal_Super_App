@@ -42,15 +42,15 @@ DATA_TYPES = {
         "read_method": "daily_rollup",
     },
     "calories": {
-        # Google documents daily energy expenditure as the calories-burned
-        # data type (distinct from food/nutrition intake). Fitbit commonly
-        # exposes this as a daily total, so use the same dailyRollUp path as
-        # steps rather than depending on raw intraday points.
-        "api_id": "calories-burned",
-        "filter_field": "calories_burned.interval.civil_start_time",
+        # Total daily energy expenditure, including basal and active energy.
+        # Google only exposes this derived data type through rollups and caps
+        # each request at 14 days.
+        "api_id": "total-calories",
+        "filter_field": "total_calories.interval.civil_start_time",
         "time_kind": "civil",
         "page_size": 10000,
         "read_method": "daily_rollup",
+        "max_rollup_days": 14,
     },
     "heart_rate": {
         "api_id": "heart-rate",
@@ -151,11 +151,10 @@ DATA_TYPES = {
         "page_size": 10000,
     },
     "food": {
-        # Food logs are exposed by the nutrition data type. Nutrition is an
-        # interval because one log can represent a meal rather than an
-        # instantaneous sensor reading.
-        "api_id": "nutrition",
-        "filter_field": "nutrition.interval.civil_start_time",
+        # Food intake is stored as nutrition-log sessions. The `food` data
+        # type is the separate read-only food catalog, not a user's log.
+        "api_id": "nutrition-log",
+        "filter_field": "nutrition_log.interval.civil_start_time",
         "time_kind": "civil",
         "page_size": 10000,
     },
@@ -196,33 +195,44 @@ def _civil_date(date_str):
     return {"date": {"year": d.year, "month": d.month, "day": d.day}}
 
 
-def _list_via_daily_rollup(api_id, from_date, to_date, access_token):
+def _list_via_daily_rollup(
+    api_id, from_date, to_date, access_token, max_range_days=90
+):
     """Fetch daily-rollup totals for `api_id` in [from_date, to_date]
-    (inclusive), following pagination until exhausted.
+    (inclusive), following pagination and splitting the range to respect the
+    API's per-data-type aggregation limits.
     """
     url = f"{BASE_URL}/users/me/dataTypes/{api_id}/dataPoints:dailyRollUp"
     headers = {"Authorization": f"Bearer {access_token}"}
-    end_date = (datetime.strptime(to_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    chunk_start = datetime.strptime(from_date, "%Y-%m-%d")
+    range_end = datetime.strptime(to_date, "%Y-%m-%d") + timedelta(days=1)
+    if chunk_start >= range_end:
+        raise ValueError("from_date must not be after to_date")
 
     all_points = []
-    page_token = None
-    while True:
-        body = {
-            "range": {"start": _civil_date(from_date), "end": _civil_date(end_date)},
-            # Documented as optional (defaults to 1) but the live API 400s
-            # if it's omitted, per `ghealth`'s buildDailyRollupBody - always
-            # send it explicitly.
-            "windowSizeDays": 1,
-        }
-        if page_token:
-            body["pageToken"] = page_token
+    while chunk_start < range_end:
+        chunk_end = min(chunk_start + timedelta(days=max_range_days), range_end)
+        page_token = None
+        while True:
+            body = {
+                "range": {
+                    "start": _civil_date(chunk_start.strftime("%Y-%m-%d")),
+                    "end": _civil_date(chunk_end.strftime("%Y-%m-%d")),
+                },
+                # Documented as optional (defaults to 1) but the live API
+                # requires it, so always send it explicitly.
+                "windowSizeDays": 1,
+            }
+            if page_token:
+                body["pageToken"] = page_token
 
-        response = http_client.post_json(url, body, headers=headers)
-        all_points.extend(response.get("rollupDataPoints", []))
+            response = http_client.post_json(url, body, headers=headers)
+            all_points.extend(response.get("rollupDataPoints", []))
 
-        page_token = response.get("nextPageToken")
-        if not page_token:
-            break
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+        chunk_start = chunk_end
 
     return all_points
 
@@ -236,7 +246,13 @@ def list_data_points(metric, from_date, to_date, access_token):
     spec = DATA_TYPES[metric]
 
     if spec.get("read_method") == "daily_rollup":
-        return _list_via_daily_rollup(spec["api_id"], from_date, to_date, access_token)
+        return _list_via_daily_rollup(
+            spec["api_id"],
+            from_date,
+            to_date,
+            access_token,
+            max_range_days=spec.get("max_rollup_days", 90),
+        )
 
     url = f"{BASE_URL}/users/me/dataTypes/{spec['api_id']}/dataPoints"
     headers = {"Authorization": f"Bearer {access_token}"}
