@@ -130,6 +130,14 @@
       taskData.source_updated_at > previousSuccessfulSyncStartedAt);
   }
 
+  // "TASK0330043" -> "TASK", "INC0012345" -> "INC" - the ticket-type facet
+  // groups by this rather than a fixed list, since ServiceNow's own set of
+  // prefixes isn't something this app tracks or should hardcode.
+  function getTicketTypePrefix(ticketNumber) {
+    var match = (ticketNumber || '').match(/^[A-Za-z]+/);
+    return match ? match[0].toUpperCase() : '';
+  }
+
   function renderSyncHealth(status) {
     if (!syncHealthEl) {
       return;
@@ -172,6 +180,12 @@
     li.dataset.focusToday = taskData.focus_today ? 'true' : 'false';
     li.dataset.dueDate = taskData.due_date || '';
     li.dataset.followUpDate = taskData.follow_up_date || '';
+    li.dataset.assignmentGroup = taskData.assignment_group || '';
+    li.dataset.ticketType = getTicketTypePrefix(taskData.ticket_number);
+    li.dataset.origin = taskData.ticket_number ? '' : 'local';
+    li.dataset.changedSinceSync = (sectionId === WORK_SECTION_ID && changedSincePreviousSync(taskData)) ? 'true' : 'false';
+    li.dataset.modified = taskData.modified || '';
+    li.dataset.sourceOpenedAt = taskData.source_opened_at || '';
 
     var handle = document.createElement('span');
     handle.className = 'drag-handle';
@@ -783,8 +797,12 @@
     sectionListMap[sectionData.id] = list;
     section.appendChild(list);
 
-    sectionData.tasks.forEach(function (taskData) {
+    sectionData.tasks.forEach(function (taskData, index) {
       var task = buildTask(taskData, sectionData.id);
+      // The server already sorts tasks by position; recording that index
+      // here is what lets "Personal order" sort back to it later without
+      // a full re-render (see applySort()).
+      task.dataset.buildOrder = index;
       if (taskData.done) {
         ensureCompletedGroup(sectionData.id).appendChild(task);
       } else {
@@ -1297,6 +1315,8 @@
     updateCompletedCount();
     buildCompletedFilterBar(sectionsToRender);
     updateViewCounts();
+    renderFacetBar();
+    applySort();
 
     // Completed panel starts collapsed.
     setCompletedExpanded(false);
@@ -1370,6 +1390,303 @@
     }) : false;
   }
 
+  // --- Facets and sorting (issue #166) -------------------------------
+  //
+  // The queue pills above (All/Today/Waiting/Overdue) are untouched -
+  // these facets are an additional, independent AND-across/OR-within
+  // layer on top, all URL-backed with the same history.replaceState
+  // approach the pills already use.
+
+  var FACET_KEYS = ['status', 'priority', 'type', 'group', 'origin', 'due'];
+  var STATUS_FACET_OPTIONS = [
+    { value: 'open', label: 'Open' },
+    { value: 'in-progress', label: 'In Progress' },
+    { value: 'pending', label: 'Waiting' }
+  ];
+  var PRIORITY_FACET_OPTIONS = [
+    { value: 'high', label: 'High' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'low', label: 'Low' }
+  ];
+  var FACET_LABELS = {
+    status: 'Status', priority: 'Priority', type: 'Type',
+    group: 'Group', origin: 'Origin', due: 'Due'
+  };
+  var SORT_VALUES = ['personal', 'due', 'updated', 'opened', 'priority'];
+
+  var taskFacetsEl = document.getElementById('task-facets');
+  var taskSortSelect = document.getElementById('task-sort');
+
+  var activeFacets = { status: [], priority: [], type: [], group: [], origin: [], due: [] };
+  var activeFresh = false;
+  var activeSort = 'personal';
+
+  function readFacetsFromUrl() {
+    var params = new URLSearchParams(window.location.search);
+    FACET_KEYS.forEach(function (key) {
+      activeFacets[key] = params.getAll(key);
+    });
+    activeFresh = params.get('fresh') === '1';
+    var sortParam = params.get('sort');
+    activeSort = SORT_VALUES.indexOf(sortParam) !== -1 ? sortParam : 'personal';
+  }
+
+  function writeFacetsToUrl() {
+    var url = new URL(window.location.href);
+    var params = url.searchParams;
+    FACET_KEYS.forEach(function (key) { params.delete(key); });
+    FACET_KEYS.forEach(function (key) {
+      activeFacets[key].forEach(function (value) { params.append(key, value); });
+    });
+    if (activeFresh) { params.set('fresh', '1'); } else { params.delete('fresh'); }
+    if (activeSort !== 'personal') { params.set('sort', activeSort); } else { params.delete('sort'); }
+    var qs = params.toString();
+    window.history.replaceState({}, '', url.pathname + (qs ? '?' + qs : ''));
+  }
+
+  function toggleFacetValue(key, value) {
+    var index = activeFacets[key].indexOf(value);
+    if (index === -1) {
+      activeFacets[key].push(value);
+    } else {
+      activeFacets[key].splice(index, 1);
+    }
+  }
+
+  function anyFacetActive() {
+    return activeFresh || FACET_KEYS.some(function (key) { return activeFacets[key].length > 0; });
+  }
+
+  function taskMatchesFacets(li) {
+    if (activeFacets.status.length && activeFacets.status.indexOf(li.dataset.status) === -1) { return false; }
+    if (activeFacets.priority.length && activeFacets.priority.indexOf(li.dataset.priority) === -1) { return false; }
+    if (activeFacets.type.length && activeFacets.type.indexOf(li.dataset.ticketType) === -1) { return false; }
+    if (activeFacets.group.length && activeFacets.group.indexOf(li.dataset.assignmentGroup) === -1) { return false; }
+    if (activeFacets.origin.length && activeFacets.origin.indexOf(li.dataset.origin) === -1) { return false; }
+    if (activeFacets.due.length && li.dataset.dueDate) { return false; }
+    if (activeFresh && li.dataset.changedSinceSync !== 'true') { return false; }
+    return true;
+  }
+
+  // Type/Group are data-driven - a value the user has selected can vanish
+  // from the current data (a ticket type no longer present, e.g.), and
+  // that option must stay listed (so it stays visible and toggleable off)
+  // even though nothing currently matches it.
+  function unionWithActiveValues(key, options) {
+    var known = options.map(function (o) { return o.value; });
+    activeFacets[key].forEach(function (value) {
+      if (known.indexOf(value) === -1) {
+        options = options.concat([{ value: value, label: value }]);
+      }
+    });
+    return options;
+  }
+
+  function collectFacetOptions() {
+    var groups = {};
+    var types = {};
+    Array.prototype.forEach.call(sectionsContainer.querySelectorAll('.task'), function (li) {
+      if (li.dataset.assignmentGroup) { groups[li.dataset.assignmentGroup] = true; }
+      if (li.dataset.ticketType) { types[li.dataset.ticketType] = true; }
+    });
+    return {
+      types: Object.keys(types).sort().map(function (t) { return { value: t, label: t }; }),
+      groups: Object.keys(groups).sort().map(function (g) { return { value: g, label: g }; })
+    };
+  }
+
+  function buildFacetGroup(container, key, label, options) {
+    if (!options.length) {
+      return;
+    }
+    var group = document.createElement('div');
+    group.className = 'facet-group';
+    var groupLabel = document.createElement('span');
+    groupLabel.className = 'facet-group-label';
+    groupLabel.textContent = label;
+    group.appendChild(groupLabel);
+    options.forEach(function (option) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'facet-chip';
+      chip.textContent = option.label;
+      var pressed = activeFacets[key].indexOf(option.value) !== -1;
+      chip.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      chip.classList.toggle('active', pressed);
+      chip.addEventListener('click', function () {
+        toggleFacetValue(key, option.value);
+        writeFacetsToUrl();
+        renderFacetBar();
+        applySearchFilter();
+      });
+      group.appendChild(chip);
+    });
+    container.appendChild(group);
+  }
+
+  function renderFacetBar() {
+    if (!taskFacetsEl) {
+      return;
+    }
+    taskFacetsEl.innerHTML = '';
+    var options = collectFacetOptions();
+
+    buildFacetGroup(taskFacetsEl, 'status', 'Status', STATUS_FACET_OPTIONS);
+    buildFacetGroup(taskFacetsEl, 'priority', 'Priority', PRIORITY_FACET_OPTIONS);
+    buildFacetGroup(taskFacetsEl, 'type', 'Type', unionWithActiveValues('type', options.types));
+    buildFacetGroup(taskFacetsEl, 'group', 'Group', unionWithActiveValues('group', options.groups));
+    buildFacetGroup(taskFacetsEl, 'origin', 'Origin', [{ value: 'local', label: 'Locally created' }]);
+    buildFacetGroup(taskFacetsEl, 'due', 'Due', [{ value: 'none', label: 'No due date' }]);
+
+    var freshChip = document.createElement('button');
+    freshChip.type = 'button';
+    freshChip.className = 'facet-chip facet-chip-standalone';
+    freshChip.textContent = 'Changed since sync';
+    freshChip.setAttribute('aria-pressed', activeFresh ? 'true' : 'false');
+    freshChip.classList.toggle('active', activeFresh);
+    freshChip.addEventListener('click', function () {
+      activeFresh = !activeFresh;
+      writeFacetsToUrl();
+      renderFacetBar();
+      applySearchFilter();
+    });
+    taskFacetsEl.appendChild(freshChip);
+
+    if (anyFacetActive()) {
+      var resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.className = 'facet-reset-btn';
+      resetBtn.textContent = 'Clear filters';
+      resetBtn.addEventListener('click', function () {
+        FACET_KEYS.forEach(function (key) { activeFacets[key] = []; });
+        activeFresh = false;
+        writeFacetsToUrl();
+        renderFacetBar();
+        applySearchFilter();
+      });
+      taskFacetsEl.appendChild(resetBtn);
+    }
+  }
+
+  function resetAllFilters() {
+    activeTaskView = 'all';
+    FACET_KEYS.forEach(function (key) { activeFacets[key] = []; });
+    activeFresh = false;
+    activeSort = 'personal';
+    if (searchInput) { searchInput.value = ''; }
+    if (taskViewBar) {
+      taskViewBar.querySelectorAll('.task-view-pill').forEach(function (p) {
+        p.classList.toggle('active', p.dataset.view === 'all');
+      });
+    }
+    if (taskSortSelect) { taskSortSelect.value = 'personal'; }
+    var url = new URL(window.location.href);
+    url.searchParams.set('view', 'all');
+    FACET_KEYS.forEach(function (key) { url.searchParams.delete(key); });
+    url.searchParams.delete('fresh');
+    url.searchParams.delete('sort');
+    window.history.replaceState({}, '', url.pathname + '?' + url.searchParams.toString());
+    renderFacetBar();
+    applySort();
+    applySearchFilter();
+  }
+
+  function comparePersonalOrder(a, b) {
+    return Number(a.dataset.buildOrder) - Number(b.dataset.buildOrder);
+  }
+  function compareByDueDate(a, b) {
+    var aDate = a.dataset.dueDate || '9999-99-99';
+    var bDate = b.dataset.dueDate || '9999-99-99';
+    return aDate < bDate ? -1 : aDate > bDate ? 1 : 0;
+  }
+  function compareByModifiedDesc(a, b) {
+    var aModified = b.dataset.modified || '';
+    var bModified = a.dataset.modified || '';
+    return aModified < bModified ? -1 : aModified > bModified ? 1 : 0;
+  }
+  function compareByOpenedAsc(a, b) {
+    var aOpened = a.dataset.sourceOpenedAt || '9999-99-99T99:99:99Z';
+    var bOpened = b.dataset.sourceOpenedAt || '9999-99-99T99:99:99Z';
+    return aOpened < bOpened ? -1 : aOpened > bOpened ? 1 : 0;
+  }
+  var PRIORITY_SORT_RANK = { high: 0, medium: 1, low: 2 };
+  function compareByPriority(a, b) {
+    return PRIORITY_SORT_RANK[a.dataset.priority] - PRIORITY_SORT_RANK[b.dataset.priority];
+  }
+  var SORT_COMPARATORS = {
+    personal: comparePersonalOrder,
+    due: compareByDueDate,
+    updated: compareByModifiedDesc,
+    opened: compareByOpenedAsc,
+    priority: compareByPriority
+  };
+
+  // Drag-and-drop and the move-up/down buttons operate on live DOM order,
+  // and Save Changes persists whatever order that is - so while a sort
+  // other than Personal has rearranged that order for display, reordering
+  // has to be switched off rather than risk silently overwriting the real
+  // position order with a due-date/priority/etc. ordering.
+  function setReorderingEnabled(enabled) {
+    document.querySelectorAll('.drag-handle').forEach(function (handle) {
+      handle.setAttribute('draggable', enabled ? 'true' : 'false');
+    });
+    if (!enabled) {
+      document.querySelectorAll('.task-move-btn').forEach(function (btn) {
+        btn.disabled = true;
+      });
+    }
+    // Re-enabling relies on the renumber() calls in applySort() (just run
+    // for every list before this) having already restored the correct
+    // first/last-disabled state - nothing to redo here.
+  }
+
+  function applySort() {
+    var comparator = SORT_COMPARATORS[activeSort] || comparePersonalOrder;
+    Object.keys(sectionListMap).forEach(function (id) {
+      var list = sectionListMap[id];
+      var items = Array.prototype.slice.call(list.children);
+      items.sort(comparator);
+      items.forEach(function (li) { list.appendChild(li); });
+      renumber(list);
+    });
+    setReorderingEnabled(activeSort === 'personal');
+  }
+
+  readFacetsFromUrl();
+
+  if (taskSortSelect) {
+    taskSortSelect.value = activeSort;
+    taskSortSelect.addEventListener('change', function () {
+      activeSort = taskSortSelect.value;
+      writeFacetsToUrl();
+      applySort();
+    });
+  }
+
+  if (taskViewEmpty) {
+    taskViewEmpty.addEventListener('click', function (e) {
+      if (e.target.classList.contains('task-view-empty-reset')) {
+        resetAllFilters();
+      }
+    });
+  }
+
+  window.addEventListener('popstate', function () {
+    readFacetsFromUrl();
+    var params = new URLSearchParams(window.location.search);
+    activeTaskView = params.get('view') || 'all';
+    if (['all', 'today', 'waiting', 'overdue'].indexOf(activeTaskView) === -1) { activeTaskView = 'all'; }
+    if (taskViewBar) {
+      taskViewBar.querySelectorAll('.task-view-pill').forEach(function (p) {
+        p.classList.toggle('active', p.dataset.view === activeTaskView);
+      });
+    }
+    if (taskSortSelect) { taskSortSelect.value = activeSort; }
+    renderFacetBar();
+    applySort();
+    applySearchFilter();
+  });
+
   function applySearchFilter() {
     var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
     var today = new Date();
@@ -1385,7 +1702,8 @@
         (activeTaskView === 'today' && (li.dataset.focusToday === 'true' || li.dataset.dueDate === localToday || li.dataset.status === 'in-progress')) ||
         (activeTaskView === 'waiting' && li.dataset.status === 'pending') ||
         (activeTaskView === 'overdue' && li.dataset.dueDate && li.dataset.dueDate < localToday && !inCompleted);
-      li.classList.toggle('search-hidden', !(matchesSearch && matchesCategory && matchesView));
+      var matchesFacets = taskMatchesFacets(li);
+      li.classList.toggle('search-hidden', !(matchesSearch && matchesCategory && matchesView && matchesFacets));
     });
 
     document.querySelectorAll('.section').forEach(function (section) {
@@ -1402,52 +1720,25 @@
       var visibleActiveTasks = sectionsContainer.querySelectorAll('.task:not(.search-hidden)').length;
       taskViewEmpty.hidden = visibleActiveTasks > 0;
       if (!visibleActiveTasks) {
-        var labels = { today: 'Today', waiting: 'Waiting', overdue: 'Overdue', all: 'All' };
-        taskViewEmpty.textContent = activeTaskView === 'all'
-          ? (query ? 'No tasks match this search.' : 'No active tasks are stored yet.')
-          : 'No tasks are in ' + labels[activeTaskView] + '. Your other tasks are safe — choose All to see them.';
+        var viewLabels = { today: 'Today', waiting: 'Waiting', overdue: 'Overdue' };
+        var descriptions = [];
+        if (activeTaskView !== 'all') { descriptions.push(viewLabels[activeTaskView]); }
+        FACET_KEYS.forEach(function (key) {
+          if (activeFacets[key].length) {
+            descriptions.push(FACET_LABELS[key] + ': ' + activeFacets[key].join(', '));
+          }
+        });
+        if (activeFresh) { descriptions.push('Changed since sync'); }
+        if (query) { descriptions.push('search "' + query + '"'); }
+
+        if (!descriptions.length) {
+          taskViewEmpty.textContent = 'No active tasks are stored yet.';
+        } else {
+          taskViewEmpty.innerHTML = 'No tasks match ' + descriptions.join(' + ') +
+            '. Your other tasks are safe. <button type="button" class="task-view-empty-reset">Reset filters</button>';
+        }
       }
     }
-  }
-
-  function updateViewCounts() {
-    var today = new Date();
-    var localToday = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' +
-      String(today.getDate()).padStart(2, '0');
-    var activeTasks = Array.prototype.slice.call(sectionsContainer.querySelectorAll('.task'));
-    var counts = {
-      today: activeTasks.filter(function (li) { return li.dataset.focusToday === 'true' || li.dataset.dueDate === localToday || li.dataset.status === 'in-progress'; }).length,
-      waiting: activeTasks.filter(function (li) { return li.dataset.status === 'pending'; }).length,
-      overdue: activeTasks.filter(function (li) { return li.dataset.dueDate && li.dataset.dueDate < localToday; }).length
-    };
-    Object.keys(counts).forEach(function (view) {
-      var el = document.getElementById(view + '-count');
-      if (el) { el.textContent = counts[view]; }
-    });
-  }
-
-  if (taskViewBar) {
-    if (!['all', 'today', 'waiting', 'overdue'].includes(activeTaskView)) { activeTaskView = 'all'; }
-    taskViewBar.querySelectorAll('.task-view-pill').forEach(function (pill) {
-      pill.classList.toggle('active', pill.dataset.view === activeTaskView);
-      pill.addEventListener('click', function () {
-        activeTaskView = pill.dataset.view;
-        taskViewBar.querySelectorAll('.task-view-pill').forEach(function (p) {
-          p.classList.toggle('active', p === pill);
-        });
-        var url = new URL(window.location.href);
-        url.searchParams.set('view', activeTaskView);
-        window.history.replaceState({}, '', url.pathname + url.search);
-        if (activeTaskView !== 'all') {
-          document.querySelectorAll('.section-header.collapsed').forEach(function (header) {
-            header.classList.remove('collapsed');
-            var list = header.parentElement.querySelector('ol.tasks');
-            if (list) { list.classList.remove('collapsed'); }
-          });
-        }
-        applySearchFilter();
-      });
-    });
   }
 
   function updateViewCounts() {

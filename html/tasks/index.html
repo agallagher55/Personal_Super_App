@@ -62,6 +62,13 @@
 
       <div class="task-search-wrap">
         <input type="text" id="task-search" class="task-search" placeholder="Search tasks..." autocomplete="off">
+        <select id="task-sort" class="task-sort-select" aria-label="Sort tasks">
+          <option value="personal">Personal order</option>
+          <option value="due">Due date</option>
+          <option value="updated">Recently updated</option>
+          <option value="opened">Oldest opened</option>
+          <option value="priority">Priority</option>
+        </select>
       </div>
 
       <nav class="task-view-bar" id="task-view-bar" aria-label="Task queue">
@@ -70,6 +77,7 @@
         <button type="button" class="task-view-pill" data-view="waiting">Waiting <span class="view-count" id="waiting-count"></span></button>
         <button type="button" class="task-view-pill" data-view="overdue">Overdue <span class="view-count" id="overdue-count"></span></button>
       </nav>
+      <div class="task-facets" id="task-facets"></div>
       <div class="task-view-empty" id="task-view-empty" role="status" hidden></div>
 
       <div class="added-banner" id="added-banner">Task added.</div>

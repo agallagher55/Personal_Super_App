@@ -243,6 +243,22 @@ than sorted. Nothing is lost, only reordered; after that, diffs are small.
   rows.
 - The search box filters the visible cards by text on top of whichever
   queue is selected.
+- Below the queue pills, facet chips add further filtering, AND'd
+  together across groups and OR'd within one: **Status** (Open/In
+  Progress/Waiting), **Priority** (High/Medium/Low), **Type** (derived
+  from the `ticket_number` prefix - TASK, INC, and so on), **Group**
+  (distinct `assignment_group` values present), **Origin** (locally
+  created, no ticket number), **Due** (no due date), and a standalone
+  **Changed since sync** toggle. Every chip and the sort order live in
+  the URL, so a filtered view is bookmarkable and reloads to the same
+  state; a filtered-empty result names what's filtering it out and offers
+  a one-click reset. A sort dropdown next to the search box (Personal
+  order, Due date, Recently updated, Oldest opened, Priority) reorders
+  each section's cards for display only - due-date sort puts undated
+  tasks last, stably. Drag-and-drop and the move-up/down buttons are
+  disabled while a non-personal sort is active, since both act on
+  whatever order is currently on screen and Save Changes would otherwise
+  persist the sorted view as the new real order.
 - Each task has a status dropdown (Open / In Progress / Pending / Done /
   Cancelled). Setting
   a task to Done moves it out of its section and into the
