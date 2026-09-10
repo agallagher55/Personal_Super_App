@@ -276,4 +276,11 @@ than sorted. Nothing is lost, only reordered; after that, diffs are small.
   flushed immediately on blur or when the tab loses focus), showing a
   persistent Saved/Unsaved changes/Saving state under the box. Entries are
   keyed by your own local calendar date, so yesterday's text is never
-  shown under today's heading.
+  shown under today's heading. Prev/next buttons and a Today button move
+  between days (an edited day is flushed before navigating away); "Carry
+  forward" copies the previous day's non-blank lines that aren't already
+  in today's entry, appended at the end, without touching the previous
+  day and without duplicating on a second press; selecting text (or just
+  leaving the caret on a line) and clicking the convert button turns it
+  into a task in the chosen section, leaving the line in the pad exactly
+  as it was.
