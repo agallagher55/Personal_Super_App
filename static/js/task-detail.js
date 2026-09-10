@@ -6,6 +6,7 @@
   var metaEl = document.getElementById('task-meta');
   var deleteBtn = document.getElementById('delete-task-btn');
 
+  var fieldSection = document.getElementById('field-section');
   var fieldDesc = document.getElementById('field-desc');
   var fieldNote = document.getElementById('field-note');
   var fieldStatus = document.getElementById('field-status');
@@ -50,9 +51,20 @@
     cmdbField.style.display = workType === 'new-feature' ? '' : 'none';
   }
 
+  function updateWorkSectionVisibility() {
+    var isWorkTask = fieldSection.value === WORK_SECTION_ID;
+    workTypeFields.style.display = isWorkTask ? '' : 'none';
+    envFields.style.display = isWorkTask ? '' : 'none';
+    if (isWorkTask) {
+      updateEnvFieldsVisibility();
+    }
+  }
+
   workTypeRadios.forEach(function (radio) {
     radio.addEventListener('change', updateEnvFieldsVisibility);
   });
+
+  fieldSection.addEventListener('change', updateWorkSectionVisibility);
 
   function getTaskIdFromPath() {
     var match = window.location.pathname.match(/^\/task\/([^/]+)$/);
@@ -106,6 +118,17 @@
     fieldParentId.value = task.parent_id || '';
   }
 
+  function populateSectionOptions(data, currentSectionId) {
+    fieldSection.innerHTML = '';
+    (data.sections || []).forEach(function (section) {
+      var option = document.createElement('option');
+      option.value = section.id;
+      option.textContent = section.label;
+      fieldSection.appendChild(option);
+    });
+    fieldSection.value = currentSectionId || '';
+  }
+
   function populateForm(task, section) {
     fieldDesc.value = task.desc || '';
     fieldNote.value = task.note || '';
@@ -131,12 +154,7 @@
     fieldEnvProd.checked = !!task.env_prod;
     fieldCmdbUpdated.checked = !!task.cmdb_updated;
 
-    var isWorkTask = section && section.id === WORK_SECTION_ID;
-    workTypeFields.style.display = isWorkTask ? '' : 'none';
-    envFields.style.display = isWorkTask ? '' : 'none';
-    if (isWorkTask) {
-      updateEnvFieldsVisibility();
-    }
+    updateWorkSectionVisibility();
 
     var tags = task.tags || [];
     var flagTag = tags.filter(function (t) { return t.flag; })[0];
@@ -191,6 +209,7 @@
           return;
         }
         populateParentOptions(data, found.task);
+        populateSectionOptions(data, found.section ? found.section.id : '');
         populateForm(found.task, found.section);
       })
       .catch(function (err) {
@@ -208,6 +227,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify([{
           id: taskId,
+          section_id: fieldSection.value,
           desc: fieldDesc.value,
           note: fieldNote.value,
           status: fieldStatus.value,

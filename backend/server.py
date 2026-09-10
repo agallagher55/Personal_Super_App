@@ -796,7 +796,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         conn = tasks_db.connect()
 
         try:
-            if tasks_db.find_section(conn, section_id) is None:
+            section = tasks_db.find_section(conn, section_id)
+            if section is None:
                 self.send_error(400, 'Unknown section: ' + section_id)
                 return
 
@@ -855,7 +856,7 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             conn.close()
 
         self.send_response(303)
-        self.send_header('Location', '/tasks?added=1')
+        self.send_header('Location', '/tasks/' + section['slug'] + '?added=1')
         self.end_headers()
 
     def handle_new_category(self):
@@ -929,6 +930,7 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             dirty_task_ids = set()
             tag_writes = {}
             position_writes = []
+            vacated_sections = set()
 
             updated_count = 0
             now = now_iso()
@@ -1007,6 +1009,23 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                         task['focus_today'] = new_value
                         changed = True
 
+                if 'section_id' in update:
+                    new_section_id = update['section_id'].strip() if isinstance(update['section_id'], str) else ''
+                    old_section_id = task.get('section_id')
+                    if (new_section_id and new_section_id != old_section_id
+                            and tasks_db.find_section(conn, new_section_id) is not None):
+                        # Position from the in-memory list, not a DB query: other
+                        # tasks in this same payload may already have been moved
+                        # into new_section_id earlier in this loop.
+                        existing_positions = [
+                            t.get('position', -1) for t in tasks
+                            if t.get('section_id') == new_section_id and t is not task
+                        ]
+                        task['section_id'] = new_section_id
+                        task['position'] = max(existing_positions) + 1 if existing_positions else 0
+                        vacated_sections.add(old_section_id)
+                        changed = True
+
                 if 'parent_id' in update:
                     new_parent_id = update['parent_id'].strip() if isinstance(update['parent_id'], str) else ''
                     if new_parent_id == task.get('id'):
@@ -1080,6 +1099,11 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                     ])
 
                 tasks_db.set_task_positions(conn, position_writes)
+
+                # A task that moved to a new section leaves a gap in the old
+                # one's position sequence (mirrors handle_delete_task).
+                for old_section_id in vacated_sections:
+                    tasks_db.reposition_section(conn, old_section_id)
         finally:
             conn.close()
 
