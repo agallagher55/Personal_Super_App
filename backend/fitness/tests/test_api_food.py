@@ -7,16 +7,31 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import api  # noqa: E402
 
 
+def civil_time(hour):
+    return {
+        "date": {"year": 2026, "month": 9, "day": 9},
+        "time": {"hours": hour},
+    }
+
+
+def nutrition_log(hour, calories, carbs, protein, fat):
+    return {"nutritionLog": {
+        "interval": {"civilStartTime": civil_time(hour)},
+        "energy": {"kcal": calories},
+        "totalCarbohydrate": {"grams": carbs},
+        "totalFat": {"grams": fat},
+        "nutrients": [
+            {"nutrient": "PROTEIN", "quantity": {"grams": protein}},
+            {"nutrient": "SODIUM", "quantity": {"grams": 0.5}},
+        ],
+    }}
+
+
 class TestReshapeFood(unittest.TestCase):
     def test_sums_meals_by_day(self):
         points = [
-            {"nutrition": {"interval": {"civilStartTime": "2026-09-09T08:00:00"}, "nutrients": {
-                "caloriesKcal": 450, "totalCarbohydrateGrams": 52, "proteinGrams": 25, "totalFatGrams": 14,
-            }}},
-            {"nutrition": {"interval": {"civilStartTime": "2026-09-09T12:00:00"}, "nutrients": {
-                "energyKilocalories": {"value": "625.5"}, "carbohydrateGrams": 71,
-                "protein": {"grams": 31}, "fatGrams": 22,
-            }}},
+            nutrition_log(8, 450, 52, 25, 14),
+            nutrition_log(12, "625.5", 71, 31, 22),
         ]
 
         self.assertEqual(api._reshape_food(points), [{
@@ -25,7 +40,7 @@ class TestReshapeFood(unittest.TestCase):
         }])
 
     def test_ignores_malformed_points(self):
-        self.assertEqual(api._reshape_food([{}, {"nutrition": None}]), [])
+        self.assertEqual(api._reshape_food([{}, {"nutritionLog": None}]), [])
 
 
 if __name__ == "__main__":

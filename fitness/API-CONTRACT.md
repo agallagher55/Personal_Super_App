@@ -138,7 +138,7 @@ that want more than the dashboard summary gives. Default range: last 30
 days if omitted.
 
 `{metric}` is one of: `steps`, `calories`, `heart_rate`, `sleep`, `activity`, `spo2`,
-`hrv`, `breathing_rate`, `temperature`, `weight` (keep in sync with
+`hrv`, `breathing_rate`, `temperature`, `weight`, `food` (keep in sync with
 `backend/fitness/api.py`'s `KNOWN_METRICS`).
 
 **Request:** `GET /fitness/api/metrics/heart_rate?from=2026-07-18&to=2026-08-17`

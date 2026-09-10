@@ -39,6 +39,9 @@ def a_task(task_id='t1', **overrides):
         'env_qa': False,
         'env_prod': False,
         'cmdb_updated': False,
+        'source_opened_at': '',
+        'source_updated_at': '',
+        'last_seen_at': '',
     }
     task.update(overrides)
     return task
@@ -74,7 +77,7 @@ class TestSchema(DatabaseTestCase):
             row['name']
             for row in self.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
-        self.assertTrue({'sections', 'tasks', 'tags'} <= names)
+        self.assertTrue({'sections', 'tasks', 'tags', 'sync_runs'} <= names)
 
     def test_init_schema_is_idempotent(self):
         self.given_section()
@@ -611,6 +614,9 @@ class TestTaskRoundTrip(DatabaseTestCase):
             work_type='new-feature',
             env_dev=True,
             env_prod=True,
+            source_opened_at='2024-01-01T04:00:00Z',
+            source_updated_at='2026-09-10T14:15:16Z',
+            last_seen_at='2026-09-10T15:00:00Z',
         )
         tasks_db.insert_task(self.conn, original)
         stored = tasks_db.find_task(self.conn, 't1')
@@ -668,6 +674,73 @@ class TestTaskRoundTrip(DatabaseTestCase):
 
     def test_find_task_returns_none_when_missing(self):
         self.assertIsNone(tasks_db.find_task(self.conn, 'nope'))
+
+
+class TestSyncRuns(DatabaseTestCase):
+
+    def test_round_trips_the_latest_run_and_previous_success(self):
+        tasks_db.insert_sync_run(self.conn, {
+            'started_at': '2026-09-10T10:00:00Z',
+            'finished_at': '2026-09-10T10:01:00Z',
+            'result': 'ok',
+            'records_seen': 5,
+            'created_count': 2,
+            'updated_count': 1,
+            'unchanged_count': 2,
+            'query_fingerprint': 'first',
+        })
+        tasks_db.insert_sync_run(self.conn, {
+            'started_at': '2026-09-10T11:00:00Z',
+            'finished_at': '2026-09-10T11:00:10Z',
+            'result': 'ok',
+            'records_seen': 5,
+            'query_fingerprint': 'second',
+        })
+
+        status = tasks_db.load_sync_status(self.conn)
+
+        self.assertEqual(status['latest_run']['records_seen'], 5)
+        self.assertEqual(status['latest_run']['query_fingerprint'], 'second')
+        self.assertEqual(status['previous_success_started_at'], '2026-09-10T10:00:00Z')
+
+    def test_error_run_uses_the_latest_success_as_its_baseline(self):
+        tasks_db.insert_sync_run(self.conn, {
+            'started_at': '2026-09-10T10:00:00Z',
+            'finished_at': '2026-09-10T10:01:00Z',
+            'result': 'ok',
+        })
+        tasks_db.insert_sync_run(self.conn, {
+            'started_at': '2026-09-10T11:00:00Z',
+            'finished_at': '2026-09-10T11:00:10Z',
+            'result': 'error',
+            'error': 'network unavailable',
+        })
+
+        status = tasks_db.load_sync_status(self.conn)
+
+        self.assertEqual(status['latest_run']['result'], 'error')
+        self.assertEqual(status['previous_success_started_at'], '2026-09-10T10:00:00Z')
+
+
+class TestSyncHealthMigration(DatabaseTestCase):
+
+    def test_version_four_database_keeps_tasks_and_gains_sync_health(self):
+        self.given_section()
+        tasks_db.insert_task(self.conn, a_task(notes='Personal note'))
+        self.conn.execute('DROP TABLE sync_runs')
+        self.conn.execute('PRAGMA user_version = 4')
+        self.conn.commit()
+
+        tasks_db.migrate(self.conn)
+        tasks_db.migrate(self.conn)
+
+        columns = {row['name'] for row in self.conn.execute('PRAGMA table_info(tasks)')}
+        self.assertTrue({'source_opened_at', 'source_updated_at', 'last_seen_at'} <= columns)
+        self.assertEqual(tasks_db.find_task(self.conn, 't1')['notes'], 'Personal note')
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], tasks_db.SCHEMA_VERSION)
+        self.assertIn('sync_runs', {
+            row['name'] for row in self.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        })
 
 
 class TestTags(DatabaseTestCase):

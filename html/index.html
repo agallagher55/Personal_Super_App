@@ -2,12 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Personal Tasks</title>
+<title>Personal Tasks - Aug 5, 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/styles/styles.css">
-<link rel="stylesheet" href="/static/styles/nav.css">
 <script>
   (function () {
     var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -16,23 +14,14 @@
 </script>
 </head>
 <body>
-  <div id="site-nav"></div>
-  <script src="/static/js/nav.js"></script>
   <div class="page page-tasks">
-    <aside class="scratchpad-panel">
-      <div class="scratchpad-header">
-        <span class="scratchpad-label">Today's List</span>
-        <span class="scratchpad-date" id="scratchpad-date"></span>
-      </div>
-      <textarea id="scratchpad-input" class="scratchpad-input" placeholder="Jot down anything for today..."></textarea>
-      <div class="scratchpad-status" id="scratchpad-status"></div>
-    </aside>
-
     <div class="sheet tasks-sheet">
       <nav class="site-nav">
-        <span class="current">All Tasks</span>
-        <a href="/tasks/categories">Categories</a>
+        <span class="current">Tasks</span>
+        <a href="/tasks">Categories</a>
         <a href="/tasks/new">+ New Task</a>
+        <a href="/fitness">Fitness</a>
+        <a href="/finance">Finance</a>
       </nav>
 
       <header>
@@ -45,19 +34,9 @@
 
       <a class="new-task-cta" id="new-task-cta" href="/tasks/new">+ New Task</a>
 
-      <div class="sync-health" id="sync-health" role="status">ServiceNow · checking sync health…</div>
-
       <div class="task-search-wrap">
         <input type="text" id="task-search" class="task-search" placeholder="Search tasks..." autocomplete="off">
       </div>
-
-      <nav class="task-view-bar" id="task-view-bar" aria-label="Task queue">
-        <button type="button" class="task-view-pill active" data-view="all">All</button>
-        <button type="button" class="task-view-pill" data-view="today">Today <span class="view-count" id="today-count"></span></button>
-        <button type="button" class="task-view-pill" data-view="waiting">Waiting <span class="view-count" id="waiting-count"></span></button>
-        <button type="button" class="task-view-pill" data-view="overdue">Overdue <span class="view-count" id="overdue-count"></span></button>
-      </nav>
-      <div class="task-view-empty" id="task-view-empty" role="status" hidden></div>
 
       <div class="added-banner" id="added-banner">Task added.</div>
 

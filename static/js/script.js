@@ -14,6 +14,8 @@
   var activeTaskView = requestedTaskView || 'all';
   var taskViewBar = document.getElementById('task-view-bar');
   var taskViewEmpty = document.getElementById('task-view-empty');
+  var syncHealthEl = document.getElementById('sync-health');
+  var previousSuccessfulSyncStartedAt = '';
 
   var sectionListMap = {};    // sectionId -> main <ol> in the left column
   var sectionLabelMap = {};   // sectionId -> section label text
@@ -59,6 +61,68 @@
       return '';
     }
     return MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  }
+
+  function formatRelativeTime(iso) {
+    var then = new Date(iso);
+    if (isNaN(then.getTime())) {
+      return 'at an unknown time';
+    }
+    var minutes = Math.max(0, Math.floor((Date.now() - then.getTime()) / 60000));
+    if (minutes < 1) {
+      return 'just now';
+    }
+    if (minutes < 60) {
+      return minutes + ' min ago';
+    }
+    var hours = Math.floor(minutes / 60);
+    if (hours < 48) {
+      return hours + ' hr ago';
+    }
+    return Math.floor(hours / 24) + ' days ago';
+  }
+
+  function sourceAgeLabel(sourceOpenedAt) {
+    if (!sourceOpenedAt) {
+      return '';
+    }
+    var opened = new Date(sourceOpenedAt);
+    if (isNaN(opened.getTime())) {
+      return '';
+    }
+    var days = Math.max(0, Math.floor((Date.now() - opened.getTime()) / 86400000));
+    if (days < 1) {
+      return 'opened today';
+    }
+    if (days < 30) {
+      return 'opened ' + days + 'd ago';
+    }
+    if (days < 365) {
+      return 'opened ' + Math.floor(days / 30) + 'mo ago';
+    }
+    return 'opened ' + Math.floor(days / 365) + 'y ago';
+  }
+
+  function changedSincePreviousSync(taskData) {
+    return !!(previousSuccessfulSyncStartedAt && taskData.source_updated_at &&
+      taskData.source_updated_at > previousSuccessfulSyncStartedAt);
+  }
+
+  function renderSyncHealth(status) {
+    if (!syncHealthEl) {
+      return;
+    }
+    var latest = status && status.latest_run;
+    syncHealthEl.classList.toggle('error', !!(latest && latest.result === 'error'));
+    if (!latest) {
+      syncHealthEl.textContent = 'ServiceNow · never synced';
+    } else if (latest.result === 'error') {
+      syncHealthEl.textContent = 'ServiceNow · last sync failed ' + formatRelativeTime(latest.finished_at);
+    } else {
+      var changed = document.querySelectorAll('.field-pill-source-changed').length;
+      syncHealthEl.textContent = 'ServiceNow · synced ' + formatRelativeTime(latest.finished_at) +
+        ' · ' + latest.records_seen + ' active · ' + changed + ' changed';
+    }
   }
 
   function buildTag(tag) {
@@ -159,6 +223,7 @@
     }
 
     var parentTask = taskData.parent_id ? taskById[taskData.parent_id] : null;
+    var isWorkTask = sectionId === WORK_SECTION_ID;
 
     var fieldEntries = [
       { key: 'ticket_number', label: '', className: 'ticket' },
@@ -169,6 +234,12 @@
     ].filter(function (entry) {
       return entry.value !== undefined ? entry.value : taskData[entry.key];
     });
+    if (isWorkTask && changedSincePreviousSync(taskData)) {
+      fieldEntries.push({ value: 'Changed', className: 'source-changed' });
+    }
+    if (isWorkTask && sourceAgeLabel(taskData.source_opened_at)) {
+      fieldEntries.push({ value: sourceAgeLabel(taskData.source_opened_at), className: 'source-age' });
+    }
 
     if (fieldEntries.length > 0) {
       var fields = document.createElement('div');
@@ -251,7 +322,6 @@
     quickFields.appendChild(estimateField);
     details.appendChild(quickFields);
 
-    var isWorkTask = sectionId === WORK_SECTION_ID;
     if (isWorkTask && taskData.work_type && WORK_TYPE_LABELS[taskData.work_type]) {
       var workTypeTags = document.createElement('div');
       workTypeTags.className = 'task-fields';
@@ -1100,14 +1170,25 @@
     });
   }
 
-  fetch('/tasks.json')
-    .then(function (response) {
+  Promise.all([
+    fetch('/tasks.json').then(function (response) {
       if (!response.ok) {
         throw new Error('Could not load tasks.json (status ' + response.status + ')');
       }
       return response.json();
+    }),
+    fetch('/tasks/sync-status.json').then(function (response) {
+      if (!response.ok) {
+        throw new Error('Could not load sync status (status ' + response.status + ')');
+      }
+      return response.json();
     })
-    .then(render)
+  ])
+    .then(function (responses) {
+      previousSuccessfulSyncStartedAt = responses[1].previous_success_started_at || '';
+      render(responses[0]);
+      renderSyncHealth(responses[1]);
+    })
     .catch(function (err) {
       sectionsContainer.textContent = 'Failed to load tasks: ' + err.message +
         '. If you opened this file directly, run a local server instead (see README.md).';
