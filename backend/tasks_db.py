@@ -65,7 +65,7 @@ MIN_SQLITE_VERSION = (3, 31, 0)
 # in test_tasks_db.py that stages a database at the previous version (see
 # TestSchemaMigrations below) and asserts the upgrade preserves data and
 # is idempotent.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Order matters: the dicts built from these are serialized straight into
 # GET /tasks.json, and keeping the old JSON files' key order means the
@@ -76,7 +76,8 @@ TASK_COLUMNS = (
     'assignment_group', 'requested_by', 'due_date', 'focus_today',
     'follow_up_date', 'time_estimate',
     'related_files', 'parent_id', 'work_type', 'env_dev', 'env_qa', 'env_prod',
-    'cmdb_updated', 'servicenow_sys_id',
+    'cmdb_updated', 'servicenow_sys_id', 'source_opened_at', 'source_updated_at',
+    'last_seen_at',
 )
 
 # Everything in TASK_COLUMNS except `done`, which is generated and so has no
@@ -144,6 +145,9 @@ def migrate(conn):
     if version < 4:
         _add_personal_triage_fields(conn)
 
+    if version < 5:
+        _add_sync_health_fields(conn)
+
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is our
         # own int constant, never user input.
@@ -170,6 +174,37 @@ def _add_personal_triage_fields(conn):
             "CHECK (follow_up_date = '' OR follow_up_date GLOB "
             "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')"
         )
+
+
+def _add_sync_health_fields(conn):
+    """Migration 5: retain ServiceNow timestamps and one row per sync run.
+
+    The task columns are additive, so existing personal fields remain exactly
+    as they were. `sync_runs` is created here as well as in the fresh schema,
+    which makes an upgrade from version 4 explicit and idempotent.
+    """
+    columns = {row['name'] for row in conn.execute('PRAGMA table_info(tasks)')}
+    for column in ('source_opened_at', 'source_updated_at', 'last_seen_at'):
+        if column not in columns:
+            conn.execute(
+                "ALTER TABLE tasks ADD COLUMN %s TEXT NOT NULL DEFAULT '' "
+                "CHECK (%s = '' OR %s %s)" % (column, column, column, _TIMESTAMP_GLOB)
+            )
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS sync_runs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          started_at TEXT NOT NULL CHECK (started_at %s),
+          finished_at TEXT NOT NULL CHECK (finished_at %s),
+          result TEXT NOT NULL CHECK (result IN ('ok', 'error')),
+          records_seen INTEGER NOT NULL DEFAULT 0 CHECK (records_seen >= 0),
+          created_count INTEGER NOT NULL DEFAULT 0 CHECK (created_count >= 0),
+          updated_count INTEGER NOT NULL DEFAULT 0 CHECK (updated_count >= 0),
+          unchanged_count INTEGER NOT NULL DEFAULT 0 CHECK (unchanged_count >= 0),
+          query_fingerprint TEXT NOT NULL DEFAULT '',
+          error TEXT NOT NULL DEFAULT ''
+        )
+    ''' % (_TIMESTAMP_GLOB, _TIMESTAMP_GLOB))
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_sync_runs_started ON sync_runs(started_at DESC)')
 
 
 def _normalize_task_domain_values(conn):
@@ -516,6 +551,43 @@ def load_scratchpad(conn):
     (no row exists until the first save)."""
     row = conn.execute('SELECT text FROM scratchpad WHERE id = 1').fetchone()
     return row['text'] if row is not None else ''
+
+
+SYNC_RUN_COLUMNS = (
+    'id', 'started_at', 'finished_at', 'result', 'records_seen', 'created_count',
+    'updated_count', 'unchanged_count', 'query_fingerprint', 'error',
+)
+
+
+def insert_sync_run(conn, run):
+    """Store one completed ServiceNow sync attempt inside the caller's transaction."""
+    columns = ', '.join(SYNC_RUN_COLUMNS[1:])
+    placeholders = ', '.join(':%s' % column for column in SYNC_RUN_COLUMNS[1:])
+    conn.execute('INSERT INTO sync_runs (%s) VALUES (%s)' % (columns, placeholders), {
+        column: run.get(column, 0 if column.endswith('_count') or column == 'records_seen' else '')
+        for column in SYNC_RUN_COLUMNS[1:]
+    })
+
+
+def load_sync_status(conn):
+    """Return the latest attempt and the baseline for a changed-source badge."""
+    latest = conn.execute('SELECT * FROM sync_runs ORDER BY id DESC LIMIT 1').fetchone()
+    if latest is None:
+        return {'latest_run': None, 'previous_success_started_at': ''}
+    latest_run = {column: latest[column] for column in SYNC_RUN_COLUMNS}
+    if latest['result'] == 'ok':
+        previous = conn.execute(
+            "SELECT started_at FROM sync_runs WHERE result = 'ok' AND id < ? ORDER BY id DESC LIMIT 1",
+            (latest['id'],),
+        ).fetchone()
+    else:
+        previous = conn.execute(
+            "SELECT started_at FROM sync_runs WHERE result = 'ok' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    return {
+        'latest_run': latest_run,
+        'previous_success_started_at': previous['started_at'] if previous is not None else '',
+    }
 
 
 def find_task(conn, task_id):

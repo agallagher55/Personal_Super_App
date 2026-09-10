@@ -120,6 +120,23 @@ a:hover { color: var(--ink); }
   max-width: none;
 }
 
+.sync-health {
+  margin: 18px 0 16px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.2px;
+}
+
+.sync-health.error {
+  color: var(--flag);
+  border-color: var(--flag);
+  background: var(--flag-soft);
+}
+
 .completed-panel {
   flex: 1 1 0;
   max-width: 420px;
@@ -920,6 +937,18 @@ a.field-pill-ticket:hover { border-color: var(--flag); color: var(--flag); }
   color: var(--flag);
   border: 1px solid var(--flag);
   background: var(--flag-soft);
+}
+
+.field-pill-source-changed {
+  color: var(--flag);
+  border: 1px solid var(--flag);
+  background: var(--flag-soft);
+  font-weight: 600;
+}
+
+.field-pill-source-age {
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
 }
 
 .task-env-fields {
