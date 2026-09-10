@@ -24,7 +24,7 @@ import store
 import sync
 import users
 
-KNOWN_METRICS = ("steps", "calories", "heart_rate", "sleep", "activity", "spo2", "hrv", "breathing_rate", "temperature", "weight")
+KNOWN_METRICS = ("steps", "calories", "heart_rate", "sleep", "activity", "spo2", "hrv", "breathing_rate", "temperature", "weight", "food")
 
 # Default lookback window, in days (inclusive of `to`), when a request omits
 # `from` - per API-CONTRACT.md ("last 7 days" for the dashboard summary,
@@ -142,25 +142,17 @@ def _reshape_steps(points):
 
 
 def _point_date_calories(p):
-    payload = p.get("caloriesBurned") or p.get("calories") or {}
-    interval = payload.get("interval") if isinstance(payload, dict) else {}
-    return _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(
-        (interval or {}).get("civilStartTime")
-    )
+    return _civil_value_to_date(p.get("civilStartTime"))
 
 
 def _reshape_calories(points):
     """Daily calories burned in kilocalories from dailyRollUp responses."""
     totals = {}
     for p in points:
-        payload = p.get("caloriesBurned") or p.get("calories")
+        payload = p.get("totalCalories")
         if not isinstance(payload, dict):
             continue
-        value = None
-        for key in ("kilocaloriesSum", "caloriesKcalSum", "caloriesKcal", "kilocalories", "value"):
-            value = _to_number(payload.get(key))
-            if value is not None:
-                break
+        value = _to_number(payload.get("kcalSum"))
         d = _point_date_calories(p)
         if d is None or value is None:
             continue
@@ -435,54 +427,48 @@ def _reshape_weight(points):
 
 
 def _point_date_food(p):
-    nutrition = p.get("nutrition")
-    if not isinstance(nutrition, dict):
+    nutrition_log = p.get("nutritionLog")
+    if not isinstance(nutrition_log, dict):
         return None
-    interval = nutrition.get("interval") or {}
+    interval = nutrition_log.get("interval") or {}
     return _civil_value_to_date(interval.get("civilStartTime")) or _local_date_from_utc(
         interval.get("startTime"), interval.get("startUtcOffset")
     ) or _civil_value_to_date(p.get("civilStartTime"))
 
 
-def _nutrient_number(nutrients, *keys):
-    """Read a nutrient across the scalar and unit-object API encodings.
+def _quantity_number(quantity, unit_key):
+    if not isinstance(quantity, dict):
+        return 0
+    return _to_number(quantity.get(unit_key)) or 0
 
-    The API has used both direct numeric fields and measurement objects in
-    examples/clients. Keeping this boundary tolerant means an unrecognised
-    optional nutrient does not hide the rest of a meal.
-    """
-    for key in keys:
-        value = nutrients.get(key)
-        if isinstance(value, dict):
-            for unit_key in ("value", "grams", "kilocalories", "calories"):
-                number = _to_number(value.get(unit_key))
-                if number is not None:
-                    return number
-        else:
-            number = _to_number(value)
-            if number is not None:
-                return number
-    return 0
+
+def _nutrient_grams(nutrition_log, nutrient_name):
+    total = 0
+    nutrients = nutrition_log.get("nutrients") or []
+    if not isinstance(nutrients, list):
+        return total
+    for nutrient in nutrients:
+        if not isinstance(nutrient, dict) or nutrient.get("nutrient") != nutrient_name:
+            continue
+        total += _quantity_number(nutrient.get("quantity"), "grams")
+    return total
 
 
 def _reshape_food(points):
     """Sum logged calories and macronutrients into one record per day."""
     by_date = {}
     for p in points:
-        nutrition = p.get("nutrition")
-        if not isinstance(nutrition, dict):
+        nutrition_log = p.get("nutritionLog")
+        if not isinstance(nutrition_log, dict):
             continue
         d = _point_date_food(p)
         if d is None:
             continue
-        nutrients = nutrition.get("nutrients")
-        if not isinstance(nutrients, dict):
-            nutrients = nutrition
         daily = by_date.setdefault(d, {"calories": 0, "carbs_grams": 0, "protein_grams": 0, "fat_grams": 0})
-        daily["calories"] += _nutrient_number(nutrients, "caloriesKcal", "energyKilocalories", "energyKcal", "energy")
-        daily["carbs_grams"] += _nutrient_number(nutrients, "totalCarbohydrateGrams", "carbohydrateGrams", "carbsGrams", "totalCarbohydrate")
-        daily["protein_grams"] += _nutrient_number(nutrients, "proteinGrams", "protein")
-        daily["fat_grams"] += _nutrient_number(nutrients, "totalFatGrams", "fatGrams", "totalFat")
+        daily["calories"] += _quantity_number(nutrition_log.get("energy"), "kcal")
+        daily["carbs_grams"] += _quantity_number(nutrition_log.get("totalCarbohydrate"), "grams")
+        daily["protein_grams"] += _nutrient_grams(nutrition_log, "PROTEIN")
+        daily["fat_grams"] += _quantity_number(nutrition_log.get("totalFat"), "grams")
     return [
         {"date": d, **{key: round(value, 1) for key, value in totals.items()}}
         for d, totals in sorted(by_date.items())

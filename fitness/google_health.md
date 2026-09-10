@@ -100,10 +100,10 @@ scopes so sign-in can identify *who's* signing in:
 | Data we want | Scope |
 |---|---|
 | The visitor's Google account id/email/name (for sign-in, not health data) | `openid`, `email`, `profile` |
-| Steps, distance, floors, altitude (activity) | `https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly` |
+| Steps, distance, floors, altitude, and total calories burned | `https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly` |
 | Sleep | `https://www.googleapis.com/auth/googlehealth.sleep.readonly` |
 | Weight and other health metrics/measurements | `https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly` |
-| Food logs, calories, and macronutrients | `https://www.googleapis.com/auth/googlehealth.nutrition.readonly` |
+| Food logs and macronutrients | `https://www.googleapis.com/auth/googlehealth.nutrition.readonly` |
 
 Add `openid`/`email`/`profile` alongside the four readonly health scopes to
 the OAuth consent screen's scope list, and request the same scopes when
@@ -113,23 +113,17 @@ starting the auth flow in code (already set in
 `developers.google.com/health/scopes` and the data types each one covers at
 `developers.google.com/health/data-types` before finalizing.
 
-## Nutrition data availability
+## Calories and nutrition data types
 
-The Google Health API currently does **not** expose a `nutrition` data type.
-A live request to
-`/v4/users/me/dataTypes/nutrition/dataPoints` returns
-`INVALID_PARENT_DATA_TYPE_COLLECTION` with "The data type ID 'nutrition' is
-not supported." Health Connect on Android has a Nutrition record type, but
-that does not make it available through this server-side Google Health API.
-Do not add `googlehealth.nutrition.readonly` or a `nutrition` entry to
-`DATA_TYPES`: an OAuth scope alone does not establish that a corresponding
-API data-type collection exists.
+Total daily energy expenditure comes from the read-only `total-calories` data
+type. It is available through `rollUp` and `dailyRollUp`, uses the activity and
+fitness scope, and limits each aggregation request to 14 days. Longer sync
+ranges must be fetched in sequential chunks.
 
-A Food section therefore needs a different source, such as a direct export or
-API from the food-logging application, an Android Health Connect companion
-that uploads Nutrition records to this app, or manual entry. The fitness sync
-must not call an unsupported Google Health endpoint because one failed metric
-otherwise creates a misleading partial-sync warning on every refresh.
+Food intake comes from `nutrition-log`, using the nutrition scope. A nutrition
+log contains `energy`, `totalCarbohydrate`, `totalFat`, and a `nutrients` list.
+The separate `food` data type is a read-only catalog used to identify foods;
+it is not the collection containing a user's logged meals.
 
 ## 6. Get a first token and sanity-check the API (before signing in through the app)
 
