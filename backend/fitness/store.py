@@ -118,7 +118,17 @@ def save_store(user_id, store):
     # otherwise a process kill, crash, or full disk partway through the
     # write leaves a truncated, unparseable file in place of the last
     # known-good store (see load_store()'s JSONDecodeError handling above).
-    write_json_atomic(data_path(user_id), store)
+    path = data_path(user_id)
+    write_json_atomic(path, store)
+
+    # A sync already has the complete parsed store in memory. Publish that
+    # object to the read cache after the atomic save so the dashboard refresh
+    # does not immediately read and parse the entire health_data.json again.
+    # This is especially important for stores with years of heart-rate samples.
+    stat = path.stat()
+    cache_key = (stat.st_mtime_ns, stat.st_size)
+    with _cache_lock:
+        _cache[user_id] = (cache_key, store)
 
 
 def add_data_points(store, metric, data_points):

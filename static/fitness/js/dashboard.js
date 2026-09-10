@@ -132,6 +132,7 @@ async function loadDashboard(from, to, { preserveStatus = false } = {}) {
       });
     }
     renderWeightCard(els.weight, data.metrics.weight || []);
+    renderFoodCard(els.food, data.metrics.food || []);
     if (!preserveStatus) setStatus(`Showing ${data.from} to ${data.to}`);
   } catch (err) {
     if (!isCurrent()) return;
