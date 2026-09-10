@@ -22,10 +22,23 @@
     <aside class="scratchpad-panel">
       <div class="scratchpad-header">
         <span class="scratchpad-label">Today's List</span>
+        <button type="button" class="scratchpad-today-btn" id="scratchpad-today-btn">Today</button>
+      </div>
+      <div class="scratchpad-day-nav">
+        <button type="button" class="scratchpad-nav-btn" id="scratchpad-prev-day"></button>
         <span class="scratchpad-date" id="scratchpad-date"></span>
+        <button type="button" class="scratchpad-nav-btn" id="scratchpad-next-day"></button>
       </div>
       <textarea id="scratchpad-input" class="scratchpad-input" placeholder="Jot down anything for today..."></textarea>
       <div class="scratchpad-status" id="scratchpad-status"></div>
+      <div class="scratchpad-actions">
+        <button type="button" class="scratchpad-action-btn" id="scratchpad-carry-forward-btn">Carry forward</button>
+        <div class="scratchpad-convert-row">
+          <select id="scratchpad-convert-section" class="scratchpad-convert-select" aria-label="Section for the new task"></select>
+          <button type="button" class="scratchpad-action-btn" id="scratchpad-convert-btn">Line &rarr; Task</button>
+        </div>
+      </div>
+      <div class="scratchpad-convert-confirm" id="scratchpad-convert-confirm" hidden></div>
     </aside>
 
     <div class="sheet tasks-sheet">

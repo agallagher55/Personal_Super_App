@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -442,7 +443,15 @@ class TestDateFormatConstraints(DatabaseTestCase):
 
     def test_rejects_a_malformed_scratchpad_modified(self):
         with self.assertRaises(sqlite3.IntegrityError):
-            self.conn.execute("INSERT INTO scratchpad (id, text, modified) VALUES (1, 'x', 'whenever')")
+            self.conn.execute(
+                "INSERT INTO scratchpad_entries (entry_date, text, modified) VALUES ('2026-09-10', 'x', 'whenever')"
+            )
+
+    def test_rejects_a_malformed_scratchpad_entry_date(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                "INSERT INTO scratchpad_entries (entry_date, text, modified) VALUES ('not-a-date', 'x', '')"
+            )
 
 
 class TestDateFormatConstraintsMigration(unittest.TestCase):
@@ -533,7 +542,7 @@ class TestDateFormatConstraintsMigration(unittest.TestCase):
 
     def test_preserves_the_scratchpad(self):
         tasks_db.migrate(self.conn)
-        self.assertEqual(tasks_db.load_scratchpad(self.conn), 'hi')
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, '2026-09-01'), 'hi')
 
     def test_foreign_keys_are_intact_after_the_rebuild(self):
         tasks_db.migrate(self.conn)
@@ -802,24 +811,111 @@ class TestDelete(DatabaseTestCase):
 class TestScratchpad(DatabaseTestCase):
 
     def test_empty_before_any_save(self):
-        self.assertEqual(tasks_db.load_scratchpad(self.conn), '')
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, '2026-01-01'), '')
 
     def test_round_trips_saved_text(self):
-        tasks_db.save_scratchpad(self.conn, 'Buy milk\nCall dentist', '2026-01-01T00:00:00Z')
-        self.assertEqual(tasks_db.load_scratchpad(self.conn), 'Buy milk\nCall dentist')
+        tasks_db.save_scratchpad(self.conn, '2026-01-01', 'Buy milk\nCall dentist', '2026-01-01T00:00:00Z')
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, '2026-01-01'), 'Buy milk\nCall dentist')
 
-    def test_saving_again_overwrites_rather_than_adding_a_row(self):
-        tasks_db.save_scratchpad(self.conn, 'First draft', '2026-01-01T00:00:00Z')
-        tasks_db.save_scratchpad(self.conn, 'Second draft', '2026-01-02T00:00:00Z')
+    def test_saving_again_on_the_same_date_overwrites_rather_than_adding_a_row(self):
+        tasks_db.save_scratchpad(self.conn, '2026-01-01', 'First draft', '2026-01-01T00:00:00Z')
+        tasks_db.save_scratchpad(self.conn, '2026-01-01', 'Second draft', '2026-01-01T12:00:00Z')
 
-        self.assertEqual(tasks_db.load_scratchpad(self.conn), 'Second draft')
-        count = self.conn.execute('SELECT COUNT(*) AS n FROM scratchpad').fetchone()['n']
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, '2026-01-01'), 'Second draft')
+        count = self.conn.execute('SELECT COUNT(*) AS n FROM scratchpad_entries').fetchone()['n']
         self.assertEqual(count, 1)
 
     def test_saving_empty_text_clears_it(self):
-        tasks_db.save_scratchpad(self.conn, 'Something', '2026-01-01T00:00:00Z')
-        tasks_db.save_scratchpad(self.conn, '', '2026-01-02T00:00:00Z')
-        self.assertEqual(tasks_db.load_scratchpad(self.conn), '')
+        tasks_db.save_scratchpad(self.conn, '2026-01-01', 'Something', '2026-01-01T00:00:00Z')
+        tasks_db.save_scratchpad(self.conn, '2026-01-01', '', '2026-01-01T12:00:00Z')
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, '2026-01-01'), '')
+
+    def test_two_distinct_dates_do_not_cross_contaminate(self):
+        tasks_db.save_scratchpad(self.conn, '2026-01-01', 'Day one', '2026-01-01T00:00:00Z')
+        tasks_db.save_scratchpad(self.conn, '2026-01-02', 'Day two', '2026-01-02T00:00:00Z')
+
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, '2026-01-01'), 'Day one')
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, '2026-01-02'), 'Day two')
+
+    def test_a_date_with_no_entry_is_empty_even_when_others_have_text(self):
+        tasks_db.save_scratchpad(self.conn, '2026-01-01', 'Day one', '2026-01-01T00:00:00Z')
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, '2026-01-02'), '')
+
+    def test_most_recent_date_is_empty_before_any_save(self):
+        self.assertEqual(tasks_db.most_recent_scratchpad_date(self.conn), '')
+
+    def test_most_recent_date_tracks_the_latest_entry_by_date(self):
+        tasks_db.save_scratchpad(self.conn, '2026-01-01', 'Day one', '2026-01-01T00:00:00Z')
+        tasks_db.save_scratchpad(self.conn, '2026-01-03', 'Day three', '2026-01-03T00:00:00Z')
+        tasks_db.save_scratchpad(self.conn, '2026-01-02', 'Day two', '2026-01-02T00:00:00Z')
+
+        self.assertEqual(tasks_db.most_recent_scratchpad_date(self.conn), '2026-01-03')
+
+    def test_rejects_a_malformed_entry_date(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            tasks_db.save_scratchpad(self.conn, 'not-a-date', 'x', '2026-01-01T00:00:00Z')
+
+
+class TestScratchpadEntriesMigration(DatabaseTestCase):
+    """Migration 6 (tasks_db._add_scratchpad_entries): replaces the single
+    timeless scratchpad row with one row per calendar date. This is the one
+    migration that touches text the user typed by hand and cannot
+    reconstruct, so it gets its own coverage beyond the general schema
+    migration tests."""
+
+    def _stage_pre_migration_scratchpad(self, text, modified):
+        """DatabaseTestCase already built the current (post-migration-6)
+        schema, which has no `scratchpad` table at all - recreate the
+        version-5 singleton-row shape in its place, the way a real
+        pre-upgrade database still has it, then wind the version back."""
+        self.conn.execute('DROP TABLE scratchpad_entries')
+        self.conn.execute('''
+            CREATE TABLE scratchpad (
+              id INTEGER PRIMARY KEY CHECK (id = 1),
+              text TEXT NOT NULL DEFAULT '',
+              modified TEXT NOT NULL DEFAULT ''
+                CHECK (modified = '' OR
+                       modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+            )
+        ''')
+        if text or modified:
+            self.conn.execute('INSERT INTO scratchpad (id, text, modified) VALUES (1, ?, ?)', (text, modified))
+        self.conn.execute('PRAGMA user_version = 5')
+        self.conn.commit()
+
+    def test_migrates_existing_text_onto_its_modified_date(self):
+        self._stage_pre_migration_scratchpad('Buy milk\nCall dentist', '2026-09-05T14:30:00Z')
+        tasks_db.migrate(self.conn)
+
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, '2026-09-05'), 'Buy milk\nCall dentist')
+        tables = {row['name'] for row in self.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        self.assertNotIn('scratchpad', tables)
+        self.assertIn('scratchpad_entries', tables)
+
+    def test_migrates_a_row_with_no_modified_onto_todays_date(self):
+        self._stage_pre_migration_scratchpad('No timestamp on this one', '')
+        today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+
+        tasks_db.migrate(self.conn)
+
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, today), 'No timestamp on this one')
+
+    def test_migrates_an_empty_singleton_row_without_copying_anything(self):
+        self._stage_pre_migration_scratchpad('', '')
+        tasks_db.migrate(self.conn)
+
+        self.assertEqual(tasks_db.most_recent_scratchpad_date(self.conn), '')
+        count = self.conn.execute('SELECT COUNT(*) AS n FROM scratchpad_entries').fetchone()['n']
+        self.assertEqual(count, 0)
+
+    def test_is_idempotent(self):
+        self._stage_pre_migration_scratchpad('Buy milk', '2026-09-05T14:30:00Z')
+        tasks_db.migrate(self.conn)
+        tasks_db.migrate(self.conn)
+
+        self.assertEqual(tasks_db.load_scratchpad(self.conn, '2026-09-05'), 'Buy milk')
+        count = self.conn.execute('SELECT COUNT(*) AS n FROM scratchpad_entries').fetchone()['n']
+        self.assertEqual(count, 1)
 
 
 class TestMigrateFromJson(unittest.TestCase):

@@ -186,6 +186,60 @@ a:hover { color: var(--ink); }
   white-space: nowrap;
 }
 
+.scratchpad-today-btn {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.scratchpad-today-btn:hover:not(:disabled) {
+  color: var(--flag);
+  border-color: var(--flag);
+}
+
+.scratchpad-today-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.scratchpad-day-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.scratchpad-nav-btn {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s ease;
+}
+
+.scratchpad-nav-btn:hover {
+  color: var(--flag);
+}
+
 .scratchpad-input {
   flex: 1 1 auto;
   width: 100%;
@@ -231,6 +285,70 @@ a:hover { color: var(--ink); }
 
 .scratchpad-status.error {
   color: var(--flag);
+}
+
+.scratchpad-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.scratchpad-action-btn {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.scratchpad-action-btn:hover {
+  color: var(--flag);
+  border-color: var(--flag);
+}
+
+.scratchpad-convert-row {
+  display: flex;
+  gap: 6px;
+}
+
+.scratchpad-convert-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 6px;
+  cursor: pointer;
+}
+
+.scratchpad-convert-row .scratchpad-action-btn {
+  flex: 0 0 auto;
+}
+
+.scratchpad-convert-confirm {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--flag-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.scratchpad-convert-confirm a {
+  color: var(--flag);
+  font-weight: 600;
 }
 
 .completed-header {
@@ -653,7 +771,10 @@ header .meta {
 .completed-toggle:focus-visible,
 .completed-group-toggle:focus-visible,
 .task-move-btn:focus-visible,
-.task .desc-row:focus-visible {
+.task .desc-row:focus-visible,
+.scratchpad-nav-btn:focus-visible,
+.scratchpad-today-btn:focus-visible,
+.scratchpad-action-btn:focus-visible {
   outline: 2px solid var(--flag);
   outline-offset: 2px;
   border-radius: 4px;

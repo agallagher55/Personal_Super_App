@@ -123,11 +123,13 @@ two domains ever need different pragmas.
 > written): CHECK constraints on the status/priority/work_type/boolean
 > domains (migration 2), the date and timestamp format constraints
 > (migration 3), the `focus_today` and `follow_up_date` triage fields
-> (migration 4), and the `source_opened_at`/`source_updated_at`/
+> (migration 4), the `source_opened_at`/`source_updated_at`/
 > `last_seen_at` ServiceNow timestamps plus the `sync_runs` audit table
-> (migration 5). Two tables here are also newer than this plan: the
-> single-row `scratchpad` behind the "Today's List" notepad, and
-> `sync_runs`. `sections` also carries the `position` column §11 explains.
+> (migration 5), and replacing the single-row `scratchpad` table with
+> `scratchpad_entries` (one row per calendar date, migration 6, issue
+> #164). Two tables here are also newer than this plan: `scratchpad_entries`
+> behind the "Today's List" notepad, and `sync_runs`. `sections` also
+> carries the `position` column §11 explains.
 
 ```sql
 -- backend/tasks_schema.sql

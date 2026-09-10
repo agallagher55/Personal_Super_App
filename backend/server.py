@@ -14,9 +14,9 @@ this app will eventually use in a real database:
 
 GET /tasks.json joins them back into the nested shape the frontend expects,
 the same way a database query/view would. It also includes `scratchpad`, a
-single freeform text field backed by the `scratchpad` table - the "Today's
-List" notepad shown alongside the task list, unrelated to any one task or
-section, saved via POST /tasks/scratchpad.
+{date, text} pair backed by the `scratchpad_entries` table (one row per
+calendar date) - the "Today's List" notepad shown alongside the task list,
+unrelated to any one task or section, saved via POST /tasks/scratchpad.
 
 data/tasks.json's columns mirror a Notion-style tasks database: desc (Task),
 status/done (Status), priority (Priority), due_date (Due Date), completed
@@ -62,6 +62,11 @@ WORK_TYPES = ('new-feature', 'schema-change')
 ENVIRONMENTS = ('dev', 'qa', 'prod')
 
 MAX_CATEGORY_LENGTH = 60  # finance category override names (see finance/ARCHITECTURE.md)
+
+# Scratchpad entries are keyed by the viewer's own local calendar date, sent
+# by the client rather than derived from the server's clock - see
+# handle_update_scratchpad and serve_tasks_json.
+DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
 # The ported Personal Health app (see fitness/ARCHITECTURE.md) lives at
 # backend/fitness/ as its own flat-import module set (config.py, auth.py,
@@ -125,16 +130,81 @@ def format_sentence(text):
     return text
 
 
-def build_nested():
+def create_task(conn, section_id, desc, note='', priority='medium', tags=None,
+                 ticket_number='', assignment_group='', requested_by='', due_date='',
+                 focus_today=False, follow_up_date='', time_estimate='', related_files='',
+                 parent_id='', work_type='', done=False):
+    """Inserts a new task row (and any tags) in one transaction, returning
+    its id. Shared by handle_new_task (the full new-task form, every field)
+    and handle_quick_task (the scratchpad's convert-line-to-task action,
+    section_id/desc only - see issue #165)."""
+    if parent_id and not tasks_db.task_exists(conn, parent_id):
+        parent_id = ''
+    if section_id != WORK_SECTION_ID or work_type not in WORK_TYPES:
+        work_type = ''
+
+    created = now_iso()
+    task_id = uuid.uuid4().hex[:12]
+    # No 'done' key: it's a generated column now, derived from status, so
+    # there's nothing to write and nothing to drift.
+    new_task = {
+        'id': task_id,
+        'section_id': section_id,
+        'position': tasks_db.next_task_position(conn, section_id),
+        'desc': desc,
+        'note': note,
+        'notes': '',
+        'status': 'done' if done else 'open',
+        'priority': priority if priority in PRIORITIES else 'medium',
+        'ticket_number': ticket_number,
+        'assignment_group': assignment_group,
+        'requested_by': requested_by,
+        'due_date': due_date,
+        'focus_today': focus_today,
+        'follow_up_date': follow_up_date,
+        'time_estimate': time_estimate,
+        'related_files': related_files,
+        'parent_id': parent_id,
+        'work_type': work_type,
+        'env_dev': False,
+        'env_qa': False,
+        'env_prod': False,
+        'cmdb_updated': False,
+        'created': created,
+        'modified': created,
+        'completed': created if done else ''
+    }
+
+    # One transaction: the task and its tags land together, or neither
+    # does. Two separate file writes used to be able to disagree if the
+    # process died between them.
+    with conn:
+        tasks_db.insert_task(conn, new_task)
+        tasks_db.replace_task_tags(conn, task_id, [
+            dict(tag, id=uuid.uuid4().hex[:12]) for tag in (tags or [])
+        ])
+    return task_id
+
+
+def build_nested(scratchpad_date=None):
     """Join sections + tasks + tags into the nested shape the frontend
-    expects, the same way a database view would."""
+    expects, the same way a database view would.
+
+    scratchpad_date is the viewer's own local calendar date (the client
+    always knows this instantly; the server never guesses at it). When it's
+    omitted or malformed, the most recently-dated saved entry is served
+    instead, so a caller that doesn't pass one still sees the last thing
+    actually written rather than an empty day.
+    """
     conn = tasks_db.connect()
 
     try:
         sections = tasks_db.load_sections(conn)
         tasks = tasks_db.load_tasks(conn)
         tags = tasks_db.load_tags(conn)
-        scratchpad = tasks_db.load_scratchpad(conn)
+        if not scratchpad_date:
+            scratchpad_date = tasks_db.most_recent_scratchpad_date(conn)
+        scratchpad_text = tasks_db.load_scratchpad(conn, scratchpad_date) if scratchpad_date else ''
     finally:
         conn.close()
 
@@ -169,7 +239,10 @@ def build_nested():
             nested_section['note'] = section['note']
         result_sections.append(nested_section)
 
-    return {'sections': result_sections, 'scratchpad': scratchpad}
+    return {
+        'sections': result_sections,
+        'scratchpad': {'date': scratchpad_date, 'text': scratchpad_text}
+    }
 
 
 class TaskHandler(http.server.SimpleHTTPRequestHandler):
@@ -196,7 +269,9 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.path = '/html/home.html'
             return super().do_GET()
         if path == '/tasks.json':
-            return self.serve_tasks_json()
+            return self.serve_tasks_json(parsed)
+        if path == '/tasks/scratchpad.json':
+            return self.serve_scratchpad_json(parsed)
         if path == '/tasks/sync-status.json':
             return self.serve_tasks_sync_status()
         if path == '/tasks':
@@ -523,14 +598,40 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def serve_tasks_json(self):
-        body = json.dumps(build_nested(), indent=2).encode('utf-8')
+    def serve_tasks_json(self, parsed):
+        scratchpad_date = parse_qs(parsed.query).get('scratchpad_date', [''])[0].strip()
+        if not DATE_RE.match(scratchpad_date):
+            scratchpad_date = None
+        body = json.dumps(build_nested(scratchpad_date), indent=2).encode('utf-8')
 
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))
         self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
         self.send_header('Pragma', 'no-cache')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def serve_scratchpad_json(self, parsed):
+        """A single day's scratchpad entry, for the day-navigation and
+        carry-forward controls (issue #165) - lets the sidebar load another
+        day without re-fetching and re-rendering the entire task list."""
+        entry_date = parse_qs(parsed.query).get('date', [''])[0].strip()
+        if not DATE_RE.match(entry_date):
+            self.send_json_error(400, 'Missing or malformed date')
+            return
+
+        conn = tasks_db.connect()
+        try:
+            text = tasks_db.load_scratchpad(conn, entry_date)
+        finally:
+            conn.close()
+
+        body = json.dumps({'date': entry_date, 'text': text}).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
         self.end_headers()
         self.wfile.write(body)
 
@@ -559,6 +660,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             return
         if parsed.path == '/tasks/new':
             return self.handle_new_task()
+        if parsed.path == '/tasks/quick-task':
+            return self.handle_quick_task()
         if parsed.path == '/tasks/new-category':
             return self.handle_new_category()
         if parsed.path == '/tasks/update':
@@ -773,8 +876,6 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         tags_raw = fields.get('tags', [''])[0].strip()
         flag_tag = fields.get('flag_tag', [''])[0].strip()
         priority = fields.get('priority', ['medium'])[0].strip()
-        if priority not in PRIORITIES:
-            priority = 'medium'
         done = 'done' in fields
         ticket_number = fields.get('ticket_number', [''])[0].strip()
         assignment_group = fields.get('assignment_group', [''])[0].strip()
@@ -786,8 +887,6 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         related_files = fields.get('related_files', [''])[0].strip()
         parent_id = fields.get('parent_id', [''])[0].strip()
         work_type = fields.get('work_type', [''])[0].strip()
-        if section_id != WORK_SECTION_ID or work_type not in WORK_TYPES:
-            work_type = ''
 
         if not section_id or not desc:
             self.send_error(400, 'Section and description are required')
@@ -801,9 +900,6 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(400, 'Unknown section: ' + section_id)
                 return
 
-            if parent_id and not tasks_db.task_exists(conn, parent_id):
-                parent_id = ''
-
             raw_tags = []
             if flag_tag:
                 raw_tags.append({'text': flag_tag, 'flag': True})
@@ -812,52 +908,55 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
                 if raw_tag:
                     raw_tags.append({'text': raw_tag, 'flag': False})
 
-            created = now_iso()
-            task_id = uuid.uuid4().hex[:12]
-            # No 'done' key: it's a generated column now, derived from
-            # status, so there's nothing to write and nothing to drift.
-            new_task = {
-                'id': task_id,
-                'section_id': section_id,
-                'position': tasks_db.next_task_position(conn, section_id),
-                'desc': desc,
-                'note': note,
-                'notes': '',
-                'status': 'done' if done else 'open',
-                'priority': priority,
-                'ticket_number': ticket_number,
-                'assignment_group': assignment_group,
-                'requested_by': requested_by,
-                'due_date': due_date,
-                'focus_today': focus_today,
-                'follow_up_date': follow_up_date,
-                'time_estimate': time_estimate,
-                'related_files': related_files,
-                'parent_id': parent_id,
-                'work_type': work_type,
-                'env_dev': False,
-                'env_qa': False,
-                'env_prod': False,
-                'cmdb_updated': False,
-                'created': created,
-                'modified': created,
-                'completed': created if done else ''
-            }
-
-            # One transaction: the task and its tags land together, or
-            # neither does. Two separate file writes used to be able to
-            # disagree if the process died between them.
-            with conn:
-                tasks_db.insert_task(conn, new_task)
-                tasks_db.replace_task_tags(conn, task_id, [
-                    dict(tag, id=uuid.uuid4().hex[:12]) for tag in raw_tags
-                ])
+            create_task(
+                conn, section_id, desc, note=note, priority=priority, tags=raw_tags,
+                ticket_number=ticket_number, assignment_group=assignment_group,
+                requested_by=requested_by, due_date=due_date, focus_today=focus_today,
+                follow_up_date=follow_up_date, time_estimate=time_estimate,
+                related_files=related_files, parent_id=parent_id, work_type=work_type, done=done
+            )
         finally:
             conn.close()
 
         self.send_response(303)
         self.send_header('Location', '/tasks/' + section['slug'] + '?added=1')
         self.end_headers()
+
+    def handle_quick_task(self):
+        """Minimal task creation for the scratchpad's convert-line-to-task
+        action (issue #165): just a section and a description, no redirect
+        - returns the created task's id and section slug as JSON so the
+        scratchpad can link straight to it."""
+        payload = self._read_json_body()
+        if payload is None:
+            self.send_json_error(400, 'Invalid JSON body')
+            return
+
+        section_id = payload.get('section_id')
+        raw_desc = payload.get('desc')
+        desc = format_sentence(raw_desc) if isinstance(raw_desc, str) else ''
+        if not isinstance(section_id, str) or not section_id or not desc:
+            self.send_json_error(400, 'section_id and desc are required')
+            return
+
+        conn = tasks_db.connect()
+
+        try:
+            section = tasks_db.find_section(conn, section_id)
+            if section is None:
+                self.send_json_error(400, 'Unknown section: ' + section_id)
+                return
+
+            task_id = create_task(conn, section_id, desc)
+        finally:
+            conn.close()
+
+        response_body = json.dumps({'status': 'ok', 'id': task_id, 'section_slug': section['slug']}).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(response_body)))
+        self.end_headers()
+        self.wfile.write(response_body)
 
     def handle_new_category(self):
         length = int(self.headers.get('Content-Length', 0))
@@ -1169,11 +1268,16 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_error(400, 'Missing text field')
             return
 
+        entry_date = payload.get('date') if isinstance(payload, dict) else None
+        if not isinstance(entry_date, str) or not DATE_RE.match(entry_date):
+            self.send_json_error(400, 'Missing or malformed date field')
+            return
+
         conn = tasks_db.connect()
 
         try:
             with conn:
-                tasks_db.save_scratchpad(conn, text, now_iso())
+                tasks_db.save_scratchpad(conn, entry_date, text, now_iso())
         finally:
             conn.close()
 

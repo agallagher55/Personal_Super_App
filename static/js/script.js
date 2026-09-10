@@ -29,18 +29,39 @@
   var DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   var MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
+  // The viewer's own local calendar date as YYYY-MM-DD - never the
+  // server's, and never UTC (Date#toISOString would silently roll over at
+  // the wrong wall-clock hour for anyone west of UTC).
+  function getLocalDateString(date) {
+    var d = date || new Date();
+    var month = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + month + '-' + day;
+  }
+
+  // date +/- days, both sides plain YYYY-MM-DD strings. Built from local
+  // (not UTC) Date components throughout, same reasoning as above, and
+  // goes through the Date constructor rather than string math so month/
+  // year rollovers (and DST, where applicable) are handled correctly.
+  function addDaysToDateString(dateString, delta) {
+    var parts = dateString.split('-').map(Number);
+    var d = new Date(parts[0], parts[1] - 1, parts[2]);
+    d.setDate(d.getDate() + delta);
+    return getLocalDateString(d);
+  }
+
+  // "SEP 8" - the day-nav buttons' label, matching this page's existing
+  // all-caps date style (see the page-date header below).
+  function formatShortDate(dateString) {
+    var parts = dateString.split('-').map(Number);
+    return MONTH_NAMES[parts[1] - 1] + ' ' + parts[2];
+  }
+
   var pageDateEl = document.getElementById('page-date');
   if (pageDateEl) {
     var today = new Date();
     pageDateEl.textContent = DAY_NAMES[today.getDay()] + ' ' + MONTH_NAMES[today.getMonth()] +
       ' ' + today.getDate() + ', ' + today.getFullYear();
-  }
-
-  var scratchpadDateEl = document.getElementById('scratchpad-date');
-  if (scratchpadDateEl) {
-    var scratchpadToday = new Date();
-    scratchpadDateEl.textContent = DAY_NAMES[scratchpadToday.getDay()] + ' ' +
-      MONTH_NAMES[scratchpadToday.getMonth()] + ' ' + scratchpadToday.getDate();
   }
 
   var STATUS_LABELS = {
@@ -927,8 +948,45 @@
 
   var scratchpadInput = document.getElementById('scratchpad-input');
   var scratchpadStatusEl = document.getElementById('scratchpad-status');
+  var scratchpadDateEl = document.getElementById('scratchpad-date');
+  var scratchpadPrevBtn = document.getElementById('scratchpad-prev-day');
+  var scratchpadNextBtn = document.getElementById('scratchpad-next-day');
+  var scratchpadTodayBtn = document.getElementById('scratchpad-today-btn');
+  var scratchpadCarryForwardBtn = document.getElementById('scratchpad-carry-forward-btn');
+  var scratchpadConvertSection = document.getElementById('scratchpad-convert-section');
+  var scratchpadConvertBtn = document.getElementById('scratchpad-convert-btn');
+  var scratchpadConvertConfirmEl = document.getElementById('scratchpad-convert-confirm');
   var scratchpadSaveTimer = null;
   var scratchpadLastSaved = '';
+  // The day currently loaded in the textarea - never advances on its own
+  // (e.g. at midnight): it only changes via explicit navigation, so a save
+  // in flight always lands on the day the user was actually looking at.
+  var scratchpadViewDate = getLocalDateString();
+  var SCRATCHPAD_LAST_SECTION_KEY = 'scratchpad-convert-section';
+
+  // "THU SEP 10" - the sidebar's date heading, for whichever day is loaded.
+  function formatScratchpadHeaderDate(dateString) {
+    var parts = dateString.split('-').map(Number);
+    var d = new Date(parts[0], parts[1] - 1, parts[2]);
+    return DAY_NAMES[d.getDay()] + ' ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
+  }
+
+  function renderScratchpadNav() {
+    if (scratchpadDateEl) {
+      scratchpadDateEl.textContent = formatScratchpadHeaderDate(scratchpadViewDate);
+    }
+    if (scratchpadPrevBtn) {
+      scratchpadPrevBtn.textContent = '‹ ' + formatShortDate(addDaysToDateString(scratchpadViewDate, -1));
+      scratchpadPrevBtn.setAttribute('aria-label', 'Go to ' + formatShortDate(addDaysToDateString(scratchpadViewDate, -1)));
+    }
+    if (scratchpadNextBtn) {
+      scratchpadNextBtn.textContent = formatShortDate(addDaysToDateString(scratchpadViewDate, 1)) + ' ›';
+      scratchpadNextBtn.setAttribute('aria-label', 'Go to ' + formatShortDate(addDaysToDateString(scratchpadViewDate, 1)));
+    }
+    if (scratchpadTodayBtn) {
+      scratchpadTodayBtn.disabled = (scratchpadViewDate === getLocalDateString());
+    }
+  }
 
   // Persistent, not a flash: it stays until the next state change so it can
   // be trusted at a glance, rather than fading on a timer regardless of
@@ -942,6 +1000,10 @@
     scratchpadStatusEl.classList.add('show');
   }
 
+  function isScratchpadDirty() {
+    return scratchpadInput.value !== scratchpadLastSaved;
+  }
+
   function saveScratchpad(useBeacon) {
     if (scratchpadSaveTimer) {
       clearTimeout(scratchpadSaveTimer);
@@ -953,8 +1015,10 @@
       return;
     }
 
+    var entryDate = scratchpadViewDate;
+
     if (useBeacon && navigator.sendBeacon) {
-      var blob = new Blob([JSON.stringify({ text: text })], { type: 'application/json' });
+      var blob = new Blob([JSON.stringify({ date: entryDate, text: text })], { type: 'application/json' });
       if (navigator.sendBeacon('/tasks/scratchpad', blob)) {
         scratchpadLastSaved = text;
         return;
@@ -967,7 +1031,7 @@
     fetch('/tasks/scratchpad', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text })
+      body: JSON.stringify({ date: entryDate, text: text })
     })
       .then(function (response) {
         if (!response.ok) {
@@ -982,6 +1046,174 @@
       .catch(function (err) {
         showScratchpadStatus(err.message, true);
       });
+  }
+
+  // Loads another day's entry into the textarea without touching the task
+  // list - a dedicated endpoint (GET /tasks/scratchpad.json) rather than
+  // re-fetching and re-rendering all of /tasks.json just to flip a day.
+  function fetchScratchpadDay(dateString) {
+    showScratchpadStatus('Loading...', false);
+    fetch('/tasks/scratchpad.json?date=' + encodeURIComponent(dateString))
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error('Could not load that day (status ' + response.status + ')');
+        }
+        return response.json();
+      })
+      .then(function (data) {
+        // The user navigated again before this resolved - drop the now-stale response.
+        if (dateString !== scratchpadViewDate) {
+          return;
+        }
+        scratchpadInput.value = data.text || '';
+        scratchpadLastSaved = data.text || '';
+        showScratchpadStatus('Saved', false);
+      })
+      .catch(function (err) {
+        showScratchpadStatus(err.message, true);
+      });
+  }
+
+  function goToScratchpadDay(newDate) {
+    if (newDate === scratchpadViewDate) {
+      return;
+    }
+    // Flush the outgoing day's edits before navigating, so the last
+    // keystrokes on it are never lost.
+    if (isScratchpadDirty()) {
+      saveScratchpad(false);
+    }
+    scratchpadViewDate = newDate;
+    renderScratchpadNav();
+    fetchScratchpadDay(newDate);
+    if (scratchpadConvertConfirmEl) {
+      scratchpadConvertConfirmEl.hidden = true;
+    }
+  }
+
+  if (scratchpadPrevBtn) {
+    scratchpadPrevBtn.addEventListener('click', function () {
+      goToScratchpadDay(addDaysToDateString(scratchpadViewDate, -1));
+    });
+  }
+  if (scratchpadNextBtn) {
+    scratchpadNextBtn.addEventListener('click', function () {
+      goToScratchpadDay(addDaysToDateString(scratchpadViewDate, 1));
+    });
+  }
+  if (scratchpadTodayBtn) {
+    scratchpadTodayBtn.addEventListener('click', function () {
+      goToScratchpadDay(getLocalDateString());
+    });
+  }
+
+  // Non-blank lines from the previous day that aren't already present
+  // (exact match) get appended - never automatic, and safe to press twice
+  // since the second pass finds them already there.
+  if (scratchpadCarryForwardBtn) {
+    scratchpadCarryForwardBtn.addEventListener('click', function () {
+      var previousDate = addDaysToDateString(scratchpadViewDate, -1);
+      fetch('/tasks/scratchpad.json?date=' + encodeURIComponent(previousDate))
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error('Could not load the previous day (status ' + response.status + ')');
+          }
+          return response.json();
+        })
+        .then(function (data) {
+          var previousLines = (data.text || '').split('\n').filter(function (line) {
+            return line.trim() !== '';
+          });
+          var currentLines = scratchpadInput.value.split('\n');
+          var toAdd = previousLines.filter(function (line) {
+            return currentLines.indexOf(line) === -1;
+          });
+          if (toAdd.length === 0) {
+            showScratchpadStatus('Nothing to carry forward', false);
+            return;
+          }
+          var current = scratchpadInput.value;
+          var separator = current && !current.endsWith('\n') ? '\n' : '';
+          scratchpadInput.value = current + separator + toAdd.join('\n');
+          saveScratchpad(false);
+        })
+        .catch(function (err) {
+          showScratchpadStatus(err.message, true);
+        });
+    });
+  }
+
+  // The selected text, or the line the caret is in when nothing is
+  // selected - for "convert this line to a task".
+  function getScratchpadConvertCandidate() {
+    var start = scratchpadInput.selectionStart;
+    var end = scratchpadInput.selectionEnd;
+    if (start !== end) {
+      return scratchpadInput.value.slice(start, end);
+    }
+    var value = scratchpadInput.value;
+    var lineStart = value.lastIndexOf('\n', start - 1) + 1;
+    var lineEnd = value.indexOf('\n', start);
+    if (lineEnd === -1) {
+      lineEnd = value.length;
+    }
+    return value.slice(lineStart, lineEnd);
+  }
+
+  function populateScratchpadConvertSections(sections) {
+    if (!scratchpadConvertSection) {
+      return;
+    }
+    var lastUsed = localStorage.getItem(SCRATCHPAD_LAST_SECTION_KEY);
+    scratchpadConvertSection.innerHTML = '';
+    sections.forEach(function (section) {
+      var option = document.createElement('option');
+      option.value = section.id;
+      option.textContent = section.label;
+      scratchpadConvertSection.appendChild(option);
+    });
+    if (lastUsed && sections.some(function (s) { return s.id === lastUsed; })) {
+      scratchpadConvertSection.value = lastUsed;
+    }
+  }
+
+  if (scratchpadConvertBtn) {
+    scratchpadConvertBtn.addEventListener('click', function () {
+      var text = getScratchpadConvertCandidate().trim();
+      var sectionId = scratchpadConvertSection ? scratchpadConvertSection.value : '';
+      if (!text || !sectionId) {
+        return;
+      }
+
+      scratchpadConvertBtn.disabled = true;
+      fetch('/tasks/quick-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section_id: sectionId, desc: text })
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error('Could not create the task (status ' + response.status + ')');
+          }
+          return response.json();
+        })
+        .then(function (data) {
+          localStorage.setItem(SCRATCHPAD_LAST_SECTION_KEY, sectionId);
+          if (scratchpadConvertConfirmEl) {
+            scratchpadConvertConfirmEl.innerHTML = 'Created <a href="/task/' +
+              encodeURIComponent(data.id) + '">' + text.replace(/[&<>]/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+              }) + '</a>';
+            scratchpadConvertConfirmEl.hidden = false;
+          }
+        })
+        .catch(function (err) {
+          showScratchpadStatus(err.message, true);
+        })
+        .finally(function () {
+          scratchpadConvertBtn.disabled = false;
+        });
+    });
   }
 
   if (scratchpadInput) {
@@ -1007,8 +1239,12 @@
 
   function render(data) {
     if (scratchpadInput) {
-      scratchpadInput.value = data.scratchpad || '';
-      scratchpadLastSaved = data.scratchpad || '';
+      var scratchpadText = (data.scratchpad && data.scratchpad.text) || '';
+      scratchpadViewDate = (data.scratchpad && data.scratchpad.date) || getLocalDateString();
+      scratchpadInput.value = scratchpadText;
+      scratchpadLastSaved = scratchpadText;
+      renderScratchpadNav();
+      populateScratchpadConvertSections(data.sections);
     }
 
     taskById = {};
@@ -1348,7 +1584,7 @@
   }
 
   Promise.all([
-    fetch('/tasks.json').then(function (response) {
+    fetch('/tasks.json?scratchpad_date=' + encodeURIComponent(getLocalDateString())).then(function (response) {
       if (!response.ok) {
         throw new Error('Could not load tasks.json (status ' + response.status + ')');
       }
