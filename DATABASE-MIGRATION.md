@@ -114,6 +114,18 @@ two domains ever need different pragmas.
 
 ## 4. Schema
 
+> **This is the schema as planned, not as it stands today.**
+> `backend/tasks_schema.sql` is the live DDL and the only source of truth;
+> read it rather than the block below if you need the current shape. §11
+> records the four departures found while building this. Everything since
+> has arrived through the versioned migration path (`SCHEMA_VERSION` and
+> `migrate()` in `backend/tasks_db.py`, which did not exist when this was
+> written): CHECK constraints on the status/priority/work_type/boolean
+> domains (migration 2), the date and timestamp format constraints
+> (migration 3), the `focus_today` and `follow_up_date` triage fields
+> (migration 4), and the single-row `scratchpad` table behind the "Today's
+> List" notepad. `sections` also carries the `position` column §11 explains.
+
 ```sql
 -- backend/tasks_schema.sql
 
@@ -395,9 +407,10 @@ have quietly changed which URLs 404. They are two functions:
   duplicate category rejected, new task with tags and a flag tag, unknown
   section rejected, status change, notes, tag replacement, drag-and-drop
   reordering, delete, and delete of a missing id.
-- `backend/tests/test_tasks_db.py`, 25 tests, covering the schema, the
-  generated `done` column (including that a contradictory `done` cannot be
-  written), round-tripping, tags, deletes, and `migrate_from_json()`.
+- `backend/tests/test_tasks_db.py`, 25 tests at the time, covering the
+  schema, the generated `done` column (including that a contradictory
+  `done` cannot be written), round-tripping, tags, deletes, and
+  `migrate_from_json()`.
 - `service_now/sync.py`'s upsert exercised directly: create, idempotent
   re-run, and an upstream status flip to done.
 

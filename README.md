@@ -175,10 +175,14 @@ shape on every request, so the browser-facing API is byte-for-byte what it
 was when the store was three JSON files.
 
 `tasks` has more columns than are listed above (`ticket_number`,
-`assignment_group`, `requested_by`, `due_date`, `time_estimate`,
-`related_files`, `parent_id`, `work_type`, `env_dev`/`env_qa`/`env_prod`,
-`cmdb_updated`, `servicenow_sys_id`) driving the task detail view and the
-ServiceNow sync. `backend/tasks_schema.sql` is the full, commented list.
+`assignment_group`, `requested_by`, `due_date`, `focus_today`,
+`follow_up_date`, `time_estimate`, `related_files`, `parent_id`,
+`work_type`, `env_dev`/`env_qa`/`env_prod`, `cmdb_updated`,
+`servicenow_sys_id`) driving the task detail view, the queue pills on
+`/tasks`, and the ServiceNow sync. `focus_today` and `follow_up_date` are
+the personal triage layer: neither is imported from ServiceNow, and neither
+is pushed back to it. `backend/tasks_schema.sql` is the full, commented
+list.
 
 ### Setting up the database
 
@@ -217,6 +221,16 @@ than sorted. Nothing is lost, only reordered; after that, diffs are small.
 
 ## Behavior
 
+- Above the list, four queue pills filter what's shown: **All**, **Today**
+  (tasks you've flagged `focus_today` on the task detail page), **Waiting**
+  (status Pending, which is also where the ServiceNow sync puts Awaiting
+  User Info tickets), and **Overdue** (past `due_date`). The active pill is
+  in the URL as `?view=`, so a filtered list can be bookmarked. **All** is
+  the default: a focused queue can legitimately be empty, and an empty one
+  says so explicitly rather than looking like a database that lost its
+  rows.
+- The search box filters the visible cards by text on top of whichever
+  queue is selected.
 - Each task has a status dropdown (Open / In Progress / Pending / Done /
   Cancelled). Setting
   a task to Done moves it out of its section and into the
