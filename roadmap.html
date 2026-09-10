@@ -155,6 +155,35 @@
     font-size: 0.9rem;
   }
 
+  /* Completed items are wrapped in <details>, closed by default, so the
+     page doesn't keep growing as more things ship. Every pill-done gets a
+     done-date next to it right in the summary, visible even collapsed -
+     see the "Roadmap maintenance" note near the top of <body> before
+     adding a new one. */
+  details > summary { cursor: pointer; list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  .done-date {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    color: var(--ink-dim);
+    white-space: nowrap;
+  }
+  .done-meta { display: flex; align-items: center; gap: 8px; }
+  .disclosure {
+    display: inline-block;
+    font-size: 0.7em;
+    color: var(--ink-dim);
+    transition: transform 0.15s ease;
+  }
+  details[open] .disclosure { transform: rotate(90deg); }
+  details.status-item .desc { margin-top: 6px; }
+  details.phase { display: block; }
+  details.phase > summary.phase-summary { display: flex; gap: 18px; align-items: flex-start; }
+  details.phase > summary.phase-summary h3 { flex: 1 1 auto; }
+  details.phase > .phase-body { padding-left: 110px; }
+  details.phase .phase-marker { display: flex; flex-direction: column; gap: 4px; }
+  details.phase .phase-marker .done-meta { gap: 6px; }
+
   .rec-box {
     border-left: 3px solid var(--accent);
     background: var(--accent-soft);
@@ -210,6 +239,17 @@
 </style>
 </head>
 <body>
+<!--
+  Roadmap maintenance convention (keep this in sync going forward):
+  when a status-item or phase flips to pill-done, (1) add a done-date
+  span next to the pill with the completion date (YYYY-MM-DD), and
+  (2) wrap the item as <details class="status-item"|"phase"> (closed
+  by default, no `open` attribute) with the pill/date/label in the
+  <summary> so the page doesn't keep growing as more things ship -
+  match the pattern already used by the other Done items below. Also
+  bump the "Last written" date in the meta-line below. This same rule
+  is documented in CLAUDE.md at the repo root.
+-->
 <div class="page">
 
   <header class="top">
@@ -221,34 +261,34 @@
   <section class="card">
     <h2>Where things stand</h2>
     <div class="status-grid">
-      <div class="status-item">
-        <div class="label-row">
+      <details class="status-item">
+        <summary class="label-row">
           <span class="name">Tasks tracker</span>
-          <span class="pill pill-done">Done</span>
-        </div>
+          <span class="done-meta"><span class="pill pill-done">Done</span><span class="done-date">2026-09-10</span><span class="disclosure" aria-hidden="true">&#9656;</span></span>
+        </summary>
         <div class="desc">Full CRUD, categories, tags, notes &mdash; the one feature that's been end-to-end real since the start. It also pulls the "My Work" list out of Halifax's ServiceNow GIS dashboard (<code>service_now/sync.py</code>, a CLI script matched on <code>sys_id</code> so re-runs never duplicate a task or overwrite a note you typed), and layers a personal triage pass on top that ServiceNow never sees: Today / Waiting / Overdue queue pills, a per-task Today flag, and a follow-up date for blocked work. Every sync attempt is logged, so the page can say how fresh its ServiceNow data is and flag what changed upstream since you last looked. <code>service_now/TASKS-UX-REVIEW.md</code> is the review of that whole workflow; what's left of it is tracked in <a href="https://github.com/agallagher55/Personal_Super_App/issues/160">issue #160</a>.</div>
-      </div>
-      <div class="status-item">
-        <div class="label-row">
+      </details>
+      <details class="status-item">
+        <summary class="label-row">
           <span class="name">Fitness / Google data pull</span>
-          <span class="pill pill-done">Done</span>
-        </div>
+          <span class="done-meta"><span class="pill pill-done">Done</span><span class="done-date">2026-08-27</span><span class="disclosure" aria-hidden="true">&#9656;</span></span>
+        </summary>
         <div class="desc">The app pulling <em>one</em> person's Google Health data (steps, HRV, SpO2, sleep, weight) via OAuth is fully working &mdash; this is the Fitbit replacement, since Fitbit's own Web API is being retired Sept 2026.</div>
-      </div>
-      <div class="status-item">
-        <div class="label-row">
+      </details>
+      <details class="status-item">
+        <summary class="label-row">
           <span class="name">Fitness / visitor Google login</span>
-          <span class="pill pill-done">Done</span>
-        </div>
+          <span class="done-meta"><span class="pill pill-done">Done</span><span class="done-date">2026-09-02</span><span class="disclosure" aria-hidden="true">&#9656;</span></span>
+        </summary>
         <div class="desc">Any allowed visitor now signs in with their own Google account at <code>/fitness/login</code> and sees only their own data &mdash; browser-driven OAuth, signed session cookies, and per-user token/data storage under <code>data/fitness/users/&lt;user_id&gt;/</code>. See <code>fitness/VISITOR-SIGNIN-PLAN.md</code>.</div>
-      </div>
-      <div class="status-item">
-        <div class="label-row">
+      </details>
+      <details class="status-item">
+        <summary class="label-row">
           <span class="name">Finance: Spending &amp; Cash Flow</span>
-          <span class="pill pill-done">Done</span>
-        </div>
+          <span class="done-meta"><span class="pill pill-done">Done</span><span class="done-date">2026-09-07</span><span class="disclosure" aria-hidden="true">&#9656;</span></span>
+        </summary>
         <div class="desc">Real data, not a sample file: a manual CSV import (credit card + bank activity exports, decided instead of Plaid for now) loads into <code>data/finance/finance.db</code>, driving a category donut, top merchants, a monthly spend chart, editable categories, and a Cash Flow block (income/expense trend, click a bar for that month's transactions, a per-type income breakdown, per-transaction exclusions). See <code>finance/ARCHITECTURE.md</code> Part A.</div>
-      </div>
+      </details>
       <div class="status-item">
         <div class="label-row">
           <span class="name">Finance: net worth</span>
@@ -256,21 +296,21 @@
         </div>
         <div class="desc">Cash, Bitcoin, Debt, and Lines of Credit now have real, dated balance history (<code>account_balance_snapshots</code> etc.) and a manual-entry route, seeded from the old sample values &mdash; <code>finance/ARCHITECTURE.md</code> Part C, Phase&nbsp;1. <code>/finance</code> itself hasn't been switched over yet, so those sections (plus Investments and Net Worth Over Time) still render the old static <code>finance-dashboard.json</code>.</div>
       </div>
-      <div class="status-item">
-        <div class="label-row">
+      <details class="status-item">
+        <summary class="label-row">
           <span class="name">Real database</span>
-          <span class="pill pill-done">Done</span>
-        </div>
+          <span class="done-meta"><span class="pill pill-done">Done</span><span class="done-date">2026-09-06</span><span class="disclosure" aria-hidden="true">&#9656;</span></span>
+        </summary>
         <div class="desc">Tasks moved off flat JSON onto SQLite: <code>data/tasks.db</code> with <code>sections</code>/<code>tasks</code>/<code>tags</code> tables, a generated <code>done</code> column that can't drift from <code>status</code>, and transactional writes. <code>backend/tasks_export.py</code> regenerates the committed JSON snapshot from it. See <code>DATABASE-MIGRATION.md</code>. Finance ended up with its own SQLite store too (<code>backend/finance/</code>, <code>data/finance/finance.db</code>) &mdash; built around CSV import rather than <code>finance/schema.sql</code>'s original Plaid-oriented design, which stays unused; see <code>finance/ARCHITECTURE.md</code> Part A1. Fitness stays on JSON deliberately (<code>fitness/ARCHITECTURE.md</code> &sect;6).</div>
-      </div>
+      </details>
 
-      <div class="status-item">
-        <div class="label-row">
+      <details class="status-item">
+        <summary class="label-row">
           <span class="name">One design system</span>
-          <span class="pill pill-done">Done</span>
-        </div>
+          <span class="done-meta"><span class="pill pill-done">Done</span><span class="done-date">2026-09-08</span><span class="disclosure" aria-hidden="true">&#9656;</span></span>
+        </summary>
         <div class="desc">Every section now shares one palette, type scale and set of components, in both light and dark. <code>/fitness</code> had carried the ported <code>personal_health</code> project's own slate/blue look, <code>system-ui</code> type and opposite-corner theme toggle, so it read as a different product next to <code>/finance</code>; it now loads <code>static/styles/styles.css</code> like every other page, with fitness-only components layered on top. Its charts take theme tokens instead of hex, so they follow the toggle. Every page also finally declares a <code>viewport</code> meta, without which none of the mobile breakpoints ever fired. See <code>DESIGN-SYSTEM.md</code>.</div>
-      </div>
+      </details>
     </div>
   </section>
 
@@ -285,10 +325,15 @@
   <section class="card">
     <h2>Soft sequencing</h2>
 
-    <div class="phase">
-      <div class="phase-marker"><span class="pill pill-done">Done</span></div>
-      <div class="phase-body">
+    <details class="phase">
+      <summary class="phase-summary">
+        <span class="phase-marker">
+          <span class="done-meta"><span class="pill pill-done">Done</span><span class="disclosure" aria-hidden="true">&#9656;</span></span>
+          <span class="done-date">2026-09-02</span>
+        </span>
         <h3>Fitness: per-visitor Google sign-in</h3>
+      </summary>
+      <div class="phase-body">
         <ul>
           <li>Browser-driven OAuth: <code>/fitness/login</code> &rarr; <code>/fitness/auth/start</code> &rarr; consent screen &rarr; <code>/fitness/auth/callback</code> in <code>backend/server.py</code> &mdash; adapted from the CLI-only flow in <code>backend/fitness/auth.py</code></li>
           <li>A signed-cookie session layer (<code>backend/fitness/session.py</code>) &mdash; stateless, no server-side session store</li>
@@ -297,12 +342,17 @@
           <li>Each expected visitor's email still needs adding to the OAuth client's Test users list in Google Cloud Console <span class="fine">(manual, outside code, required today per the cap above)</span>, plus one of <code>FITNESS_OWNER_EMAIL</code>/<code>FITNESS_ALLOWED_EMAILS</code>/<code>data/fitness/allowed_users.json</code> set as this app's own allowlist</li>
         </ul>
       </div>
-    </div>
+    </details>
 
-    <div class="phase">
-      <div class="phase-marker"><span class="pill pill-done">Done</span></div>
-      <div class="phase-body">
+    <details class="phase">
+      <summary class="phase-summary">
+        <span class="phase-marker">
+          <span class="done-meta"><span class="pill pill-done">Done</span><span class="disclosure" aria-hidden="true">&#9656;</span></span>
+          <span class="done-date">2026-09-07</span>
+        </span>
         <h3>Finance: CSV-import pipeline, and its first real net worth tables</h3>
+      </summary>
+      <div class="phase-body">
         <ul>
           <li>Decided against Plaid for now <span class="fine">(no developer account, no production-approval process, no auth gate needed yet)</span> &mdash; manual CSV export from the credit card and bank sites instead, into <code>backend/finance/</code> + <code>data/finance/finance.db</code>. See <code>finance/ARCHITECTURE.md</code> Part A.</li>
           <li>Spending (category donut, click-to-filter top merchants, monthly chart, one-time/permanent category fixes) and Cash Flow (income/expense trend, click a bar for its transactions, per-row exclusions, a per-type income breakdown) &mdash; both reading real imported data</li>
@@ -310,7 +360,7 @@
           <li>Part C Phase&nbsp;1: real, dated balance history for Cash/Bitcoin/Debt/Lines of Credit (<code>account_balance_snapshots</code>, <code>account_terms_snapshots</code>), a manual-entry route (<code>POST /finance/balance-entries</code>), seeded from the old sample values</li>
         </ul>
       </div>
-    </div>
+    </details>
 
     <div class="phase">
       <div class="phase-marker"><span class="pill pill-next">Up next</span></div>
@@ -339,7 +389,7 @@
       <div class="phase-body">
         <h3>Tasks: make the ServiceNow layer trustworthy</h3>
         <ul>
-          <li>Sync health is <strong>done</strong>: each task now records when its ticket was opened and last changed upstream, every sync attempt is logged to <code>sync_runs</code> whether it succeeded or failed, and <code>/tasks</code> shows how fresh the data is <span class="fine">(schema migration 5, <code>/tasks/sync-status.json</code>)</span></li>
+          <li>Sync health is <strong>done</strong> <span class="done-date">(2026-09-10)</span>: each task now records when its ticket was opened and last changed upstream, every sync attempt is logged to <code>sync_runs</code> whether it succeeded or failed, and <code>/tasks</code> shows how fresh the data is <span class="fine">(schema migration 5, <code>/tasks/sync-status.json</code>)</span></li>
           <li>Rest of Phase&nbsp;1: persistent saved/unsaved state for task edits, and real button semantics on the collapsible sections <span class="fine">(they're <code>div</code>s with click handlers today, so none of them are keyboard reachable)</span></li>
           <li>Then Phase&nbsp;2: date the scratchpad so yesterday's list stops being presented as today's, reconcile tickets that drop out of the active query without ever deleting their notes, and add real queue facets</li>
           <li>Full plan and per-item scope in <a href="https://github.com/agallagher55/Personal_Super_App/issues/160">issue #160</a>; the review itself is <code>service_now/TASKS-UX-REVIEW.md</code></li>
