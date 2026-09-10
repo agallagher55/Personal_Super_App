@@ -218,6 +218,17 @@
 
 .status-busy {
   color: var(--flag);
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in oklab, var(--flag) 35%, var(--line));
+  border-left: 4px solid var(--flag);
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--flag) 8%, var(--paper-raised));
+  font-size: 14px;
+  letter-spacing: 0.35px;
   font-weight: 600;
 }
 
@@ -270,10 +281,30 @@
 .dashboard-grid {
   display: grid;
   /* Overridden inline by js/balanced-grid.js once it runs, to keep rows
-     balanced (issue #32) - this is just the no-JS/first-paint fallback. */
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+     compact on desktop - this is just the no-JS/first-paint fallback. */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   align-content: start;
-  gap: 16px;
+  gap: 12px;
+}
+
+/* The overview is scanned as a whole, so its cards use a denser rhythm than
+   metric-detail pages. Keeping this scoped to the dashboard preserves the
+   roomier reading layout elsewhere in Fitness. */
+.dashboard-grid > .card {
+  padding: 14px 16px 16px;
+}
+
+.dashboard-grid > .card h2 {
+  margin-bottom: 10px;
+}
+
+.dashboard-grid canvas.sparkline {
+  height: 60px;
+  margin-top: 10px;
+}
+
+.dashboard-grid canvas.stacked-bar {
+  margin-top: 10px;
 }
 
 /* The Activity sidebar sits beside the sheet rather than inside it, the
