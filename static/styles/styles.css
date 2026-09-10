@@ -1340,6 +1340,11 @@ a.field-pill-ticket:hover { border-color: var(--flag); color: var(--flag); }
   background: var(--ink);
 }
 
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .new-task-cta {
   display: flex;
   align-items: center;

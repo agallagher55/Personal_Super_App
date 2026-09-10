@@ -789,8 +789,11 @@
   var scratchpadInput = document.getElementById('scratchpad-input');
   var scratchpadStatusEl = document.getElementById('scratchpad-status');
   var scratchpadSaveTimer = null;
-  var scratchpadStatusTimer = null;
+  var scratchpadLastSaved = '';
 
+  // Persistent, not a flash: it stays until the next state change so it can
+  // be trusted at a glance, rather than fading on a timer regardless of
+  // whether the save actually succeeded.
   function showScratchpadStatus(text, isError) {
     if (!scratchpadStatusEl) {
       return;
@@ -798,19 +801,34 @@
     scratchpadStatusEl.textContent = text;
     scratchpadStatusEl.classList.toggle('error', !!isError);
     scratchpadStatusEl.classList.add('show');
-    if (scratchpadStatusTimer) {
-      clearTimeout(scratchpadStatusTimer);
-    }
-    scratchpadStatusTimer = setTimeout(function () {
-      scratchpadStatusEl.classList.remove('show');
-    }, 2000);
   }
 
-  function saveScratchpad() {
+  function saveScratchpad(useBeacon) {
+    if (scratchpadSaveTimer) {
+      clearTimeout(scratchpadSaveTimer);
+      scratchpadSaveTimer = null;
+    }
+
+    var text = scratchpadInput.value;
+    if (text === scratchpadLastSaved) {
+      return;
+    }
+
+    if (useBeacon && navigator.sendBeacon) {
+      var blob = new Blob([JSON.stringify({ text: text })], { type: 'application/json' });
+      if (navigator.sendBeacon('/tasks/scratchpad', blob)) {
+        scratchpadLastSaved = text;
+        return;
+      }
+      // sendBeacon declined to queue the request (e.g. payload too large) -
+      // fall through to a normal fetch, best-effort during unload.
+    }
+
+    showScratchpadStatus('Saving...', false);
     fetch('/tasks/scratchpad', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: scratchpadInput.value })
+      body: JSON.stringify({ text: text })
     })
       .then(function (response) {
         if (!response.ok) {
@@ -819,6 +837,7 @@
         return response.json();
       })
       .then(function () {
+        scratchpadLastSaved = text;
         showScratchpadStatus('Saved', false);
       })
       .catch(function (err) {
@@ -828,16 +847,29 @@
 
   if (scratchpadInput) {
     scratchpadInput.addEventListener('input', function () {
+      showScratchpadStatus('Unsaved changes', false);
       if (scratchpadSaveTimer) {
         clearTimeout(scratchpadSaveTimer);
       }
-      scratchpadSaveTimer = setTimeout(saveScratchpad, 800);
+      scratchpadSaveTimer = setTimeout(function () { saveScratchpad(false); }, 800);
     });
+
+    // The debounce alone loses keystrokes typed in the 800ms before a
+    // navigation or tab close - flush immediately on every point where the
+    // page might go away.
+    scratchpadInput.addEventListener('blur', function () { saveScratchpad(false); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') {
+        saveScratchpad(true);
+      }
+    });
+    window.addEventListener('pagehide', function () { saveScratchpad(true); });
   }
 
   function render(data) {
     if (scratchpadInput) {
       scratchpadInput.value = data.scratchpad || '';
+      scratchpadLastSaved = data.scratchpad || '';
     }
 
     taskById = {};
