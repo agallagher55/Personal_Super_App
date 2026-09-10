@@ -11,7 +11,7 @@ function handleUnauthorized(body) {
 }
 
 async function getJSON(path) {
-  const res = await fetch(path);
+  const res = await fetch(path, { cache: "no-store" });
   const body = await res.json().catch(() => null);
   if (res.status === 401) {
     return handleUnauthorized(body);
