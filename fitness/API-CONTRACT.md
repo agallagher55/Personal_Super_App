@@ -119,7 +119,9 @@ having to check for missing keys.
 
 Food records combine all nutrition logs on the same local calendar day.
 Calories are kilocalories and each macronutrient value is grams. The
-dashboard presents the latest logged day in the selected range.
+dashboard presents the latest logged day in the selected range. The source
+collection is `nutrition-log`, not the read-only `food` catalog data type;
+see "Calories and nutrition data types" in `google_health.md`.
 
 Each `activity` exercise carries more than the dashboard timeline shows,
 for the per-activity detail view: `start_time`/`end_time` are raw UTC
