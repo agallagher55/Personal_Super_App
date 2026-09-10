@@ -4,6 +4,7 @@
   var sectionsContainer = document.getElementById('sections');
   var footnoteEl = document.getElementById('footnote-text');
   var completedHeader = document.getElementById('completed-header');
+  var completedToggle = document.getElementById('completed-toggle');
   var completedBody = document.getElementById('completed-body');
   var completedCountEl = document.getElementById('completed-count');
   var completedFilterBar = document.getElementById('completed-filter-bar');
@@ -158,6 +159,24 @@
     handle.title = 'Drag to reorder';
     handle.textContent = '⋮⋮';
 
+    var reorderControls = document.createElement('div');
+    reorderControls.className = 'task-reorder-controls';
+
+    var taskMoveUpBtn = document.createElement('button');
+    taskMoveUpBtn.type = 'button';
+    taskMoveUpBtn.className = 'task-move-btn task-move-up';
+    taskMoveUpBtn.setAttribute('aria-label', 'Move task up');
+    taskMoveUpBtn.textContent = '↑';
+
+    var taskMoveDownBtn = document.createElement('button');
+    taskMoveDownBtn.type = 'button';
+    taskMoveDownBtn.className = 'task-move-btn task-move-down';
+    taskMoveDownBtn.setAttribute('aria-label', 'Move task down');
+    taskMoveDownBtn.textContent = '↓';
+
+    reorderControls.appendChild(taskMoveUpBtn);
+    reorderControls.appendChild(taskMoveDownBtn);
+
     var num = document.createElement(taskData.id ? 'a' : 'div');
     num.className = 'num';
     if (taskData.id) {
@@ -192,8 +211,12 @@
     var body = document.createElement('div');
     body.className = 'body';
 
-    var descRow = document.createElement('div');
+    var descRow = document.createElement('button');
+    descRow.type = 'button';
     descRow.className = 'desc-row';
+    // Every card starts with the task-collapsed class (set above on li),
+    // so the toggle starts in sync with that.
+    descRow.setAttribute('aria-expanded', 'false');
 
     var toggleArrow = document.createElement('span');
     toggleArrow.className = 'task-toggle-arrow';
@@ -206,14 +229,20 @@
 
     descRow.appendChild(toggleArrow);
     descRow.appendChild(desc);
-    descRow.addEventListener('click', function () {
-      li.classList.toggle('task-collapsed');
-    });
     body.appendChild(descRow);
 
     var details = document.createElement('div');
     details.className = 'task-details';
+    if (taskData.id) {
+      details.id = 'task-details-' + taskData.id;
+      descRow.setAttribute('aria-controls', details.id);
+    }
     body.appendChild(details);
+
+    descRow.addEventListener('click', function () {
+      var collapsed = li.classList.toggle('task-collapsed');
+      descRow.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    });
 
     if (taskData.note) {
       var note = document.createElement('div');
@@ -414,10 +443,14 @@
     controls.appendChild(prioritySelect);
 
     li.appendChild(handle);
+    li.appendChild(reorderControls);
     li.appendChild(num);
     li.appendChild(controls);
     li.appendChild(body);
     li.appendChild(deleteBtn);
+
+    taskMoveUpBtn.addEventListener('click', function () { moveTask(li, -1); });
+    taskMoveDownBtn.addEventListener('click', function () { moveTask(li, 1); });
 
     handle.addEventListener('dragstart', function (e) {
       li.classList.add('dragging');
@@ -480,6 +513,27 @@
     return li;
   }
 
+  // Keyboard-only equivalent of dragging a task's handle: swaps it with the
+  // sibling in `direction` (-1 up, 1 down) within whichever list currently
+  // holds it (the section's own list, or a completed group's), then
+  // renumbers exactly as dragend already does.
+  function moveTask(li, direction) {
+    var list = li.closest('ol.tasks');
+    if (!list) {
+      return;
+    }
+    var sibling = direction < 0 ? li.previousElementSibling : li.nextElementSibling;
+    if (!sibling) {
+      return;
+    }
+    if (direction < 0) {
+      list.insertBefore(li, sibling);
+    } else {
+      list.insertBefore(sibling, li);
+    }
+    renumber(list);
+  }
+
   function getTaskDragAfterElement(list, y) {
     var elements = Array.prototype.slice.call(list.querySelectorAll(':scope > .task:not(.dragging)'));
     return elements.reduce(function (closest, child) {
@@ -520,24 +574,34 @@
     var groupHeader = document.createElement('div');
     groupHeader.className = 'completed-group-header';
 
+    var groupToggle = document.createElement('button');
+    groupToggle.type = 'button';
+    groupToggle.className = 'completed-group-toggle';
+    groupToggle.setAttribute('aria-expanded', 'true');
+
     var groupArrow = document.createElement('span');
     groupArrow.className = 'completed-group-arrow';
     groupArrow.innerHTML = '&#9660;';
+    groupArrow.setAttribute('aria-hidden', 'true');
 
     var groupLabel = document.createElement('span');
     groupLabel.className = 'completed-group-label';
     groupLabel.textContent = sectionLabelMap[sectionId] || sectionId;
 
-    groupHeader.appendChild(groupArrow);
-    groupHeader.appendChild(groupLabel);
+    groupToggle.appendChild(groupArrow);
+    groupToggle.appendChild(groupLabel);
+    groupHeader.appendChild(groupToggle);
 
     var list = document.createElement('ol');
     list.className = 'tasks';
+    list.id = 'completed-group-' + sectionId;
+    groupToggle.setAttribute('aria-controls', list.id);
     attachTaskReorder(list);
 
-    groupHeader.addEventListener('click', function () {
-      groupHeader.classList.toggle('collapsed');
-      list.classList.toggle('collapsed');
+    groupToggle.addEventListener('click', function () {
+      var collapsed = groupHeader.classList.toggle('collapsed');
+      list.classList.toggle('collapsed', collapsed);
+      groupToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     });
 
     group.appendChild(groupHeader);
@@ -639,9 +703,16 @@
     header.className = 'section-header';
     header.draggable = true;
 
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'section-toggle';
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-controls', sectionData.id);
+
     var arrow = document.createElement('span');
     arrow.className = 'section-arrow';
     arrow.innerHTML = '&#9660;';
+    arrow.setAttribute('aria-hidden', 'true');
 
     var label = document.createElement('span');
     label.className = 'section-label';
@@ -651,9 +722,30 @@
     count.className = 'section-count';
     count.id = 'count-' + sectionData.id;
 
-    header.appendChild(arrow);
-    header.appendChild(label);
-    header.appendChild(count);
+    toggle.appendChild(arrow);
+    toggle.appendChild(label);
+    toggle.appendChild(count);
+    header.appendChild(toggle);
+
+    var reorderControls = document.createElement('span');
+    reorderControls.className = 'section-reorder-controls';
+
+    var moveUpBtn = document.createElement('button');
+    moveUpBtn.type = 'button';
+    moveUpBtn.className = 'section-move-btn section-move-up';
+    moveUpBtn.setAttribute('aria-label', 'Move ' + sectionData.label + ' section up');
+    moveUpBtn.textContent = '↑';
+
+    var moveDownBtn = document.createElement('button');
+    moveDownBtn.type = 'button';
+    moveDownBtn.className = 'section-move-btn section-move-down';
+    moveDownBtn.setAttribute('aria-label', 'Move ' + sectionData.label + ' section down');
+    moveDownBtn.textContent = '↓';
+
+    reorderControls.appendChild(moveUpBtn);
+    reorderControls.appendChild(moveDownBtn);
+    header.appendChild(reorderControls);
+
     section.appendChild(header);
 
     if (sectionData.note) {
@@ -682,11 +774,22 @@
     if (!getFilterSlugFromPath() && activeTaskView === 'all') {
       header.classList.add('collapsed');
       list.classList.add('collapsed');
+      toggle.setAttribute('aria-expanded', 'false');
     }
 
-    header.addEventListener('click', function () {
-      header.classList.toggle('collapsed');
-      list.classList.toggle('collapsed');
+    // A drag gesture that starts and ends on the header can, in some
+    // browsers, still fire a click on release - without this guard that
+    // click would immediately re-toggle the section a drag just opened
+    // or closed.
+    var sectionJustDragged = false;
+
+    toggle.addEventListener('click', function () {
+      if (sectionJustDragged) {
+        return;
+      }
+      var collapsed = header.classList.toggle('collapsed');
+      list.classList.toggle('collapsed', collapsed);
+      toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     });
 
     header.addEventListener('dragstart', function (e) {
@@ -697,7 +800,13 @@
 
     header.addEventListener('dragend', function () {
       section.classList.remove('dragging');
+      sectionJustDragged = true;
+      setTimeout(function () { sectionJustDragged = false; }, 0);
+      updateSectionMoveButtons();
     });
+
+    moveUpBtn.addEventListener('click', function () { moveSection(section, -1); });
+    moveDownBtn.addEventListener('click', function () { moveSection(section, 1); });
 
     return section;
   }
@@ -730,12 +839,42 @@
     }
   });
 
+  // Keyboard-only equivalent of dragging a section header: swaps it with
+  // the sibling in `direction` (-1 up, 1 down) so the same DOM order the
+  // drag path produces is reachable without a pointer.
+  function moveSection(sectionEl, direction) {
+    var sibling = direction < 0 ? sectionEl.previousElementSibling : sectionEl.nextElementSibling;
+    if (!sibling) {
+      return;
+    }
+    if (direction < 0) {
+      sectionsContainer.insertBefore(sectionEl, sibling);
+    } else {
+      sectionsContainer.insertBefore(sibling, sectionEl);
+    }
+    updateSectionMoveButtons();
+  }
+
+  function updateSectionMoveButtons() {
+    var sections = sectionsContainer.children;
+    var total = sections.length;
+    Array.prototype.forEach.call(sections, function (sectionEl, index) {
+      var upBtn = sectionEl.querySelector(':scope > .section-header > .section-reorder-controls > .section-move-up');
+      var downBtn = sectionEl.querySelector(':scope > .section-header > .section-reorder-controls > .section-move-down');
+      if (upBtn) { upBtn.disabled = index === 0; }
+      if (downBtn) { downBtn.disabled = index === total - 1; }
+    });
+  }
+
   function renumber(list) {
-    var n = 1;
-    Array.prototype.forEach.call(list.children, function (task) {
+    var total = list.children.length;
+    Array.prototype.forEach.call(list.children, function (task, index) {
       var num = task.querySelector('.num');
-      num.textContent = String(n).padStart(2, '0');
-      n += 1;
+      num.textContent = String(index + 1).padStart(2, '0');
+      var upBtn = task.querySelector(':scope > .task-reorder-controls > .task-move-up');
+      var downBtn = task.querySelector(':scope > .task-reorder-controls > .task-move-down');
+      if (upBtn) { upBtn.disabled = index === 0; }
+      if (downBtn) { downBtn.disabled = index === total - 1; }
     });
   }
 
@@ -789,8 +928,11 @@
   var scratchpadInput = document.getElementById('scratchpad-input');
   var scratchpadStatusEl = document.getElementById('scratchpad-status');
   var scratchpadSaveTimer = null;
-  var scratchpadStatusTimer = null;
+  var scratchpadLastSaved = '';
 
+  // Persistent, not a flash: it stays until the next state change so it can
+  // be trusted at a glance, rather than fading on a timer regardless of
+  // whether the save actually succeeded.
   function showScratchpadStatus(text, isError) {
     if (!scratchpadStatusEl) {
       return;
@@ -798,19 +940,34 @@
     scratchpadStatusEl.textContent = text;
     scratchpadStatusEl.classList.toggle('error', !!isError);
     scratchpadStatusEl.classList.add('show');
-    if (scratchpadStatusTimer) {
-      clearTimeout(scratchpadStatusTimer);
-    }
-    scratchpadStatusTimer = setTimeout(function () {
-      scratchpadStatusEl.classList.remove('show');
-    }, 2000);
   }
 
-  function saveScratchpad() {
+  function saveScratchpad(useBeacon) {
+    if (scratchpadSaveTimer) {
+      clearTimeout(scratchpadSaveTimer);
+      scratchpadSaveTimer = null;
+    }
+
+    var text = scratchpadInput.value;
+    if (text === scratchpadLastSaved) {
+      return;
+    }
+
+    if (useBeacon && navigator.sendBeacon) {
+      var blob = new Blob([JSON.stringify({ text: text })], { type: 'application/json' });
+      if (navigator.sendBeacon('/tasks/scratchpad', blob)) {
+        scratchpadLastSaved = text;
+        return;
+      }
+      // sendBeacon declined to queue the request (e.g. payload too large) -
+      // fall through to a normal fetch, best-effort during unload.
+    }
+
+    showScratchpadStatus('Saving...', false);
     fetch('/tasks/scratchpad', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: scratchpadInput.value })
+      body: JSON.stringify({ text: text })
     })
       .then(function (response) {
         if (!response.ok) {
@@ -819,6 +976,7 @@
         return response.json();
       })
       .then(function () {
+        scratchpadLastSaved = text;
         showScratchpadStatus('Saved', false);
       })
       .catch(function (err) {
@@ -828,16 +986,29 @@
 
   if (scratchpadInput) {
     scratchpadInput.addEventListener('input', function () {
+      showScratchpadStatus('Unsaved changes', false);
       if (scratchpadSaveTimer) {
         clearTimeout(scratchpadSaveTimer);
       }
-      scratchpadSaveTimer = setTimeout(saveScratchpad, 800);
+      scratchpadSaveTimer = setTimeout(function () { saveScratchpad(false); }, 800);
     });
+
+    // The debounce alone loses keystrokes typed in the 800ms before a
+    // navigation or tab close - flush immediately on every point where the
+    // page might go away.
+    scratchpadInput.addEventListener('blur', function () { saveScratchpad(false); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') {
+        saveScratchpad(true);
+      }
+    });
+    window.addEventListener('pagehide', function () { saveScratchpad(true); });
   }
 
   function render(data) {
     if (scratchpadInput) {
       scratchpadInput.value = data.scratchpad || '';
+      scratchpadLastSaved = data.scratchpad || '';
     }
 
     taskById = {};
@@ -871,6 +1042,7 @@
     sectionsToRender.forEach(function (sectionData) {
       sectionsContainer.appendChild(buildSection(sectionData));
     });
+    updateSectionMoveButtons();
 
     if (data.footnote && !filterSlug) {
       footnoteEl.innerHTML = data.footnote;
@@ -891,11 +1063,7 @@
     updateViewCounts();
 
     // Completed panel starts collapsed.
-    completedHeader.classList.add('collapsed');
-    completedBody.classList.add('collapsed');
-    if (completedFilterBar) {
-      completedFilterBar.classList.add('collapsed');
-    }
+    setCompletedExpanded(false);
 
     applySearchFilter();
   }
@@ -931,13 +1099,22 @@
     }
   }
 
-  completedHeader.addEventListener('click', function () {
-    completedHeader.classList.toggle('collapsed');
-    completedBody.classList.toggle('collapsed');
+  function setCompletedExpanded(expanded) {
+    completedHeader.classList.toggle('collapsed', !expanded);
+    completedBody.classList.toggle('collapsed', !expanded);
     if (completedFilterBar) {
-      completedFilterBar.classList.toggle('collapsed');
+      completedFilterBar.classList.toggle('collapsed', !expanded);
     }
-  });
+    if (completedToggle) {
+      completedToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    }
+  }
+
+  if (completedToggle) {
+    completedToggle.addEventListener('click', function () {
+      setCompletedExpanded(completedHeader.classList.contains('collapsed'));
+    });
+  }
 
   var searchInput = document.getElementById('task-search');
 

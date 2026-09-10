@@ -68,9 +68,11 @@
 
     <aside class="completed-panel">
       <div class="completed-header" id="completed-header">
-        <span class="section-arrow" id="completed-arrow">&#9660;</span>
-        <span class="section-label">Completed</span>
-        <span class="section-count" id="completed-count"></span>
+        <button type="button" class="completed-toggle" id="completed-toggle" aria-expanded="true" aria-controls="completed-body">
+          <span class="section-arrow" id="completed-arrow" aria-hidden="true">&#9660;</span>
+          <span class="section-label">Completed</span>
+          <span class="section-count" id="completed-count"></span>
+        </button>
       </div>
       <div class="completed-filter-bar" id="completed-filter-bar">
         <button type="button" class="completed-filter-pill active" data-filter="all">All</button>

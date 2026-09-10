@@ -5,7 +5,10 @@
   var statusEl = document.getElementById('task-detail-status');
   var metaEl = document.getElementById('task-meta');
   var deleteBtn = document.getElementById('delete-task-btn');
+  var submitBtn = form.querySelector('.submit-btn');
+  submitBtn.disabled = true;
 
+  var fieldSection = document.getElementById('field-section');
   var fieldDesc = document.getElementById('field-desc');
   var fieldNote = document.getElementById('field-note');
   var fieldStatus = document.getElementById('field-status');
@@ -50,9 +53,20 @@
     cmdbField.style.display = workType === 'new-feature' ? '' : 'none';
   }
 
+  function updateWorkSectionVisibility() {
+    var isWorkTask = fieldSection.value === WORK_SECTION_ID;
+    workTypeFields.style.display = isWorkTask ? '' : 'none';
+    envFields.style.display = isWorkTask ? '' : 'none';
+    if (isWorkTask) {
+      updateEnvFieldsVisibility();
+    }
+  }
+
   workTypeRadios.forEach(function (radio) {
     radio.addEventListener('change', updateEnvFieldsVisibility);
   });
+
+  fieldSection.addEventListener('change', updateWorkSectionVisibility);
 
   function getTaskIdFromPath() {
     var match = window.location.pathname.match(/^\/task\/([^/]+)$/);
@@ -106,6 +120,17 @@
     fieldParentId.value = task.parent_id || '';
   }
 
+  function populateSectionOptions(data, currentSectionId) {
+    fieldSection.innerHTML = '';
+    (data.sections || []).forEach(function (section) {
+      var option = document.createElement('option');
+      option.value = section.id;
+      option.textContent = section.label;
+      fieldSection.appendChild(option);
+    });
+    fieldSection.value = currentSectionId || '';
+  }
+
   function populateForm(task, section) {
     fieldDesc.value = task.desc || '';
     fieldNote.value = task.note || '';
@@ -131,12 +156,7 @@
     fieldEnvProd.checked = !!task.env_prod;
     fieldCmdbUpdated.checked = !!task.cmdb_updated;
 
-    var isWorkTask = section && section.id === WORK_SECTION_ID;
-    workTypeFields.style.display = isWorkTask ? '' : 'none';
-    envFields.style.display = isWorkTask ? '' : 'none';
-    if (isWorkTask) {
-      updateEnvFieldsVisibility();
-    }
+    updateWorkSectionVisibility();
 
     var tags = task.tags || [];
     var flagTag = tags.filter(function (t) { return t.flag; })[0];
@@ -172,6 +192,93 @@
     return tags;
   }
 
+  function getFieldsPayload() {
+    return {
+      section_id: fieldSection.value,
+      desc: fieldDesc.value,
+      note: fieldNote.value,
+      status: fieldStatus.value,
+      priority: fieldPriority.value,
+      tags: buildTagsPayload(),
+      notes: fieldNotes.value,
+      ticket_number: fieldTicketNumber.value,
+      assignment_group: fieldAssignmentGroup.value,
+      requested_by: fieldRequestedBy.value,
+      due_date: fieldDueDate.value,
+      focus_today: fieldFocusToday.checked,
+      follow_up_date: fieldFollowUpDate.value,
+      time_estimate: fieldTimeEstimate.value,
+      related_files: fieldRelatedFiles.value,
+      parent_id: fieldParentId.value,
+      work_type: getWorkType(),
+      env_dev: fieldEnvDev.checked,
+      env_qa: fieldEnvQa.checked,
+      env_prod: fieldEnvProd.checked,
+      cmdb_updated: fieldCmdbUpdated.checked
+    };
+  }
+
+  // null until the form is first populated, so a stray 'input'/'change'
+  // event fired while the page is still loading can never read as dirty.
+  var savedSnapshot = null;
+  // Set right before a confirmed in-app navigation proceeds, so the
+  // beforeunload handler that fires a moment later (the browser's own
+  // "leave site?" prompt) doesn't double up on a warning the user already
+  // answered.
+  var suppressUnloadGuard = false;
+  var UNSAVED_MESSAGE = 'You have unsaved changes on this task. Leave without saving?';
+
+  function isDirty() {
+    return savedSnapshot !== null && JSON.stringify(getFieldsPayload()) !== savedSnapshot;
+  }
+
+  function markSaved() {
+    savedSnapshot = JSON.stringify(getFieldsPayload());
+    showStatus('Saved', false);
+    submitBtn.disabled = true;
+  }
+
+  function handleFieldChange() {
+    if (isDirty()) {
+      showStatus('Unsaved changes', false);
+      submitBtn.disabled = false;
+    } else {
+      showStatus('Saved', false);
+      submitBtn.disabled = true;
+    }
+  }
+
+  form.addEventListener('input', handleFieldChange);
+  form.addEventListener('change', handleFieldChange);
+
+  window.addEventListener('beforeunload', function (e) {
+    if (isDirty() && !suppressUnloadGuard) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  // beforeunload alone doesn't cover every way to leave this page: it never
+  // fires for a scripted same-page transition, and even for a real link
+  // click it only shows the browser's generic, unhelpful prompt. Intercept
+  // link clicks directly (in capture phase, ahead of nav.js's plain <a>
+  // navigation) so both the nav bar links and the "All tasks" back-link
+  // get the same explicit confirmation.
+  document.addEventListener('click', function (e) {
+    if (!isDirty()) {
+      return;
+    }
+    var link = e.target.closest ? e.target.closest('a[href]') : null;
+    if (!link || link.target === '_blank') {
+      return;
+    }
+    if (window.confirm(UNSAVED_MESSAGE)) {
+      suppressUnloadGuard = true;
+    } else {
+      e.preventDefault();
+    }
+  }, true);
+
   if (!taskId) {
     showStatus('No task specified.', true);
     form.style.display = 'none';
@@ -191,7 +298,9 @@
           return;
         }
         populateParentOptions(data, found.task);
+        populateSectionOptions(data, found.section ? found.section.id : '');
         populateForm(found.task, found.section);
+        markSaved();
       })
       .catch(function (err) {
         showStatus('Failed to load task: ' + err.message, true);
@@ -200,35 +309,13 @@
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      var submitBtn = form.querySelector('.submit-btn');
       submitBtn.disabled = true;
+      showStatus('Saving...', false);
 
       fetch('/tasks/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([{
-          id: taskId,
-          desc: fieldDesc.value,
-          note: fieldNote.value,
-          status: fieldStatus.value,
-          priority: fieldPriority.value,
-          tags: buildTagsPayload(),
-          notes: fieldNotes.value,
-          ticket_number: fieldTicketNumber.value,
-          assignment_group: fieldAssignmentGroup.value,
-          requested_by: fieldRequestedBy.value,
-          due_date: fieldDueDate.value,
-          focus_today: fieldFocusToday.checked,
-          follow_up_date: fieldFollowUpDate.value,
-          time_estimate: fieldTimeEstimate.value,
-          related_files: fieldRelatedFiles.value,
-          parent_id: fieldParentId.value,
-          work_type: getWorkType(),
-          env_dev: fieldEnvDev.checked,
-          env_qa: fieldEnvQa.checked,
-          env_prod: fieldEnvProd.checked,
-          cmdb_updated: fieldCmdbUpdated.checked
-        }])
+        body: JSON.stringify([Object.assign({ id: taskId }, getFieldsPayload())])
       })
         .then(function (response) {
           if (!response.ok) {
@@ -237,12 +324,10 @@
           return response.json();
         })
         .then(function () {
-          showStatus('Saved', false);
+          markSaved();
         })
         .catch(function (err) {
           showStatus(err.message, true);
-        })
-        .finally(function () {
           submitBtn.disabled = false;
         });
     });
@@ -268,6 +353,7 @@
           return response.json();
         })
         .then(function () {
+          suppressUnloadGuard = true;
           window.location.href = '/tasks';
         })
         .catch(function (err) {

@@ -237,8 +237,22 @@ a:hover { color: var(--ink); }
   display: flex;
   align-items: center;
   gap: 8px;
-  cursor: pointer;
   user-select: none;
+}
+
+.completed-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .completed-header .section-label {
@@ -338,12 +352,25 @@ a:hover { color: var(--ink); }
 .completed-group-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  cursor: pointer;
   user-select: none;
   border-bottom: 1px solid var(--line);
   padding-bottom: 4px;
   margin-bottom: 4px;
+}
+
+.completed-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .completed-group-label {
@@ -572,6 +599,66 @@ header .meta {
   margin-left: 4px;
 }
 
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.section-reorder-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.section-move-btn {
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.section-header:hover .section-move-btn {
+  opacity: 0.7;
+}
+
+.section-move-btn:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--flag);
+}
+
+.section-move-btn:disabled {
+  opacity: 0.15;
+  cursor: default;
+}
+
+.section-toggle:focus-visible,
+.section-move-btn:focus-visible,
+.completed-toggle:focus-visible,
+.completed-group-toggle:focus-visible,
+.task-move-btn:focus-visible,
+.task .desc-row:focus-visible {
+  outline: 2px solid var(--flag);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 ol.tasks {
   overflow: hidden;
   max-height: 4000px;
@@ -636,6 +723,47 @@ ol.tasks > .task:last-child {
 }
 
 .completed-panel .drag-handle {
+  display: none;
+}
+
+.task-reorder-controls {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 3px;
+}
+
+.task-move-btn {
+  width: 18px;
+  height: 15px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.task:hover .task-move-btn {
+  opacity: 0.7;
+}
+
+.task-move-btn:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--flag);
+}
+
+.task-move-btn:disabled {
+  opacity: 0.12;
+  cursor: default;
+}
+
+.completed-panel .task-reorder-controls {
   display: none;
 }
 
@@ -826,6 +954,14 @@ a.num:hover {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
@@ -859,10 +995,6 @@ a.num:hover {
 
 .task.task-collapsed .desc {
   margin-bottom: 2px;
-}
-
-.task.task-collapsed .priority-select {
-  display: none;
 }
 
 .task .note {
@@ -1338,6 +1470,11 @@ a.field-pill-ticket:hover { border-color: var(--flag); color: var(--flag); }
 
 .submit-btn:hover {
   background: var(--ink);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .new-task-cta {

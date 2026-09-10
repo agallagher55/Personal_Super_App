@@ -390,7 +390,7 @@
         <h3>Tasks: make the ServiceNow layer trustworthy</h3>
         <ul>
           <li>Sync health is <strong>done</strong> <span class="done-date">(2026-09-10)</span>: each task now records when its ticket was opened and last changed upstream, every sync attempt is logged to <code>sync_runs</code> whether it succeeded or failed, and <code>/tasks</code> shows how fresh the data is <span class="fine">(schema migration 5, <code>/tasks/sync-status.json</code>)</span></li>
-          <li>Rest of Phase&nbsp;1: persistent saved/unsaved state for task edits, and real button semantics on the collapsible sections <span class="fine">(they're <code>div</code>s with click handlers today, so none of them are keyboard reachable)</span></li>
+          <li>Rest of Phase&nbsp;1 is <strong>done</strong> <span class="done-date">(2026-09-10)</span>: task edits now show a persistent Saved/Unsaved changes/Saving state and warn before a navigation would discard them (<a href="https://github.com/agallagher55/Personal_Super_App/issues/162">#162</a>), and the collapsible sections are real buttons with <code>aria-expanded</code> and keyboard-operable move-up/move-down controls instead of <code>div</code>s with click handlers (<a href="https://github.com/agallagher55/Personal_Super_App/issues/163">#163</a>)</li>
           <li>Then Phase&nbsp;2: date the scratchpad so yesterday's list stops being presented as today's, reconcile tickets that drop out of the active query without ever deleting their notes, and add real queue facets</li>
           <li>Full plan and per-item scope in <a href="https://github.com/agallagher55/Personal_Super_App/issues/160">issue #160</a>; the review itself is <code>service_now/TASKS-UX-REVIEW.md</code></li>
         </ul>
