@@ -197,6 +197,8 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             return super().do_GET()
         if path == '/tasks.json':
             return self.serve_tasks_json()
+        if path == '/tasks/sync-status.json':
+            return self.serve_tasks_sync_status()
         if path == '/tasks':
             self.path = '/html/tasks/index.html'
             return super().do_GET()
@@ -531,6 +533,14 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Pragma', 'no-cache')
         self.end_headers()
         self.wfile.write(body)
+
+    def serve_tasks_sync_status(self):
+        conn = tasks_db.connect()
+        try:
+            status = tasks_db.load_sync_status(conn)
+        finally:
+            conn.close()
+        self.send_json(200, status)
 
     def do_POST(self):
         parsed = urlparse(self.path)

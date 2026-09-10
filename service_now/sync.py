@@ -17,10 +17,12 @@ same backend/tasks_db.py helpers rather than touching the file itself.
 """
 
 import argparse
+import hashlib
 import os
 import sys
 import uuid
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -73,6 +75,33 @@ def now_iso():
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
+SERVICENOW_TIMEZONE = ZoneInfo('America/Halifax')
+
+
+def normalize_servicenow_timestamp(value):
+    """Convert ServiceNow's instance-local timestamp into canonical UTC."""
+    value = (value or '').strip()
+    if not value:
+        return ''
+    local_time = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+    return local_time.replace(tzinfo=SERVICENOW_TIMEZONE).astimezone(timezone.utc).strftime(
+        '%Y-%m-%dT%H:%M:%SZ'
+    )
+
+
+def query_fingerprint(query):
+    return hashlib.sha256(query.encode('utf-8')).hexdigest()
+
+
+def safe_error_message(error, config):
+    """Keep configured credentials out of the persisted sync diagnostics."""
+    message = str(error)
+    for value in (config.token, config.password, config.user):
+        if value:
+            message = message.replace(value, '[redacted]')
+    return message[:500]
+
+
 def field(record, name):
     """sysparm_display_value=all wraps every field as {value, display_value}."""
     value = record.get(name)
@@ -108,6 +137,10 @@ def map_record(record):
         'requested_by': field(record, 'opened_by'),
         'due_date': due_date,
         'status': map_status(field(record, 'state')),
+        'source_opened_at': normalize_servicenow_timestamp(
+            field(record, 'opened_at') or field(record, 'sys_created_on')
+        ),
+        'source_updated_at': normalize_servicenow_timestamp(field(record, 'sys_updated_on')),
     }
 
 
@@ -132,7 +165,7 @@ def find_existing_task(tasks, section_id, mapped):
     return None
 
 
-def upsert(tasks, section_id, mapped, dry_run, pending):
+def upsert(tasks, section_id, mapped, sync_started_at, dry_run, pending):
     """Upsert one mapped record into the in-memory `tasks` list, recording
     in `pending` which rows the caller then has to write. No 'done' key: it
     is a generated column derived from status, so there is nothing here to
@@ -156,6 +189,9 @@ def upsert(tasks, section_id, mapped, dry_run, pending):
             'requested_by': mapped['requested_by'],
             'due_date': mapped['due_date'],
             'servicenow_sys_id': mapped['servicenow_sys_id'],
+            'source_opened_at': mapped['source_opened_at'],
+            'source_updated_at': mapped['source_updated_at'],
+            'last_seen_at': sync_started_at,
             'created': now,
             'modified': now,
             'completed': now if mapped['status'] == 'done' else '',
@@ -176,11 +212,37 @@ def upsert(tasks, section_id, mapped, dry_run, pending):
         existing['completed'] = now if mapped['status'] == 'done' else ''
         changed = True
 
+    # These fields are source freshness metadata, not an actionable source
+    # change. They still have to be written every successful run so issue
+    # #167 can later reconcile records no longer returned by the query.
+    refreshed = False
+    for f in ('source_opened_at', 'source_updated_at'):
+        if existing.get(f, '') != mapped[f]:
+            existing[f] = mapped[f]
+            refreshed = True
+    if existing.get('last_seen_at', '') != sync_started_at:
+        existing['last_seen_at'] = sync_started_at
+        refreshed = True
+
     if changed and not dry_run:
         existing['modified'] = now
         pending['updated'].add(existing['id'])
 
+    if refreshed and not dry_run:
+        pending['refreshed'].add(existing['id'])
+
     return 'updated' if changed else 'unchanged'
+
+
+def record_sync_error(conn, started_at, query, error, config):
+    with conn:
+        tasks_db.insert_sync_run(conn, {
+            'started_at': started_at,
+            'finished_at': now_iso(),
+            'result': 'error',
+            'query_fingerprint': query_fingerprint(query),
+            'error': safe_error_message(error, config),
+        })
 
 
 def main():
@@ -204,43 +266,62 @@ def main():
 
     query = config.query or build_default_query(config.user_sys_id)
     print('Querying %s: %s' % (config.table, query))
-
-    try:
-        records = client.get_records(config.table, query=query)
-    except ServiceNowError as e:
-        raise SystemExit(str(e))
-
-    print('Fetched %d record(s).' % len(records))
-
+    started_at = now_iso()
     conn = tasks_db.connect()
 
     try:
         section = find_section(conn, config.section_id)
+        try:
+            records = client.get_records(config.table, query=query)
+        except ServiceNowError as error:
+            if not args.dry_run:
+                record_sync_error(conn, started_at, query, error, config)
+            raise SystemExit(safe_error_message(error, config))
+
+        print('Fetched %d record(s).' % len(records))
         tasks = tasks_db.load_tasks(conn)
 
-        pending = {'created': [], 'updated': set()}
+        pending = {'created': [], 'updated': set(), 'refreshed': set()}
         counts = {'created': 0, 'updated': 0, 'unchanged': 0}
-        for record in records:
-            mapped = map_record(record)
-            outcome = upsert(tasks, section['id'], mapped, args.dry_run, pending)
-            counts[outcome] += 1
-            print('  [%s] %s - %s' % (outcome, mapped['ticket_number'] or '(no number)', mapped['desc']))
+        try:
+            for record in records:
+                mapped = map_record(record)
+                outcome = upsert(tasks, section['id'], mapped, started_at, args.dry_run, pending)
+                counts[outcome] += 1
+                print('  [%s] %s - %s' % (outcome, mapped['ticket_number'] or '(no number)', mapped['desc']))
 
-        print('created=%d updated=%d unchanged=%d' % (counts['created'], counts['updated'], counts['unchanged']))
+            print('created=%d updated=%d unchanged=%d' % (counts['created'], counts['updated'], counts['unchanged']))
 
-        if args.dry_run:
-            print('Dry run -- data/tasks.db was not modified.')
-            return
+            if args.dry_run:
+                print('Dry run -- data/tasks.db was not modified.')
+                return
 
-        # One transaction for the whole run: a partial sync can't leave the
-        # store half-updated the way two file writes could.
-        with conn:
-            for task in pending['created']:
-                tasks_db.insert_task(conn, task)
+            # One transaction for the whole run: a partial sync can't leave
+            # the store half-updated, and the matching health row only lands
+            # if every task write does too.
+            with conn:
+                for task in pending['created']:
+                    tasks_db.insert_task(conn, task)
 
-            for task in tasks:
-                if task['id'] in pending['updated']:
-                    tasks_db.update_task(conn, task)
+                touched = pending['updated'] | pending['refreshed']
+                for task in tasks:
+                    if task['id'] in touched:
+                        tasks_db.update_task(conn, task)
+
+                tasks_db.insert_sync_run(conn, {
+                    'started_at': started_at,
+                    'finished_at': now_iso(),
+                    'result': 'ok',
+                    'records_seen': len(records),
+                    'created_count': counts['created'],
+                    'updated_count': counts['updated'],
+                    'unchanged_count': counts['unchanged'],
+                    'query_fingerprint': query_fingerprint(query),
+                })
+        except Exception as error:
+            if not args.dry_run:
+                record_sync_error(conn, started_at, query, error, config)
+            raise SystemExit(safe_error_message(error, config))
 
         print('Saved to %s' % tasks_db.DB_PATH)
     finally:
