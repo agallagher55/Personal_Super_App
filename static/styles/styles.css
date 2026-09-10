@@ -1654,6 +1654,64 @@ a.field-pill-ticket:hover { border-color: var(--flag); color: var(--flag); }
 .task-view-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper-raised); }
 .view-count { margin-left: 4px; opacity: .72; }
 
+.task-facet-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 18px;
+  margin: -10px 0 24px;
+}
+
+.task-facet-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-facet-label,
+.task-sort-control {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+
+.task-facet-chip,
+.task-filter-reset,
+.task-sort-control select {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.task-facet-chip,
+.task-filter-reset {
+  border-radius: 999px;
+  cursor: pointer;
+  padding: 6px 10px;
+}
+
+.task-facet-chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-raised);
+}
+
+.task-sort-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-sort-control select { border-radius: 5px; padding: 6px 8px; }
+.task-filter-reset { margin-left: 4px; }
+
 .task-view-empty {
   margin: -8px 0 24px;
   padding: 14px 16px;
