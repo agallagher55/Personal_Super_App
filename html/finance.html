@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finance - Personal Super App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles/styles.css">
+<link rel="stylesheet" href="/static/styles/nav.css">
+<link rel="stylesheet" href="/static/finance/css/ticker.css">
+<link rel="stylesheet" href="/static/finance/css/dashboard.css">
+<script>
+  (function () {
+    var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+</head>
+<body>
+  <div id="site-nav"></div>
+  <script src="/static/js/nav.js"></script>
+  <div class="page page-finance">
+    <div class="sheet finance-sheet">
+      <header>
+        <div class="title">Finance</div>
+        <div class="meta">Net worth dashboard</div>
+      </header>
+
+      <p class="fin-banner" id="fin-sample-note"></p>
+
+      <div class="fin-import-bar">
+        <button class="fin-import-button" id="fin-import-button" type="button">Import CSV Export</button>
+        <input type="file" id="fin-import-input" accept=".csv" hidden>
+        <span class="fin-import-status" id="fin-import-status"></span>
+        <span class="fin-last-imported" id="fin-last-imported"></span>
+      </div>
+
+      <div class="fin-stat-row">
+        <div class="fin-stat">
+          <div class="fin-stat-label">Net Worth</div>
+          <div class="fin-stat-value" id="fin-stat-net-worth">&middot;&middot;&middot;</div>
+        </div>
+        <div class="fin-stat">
+          <div class="fin-stat-label">Total Assets</div>
+          <div class="fin-stat-value" id="fin-stat-assets">&middot;&middot;&middot;</div>
+        </div>
+        <div class="fin-stat">
+          <div class="fin-stat-label">Total Debt</div>
+          <div class="fin-stat-value" id="fin-stat-debt">&middot;&middot;&middot;</div>
+        </div>
+      </div>
+
+      <div class="fin-donut-row">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Asset Allocation</div>
+          <div class="donut-card-body">
+            <div class="donut-wrap">
+              <div id="fin-donut"></div>
+              <div class="donut-center">
+                <span class="donut-center-label">Assets</span>
+                <span class="donut-center-value" id="fin-donut-center-value">&middot;&middot;&middot;</span>
+              </div>
+            </div>
+            <div class="fin-legend" id="fin-allocation-legend"></div>
+          </div>
+        </div>
+
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Investment Breakdown</div>
+          <div class="donut-card-body">
+            <div class="donut-wrap">
+              <div id="fin-investment-donut"></div>
+              <div class="donut-center">
+                <span class="donut-center-label">Invested</span>
+                <span class="donut-center-value" id="fin-investment-donut-center-value">&middot;&middot;&middot;</span>
+              </div>
+            </div>
+            <div class="fin-legend" id="fin-investment-legend"></div>
+          </div>
+        </div>
+
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Portfolio by Stock/ETF</div>
+          <div class="donut-card-body">
+            <div class="donut-wrap">
+              <div id="fin-stock-donut"></div>
+              <div class="donut-center">
+                <span class="donut-center-label">Holdings</span>
+                <span class="donut-center-value" id="fin-stock-donut-center-value">&middot;&middot;&middot;</span>
+              </div>
+            </div>
+            <div class="fin-legend" id="fin-stock-legend"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fin-chart-row">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Net Worth Over Time</div>
+          <div class="fin-chart-wrap">
+            <canvas class="fin-networth-canvas" id="fin-networth-canvas"></canvas>
+            <div class="fin-tooltip" id="fin-networth-tooltip"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fin-block-header">
+        <span class="fin-block-title">Spending</span>
+        <select class="fin-spending-window" id="fin-spending-window">
+          <option value="month">This month</option>
+          <option value="30d">Last 30 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="all">All time</option>
+        </select>
+      </div>
+
+      <div class="fin-donut-row fin-spending-row">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Spending by Category</div>
+          <div class="donut-card-body">
+            <div class="donut-wrap">
+              <div id="fin-spending-donut"></div>
+              <div class="donut-center">
+                <span class="donut-center-label">Spent</span>
+                <span class="donut-center-value" id="fin-spending-donut-center-value">&middot;&middot;&middot;</span>
+              </div>
+            </div>
+            <div class="fin-legend" id="fin-spending-legend"></div>
+          </div>
+        </div>
+
+        <div class="fin-overview-card fin-spending-merchants-card">
+          <div class="fin-overview-card-title">Top Merchants</div>
+          <div class="fin-merchants-filter" id="fin-merchants-filter" hidden>
+            Filtered by <span class="fin-filter-chip" id="fin-filter-chip-label"></span>
+            <button class="fin-filter-clear" id="fin-merchants-filter-clear" type="button">&times; Clear</button>
+          </div>
+          <div class="fin-rows" id="fin-spending-merchants"></div>
+        </div>
+      </div>
+
+      <div class="fin-chart-row">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Spend by Month</div>
+          <div class="fin-chart-wrap">
+            <canvas class="fin-bar-canvas" id="fin-spend-month-canvas"></canvas>
+            <div class="fin-tooltip" id="fin-spend-month-tooltip"></div>
+            <p class="fin-empty-note" id="fin-spend-month-empty" hidden>No spending history yet — import a CSV export above to get started.</p>
+          </div>
+          <div class="fin-legend fin-legend-horizontal" id="fin-spend-month-legend"></div>
+        </div>
+      </div>
+
+      <div class="fin-chart-row">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title">Bitcoin Accumulated (Shakepay Round-ups)</div>
+          <div class="fin-chart-wrap">
+            <canvas class="fin-bar-canvas" id="fin-btc-month-canvas"></canvas>
+            <div class="fin-tooltip" id="fin-btc-month-tooltip"></div>
+            <p class="fin-empty-note" id="fin-btc-month-empty" hidden>No Shakepay round-ups yet — run backend/finance/import_shakepay.py to get started.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="fin-block-header">
+        <span class="fin-block-title">Cash Flow</span>
+        <select class="fin-spending-window" id="fin-cashflow-window">
+          <option value="month">This month</option>
+          <option value="30d">Last 30 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="all">All time</option>
+        </select>
+      </div>
+
+      <div class="fin-stat-row fin-cashflow-stat-row">
+        <div class="fin-stat">
+          <div class="fin-stat-label">Income</div>
+          <div class="fin-stat-value" id="fin-cashflow-income">&middot;&middot;&middot;</div>
+        </div>
+        <div class="fin-stat">
+          <div class="fin-stat-label">Expense</div>
+          <div class="fin-stat-value" id="fin-cashflow-expense">&middot;&middot;&middot;</div>
+        </div>
+        <div class="fin-stat">
+          <div class="fin-stat-label">Net</div>
+          <div class="fin-stat-value" id="fin-cashflow-net">&middot;&middot;&middot;</div>
+        </div>
+      </div>
+
+      <div class="fin-chart-row">
+        <div class="fin-overview-card">
+          <div class="fin-overview-card-title-row">
+            <div class="fin-overview-card-title">Income vs Expense by Month</div>
+            <div class="fin-chart-legend">
+              <span class="fin-chart-legend-item"><span class="fin-chart-legend-swatch" style="background:var(--status-green)"></span>Income</span>
+              <span class="fin-chart-legend-item"><span class="fin-chart-legend-swatch" style="background:var(--status-red)"></span>Expense</span>
+            </div>
+          </div>
+          <div class="fin-chart-wrap">
+            <canvas class="fin-bar-canvas" id="fin-cashflow-canvas"></canvas>
+            <div class="fin-tooltip" id="fin-cashflow-tooltip"></div>
+            <p class="fin-empty-note" id="fin-cashflow-empty" hidden>No bank activity imported yet — import a bank activity export above to see income vs expense.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Cash</span>
+          <span class="fin-section-total" id="fin-cash-total">&middot;&middot;&middot;</span>
+        </div>
+        <div class="fin-rows fin-section-body" id="fin-cash-rows"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Investments</span>
+          <span class="section-count" id="fin-prices-updated"></span>
+          <span class="fin-section-total" id="fin-investments-total">&middot;&middot;&middot;</span>
+        </div>
+        <div class="fin-account-grid fin-section-body" id="fin-investment-accounts"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Bitcoin</span>
+          <span class="section-count" id="fin-bitcoin-btc-total"></span>
+          <span class="fin-section-total" id="fin-bitcoin-total">&middot;&middot;&middot;</span>
+        </div>
+        <div class="fin-rows fin-section-body" id="fin-bitcoin-rows"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Debt</span>
+          <span class="fin-section-total" id="fin-debt-total">&middot;&middot;&middot;</span>
+        </div>
+        <div class="fin-rows fin-section-body" id="fin-debt-rows"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Lines of Credit Available</span>
+          <span class="fin-section-total" id="fin-loc-limit-total">&middot;&middot;&middot;</span>
+        </div>
+        <div class="fin-loc-grid fin-section-body" id="fin-loc-rows"></div>
+      </div>
+    </div>
+
+    <aside class="ticker-panel">
+      <div class="ticker-panel-header">
+        <span class="ticker-panel-title">Watchlist</span>
+      </div>
+      <div class="ticker-bar" id="ticker-bar"></div>
+      <div class="ticker-panel-footer">
+        <button class="ticker-refresh" id="ticker-refresh" type="button">Refresh</button>
+      </div>
+      <span class="ticker-updated" id="ticker-updated"></span>
+    </aside>
+  </div>
+
+  <dialog class="fin-category-dialog" id="fin-category-dialog">
+    <form method="dialog" class="fin-category-dialog-form">
+      <div class="fin-category-dialog-header">
+        <h3>Edit category &mdash; <span id="fin-category-dialog-merchant"></span></h3>
+        <button type="submit" class="fin-category-dialog-close" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="fin-category-dialog-section">
+        <div class="fin-category-dialog-section-title">This merchant, always (past and future)</div>
+        <div class="fin-category-dialog-permanent-row">
+          <input type="text" id="fin-category-dialog-permanent-input" list="fin-category-options" placeholder="Category">
+          <button type="button" id="fin-category-dialog-permanent-save">Save always</button>
+        </div>
+      </div>
+
+      <div class="fin-category-dialog-section">
+        <div class="fin-category-dialog-section-title">Or fix a single transaction</div>
+        <div id="fin-category-dialog-transactions" class="fin-category-tx-list"></div>
+      </div>
+
+      <p class="fin-category-dialog-status" id="fin-category-dialog-status" hidden></p>
+    </form>
+  </dialog>
+  <datalist id="fin-category-options"></datalist>
+
+  <dialog class="fin-category-dialog" id="fin-spend-month-tx-dialog">
+    <form method="dialog" class="fin-category-dialog-form">
+      <div class="fin-category-dialog-header">
+        <h3 id="fin-spend-month-tx-dialog-title"></h3>
+        <button type="submit" class="fin-category-dialog-close" aria-label="Close">&times;</button>
+      </div>
+      <p class="fin-category-dialog-subtitle" id="fin-spend-month-tx-dialog-subtitle"></p>
+      <div id="fin-spend-month-tx-list" class="fin-category-tx-list"></div>
+    </form>
+  </dialog>
+
+  <dialog class="fin-category-dialog" id="fin-cashflow-tx-dialog">
+    <form method="dialog" class="fin-category-dialog-form">
+      <div class="fin-category-dialog-header">
+        <h3 id="fin-cashflow-tx-dialog-title"></h3>
+        <button type="submit" class="fin-category-dialog-close" aria-label="Close">&times;</button>
+      </div>
+      <p class="fin-category-dialog-subtitle" id="fin-cashflow-tx-dialog-subtitle"></p>
+      <div class="fin-category-dialog-section" id="fin-cashflow-tx-breakdown-section" hidden>
+        <div class="fin-category-dialog-section-title">By type</div>
+        <div id="fin-cashflow-tx-breakdown" class="fin-legend"></div>
+      </div>
+      <div id="fin-cashflow-tx-list" class="fin-category-tx-list"></div>
+    </form>
+  </dialog>
+
+  <script src="/static/js/theme.js"></script>
+  <script type="module">
+    import { initTickerBar } from "/static/finance/js/ticker.js";
+    import { initFinanceDashboard } from "/static/finance/js/dashboard.js";
+    import { initFinanceImport } from "/static/finance/js/import.js";
+    import { initFinanceSpending } from "/static/finance/js/spending.js";
+    import { initFinanceCashFlow } from "/static/finance/js/cashflow.js";
+    initTickerBar();
+    initFinanceDashboard();
+    initFinanceImport();
+    initFinanceSpending();
+    initFinanceCashFlow();
+  </script>
+</body>
+</html>

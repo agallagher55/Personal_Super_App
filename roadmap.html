@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personal Super App &mdash; Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script>
+  (function () {
+    var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<style>
+  /* This page is deliberately self-contained (no /static/*.css), so it
+     still renders when opened straight off disk rather than through
+     backend/server.py. The values below are the app's own palette from
+     static/styles/styles.css under local names, not a fourth palette -
+     the pill colors are the only ones tuned away from their --status-*
+     originals, darkened/lightened a step so small uppercase mono text
+     stays legible on its own soft background. See DESIGN-SYSTEM.md. */
+  :root {
+    --bg: oklch(97% 0.014 75);
+    --sheet: oklch(99% 0.008 75);
+    --ink: oklch(24% 0.02 75);
+    --ink-dim: oklch(48% 0.02 75);
+    --line: oklch(88% 0.015 75);
+    --accent: oklch(56% 0.16 35);
+    --accent-soft: oklch(93% 0.03 35);
+    --green: oklch(48% 0.13 145);
+    --green-soft: oklch(94% 0.035 145);
+    --blue: oklch(48% 0.13 250);
+    --blue-soft: oklch(94% 0.025 250);
+    --grey-soft: oklch(93% 0.005 75);
+    color-scheme: light;
+  }
+  /* Driven by the data-theme attribute the bootstrap script in <head>
+     sets from the same "theme" localStorage key every other page uses, so
+     the app-wide dark mode toggle reaches this page too. It used to answer
+     only to prefers-color-scheme, which is why flipping the app to dark
+     left the roadmap stubbornly light. */
+  :root[data-theme="dark"] {
+    --bg: oklch(20% 0.014 75);
+    --sheet: oklch(25% 0.016 75);
+    --ink: oklch(92% 0.015 75);
+    --ink-dim: oklch(68% 0.02 75);
+    --line: oklch(36% 0.02 75);
+    --accent: oklch(70% 0.17 35);
+    --accent-soft: oklch(32% 0.07 35);
+    --green: oklch(76% 0.14 145);
+    --green-soft: oklch(30% 0.06 145);
+    --blue: oklch(74% 0.13 250);
+    --blue-soft: oklch(30% 0.05 250);
+    --grey-soft: oklch(30% 0.006 75);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Work Sans", -apple-system, sans-serif;
+    line-height: 1.55;
+  }
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  header.top {
+    margin-bottom: 40px;
+  }
+  h1 {
+    font-family: "Newsreader", serif;
+    font-style: italic;
+    font-weight: 700;
+    font-size: 2.4rem;
+    margin: 0 0 6px;
+  }
+  .subtitle {
+    color: var(--ink-dim);
+    font-size: 1.02rem;
+    margin: 0;
+  }
+  .meta-line {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+    margin-top: 14px;
+  }
+  .card {
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 30px;
+    margin-bottom: 24px;
+  }
+  h2 {
+    font-family: "Newsreader", serif;
+    font-style: italic;
+    font-weight: 700;
+    font-size: 1.35rem;
+    margin: 0 0 14px;
+  }
+  h3 {
+    font-family: "Newsreader", serif;
+    font-style: italic;
+    font-weight: 600;
+    font-size: 1.08rem;
+    margin: 0 0 4px;
+  }
+  p { margin: 0 0 12px; }
+  p:last-child { margin-bottom: 0; }
+  a { color: var(--accent); }
+
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 14px;
+    margin-top: 4px;
+  }
+  .status-item {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .status-item .label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .status-item .name {
+    font-weight: 600;
+  }
+  .pill {
+    display: inline-block;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .pill-done { background: var(--green-soft); color: var(--green); }
+  .pill-next { background: var(--accent-soft); color: var(--accent); }
+  .pill-later { background: var(--blue-soft); color: var(--blue); }
+  .pill-idea { background: var(--grey-soft); color: var(--ink-dim); }
+  .status-item .desc {
+    color: var(--ink-dim);
+    font-size: 0.9rem;
+  }
+
+  .rec-box {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 10px 10px 0;
+    padding: 16px 20px;
+    margin-top: 6px;
+  }
+  .rec-box p { color: var(--ink); }
+
+  .phase {
+    display: flex;
+    gap: 18px;
+    padding: 18px 0;
+    border-top: 1px solid var(--line);
+  }
+  .phase:first-of-type { border-top: none; padding-top: 6px; }
+  .phase-marker {
+    flex: 0 0 auto;
+    width: 92px;
+  }
+  .phase-body { flex: 1 1 auto; }
+  .phase-body ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+  }
+  .phase-body li {
+    margin-bottom: 5px;
+    color: var(--ink);
+  }
+  .phase-body li .fine {
+    color: var(--ink-dim);
+    font-size: 0.9rem;
+  }
+  .why {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    color: var(--ink-dim);
+    font-style: italic;
+  }
+
+  footer.notes {
+    color: var(--ink-dim);
+    font-size: 0.88rem;
+    margin-top: 8px;
+  }
+  code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.85em;
+    background: var(--grey-soft);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="top">
+    <h1>Roadmap</h1>
+    <p class="subtitle">A soft, living plan &mdash; priorities and rough sequencing, not a committed schedule. Revisit whenever priorities shift.</p>
+    <div class="meta-line">Last written 2026-09-08 &middot; source docs: <code>finance/ARCHITECTURE.md</code>, <code>finance/README.md</code>, <code>fitness/README.md</code>, <code>fitness/VISITOR-SIGNIN-PLAN.md</code>, <code>DATABASE-MIGRATION.md</code>, <code>DESIGN-SYSTEM.md</code>, <code>architecture_Review.md</code></div>
+  </header>
+
+  <section class="card">
+    <h2>Where things stand</h2>
+    <div class="status-grid">
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Tasks tracker</span>
+          <span class="pill pill-done">Done</span>
+        </div>
+        <div class="desc">Full CRUD, categories, tags, notes &mdash; the one feature that's been end-to-end real since the start.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Fitness / Google data pull</span>
+          <span class="pill pill-done">Done</span>
+        </div>
+        <div class="desc">The app pulling <em>one</em> person's Google Health data (steps, HRV, SpO2, sleep, weight) via OAuth is fully working &mdash; this is the Fitbit replacement, since Fitbit's own Web API is being retired Sept 2026.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Fitness / visitor Google login</span>
+          <span class="pill pill-done">Done</span>
+        </div>
+        <div class="desc">Any allowed visitor now signs in with their own Google account at <code>/fitness/login</code> and sees only their own data &mdash; browser-driven OAuth, signed session cookies, and per-user token/data storage under <code>data/fitness/users/&lt;user_id&gt;/</code>. See <code>fitness/VISITOR-SIGNIN-PLAN.md</code>.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Finance: Spending &amp; Cash Flow</span>
+          <span class="pill pill-done">Done</span>
+        </div>
+        <div class="desc">Real data, not a sample file: a manual CSV import (credit card + bank activity exports, decided instead of Plaid for now) loads into <code>data/finance/finance.db</code>, driving a category donut, top merchants, a monthly spend chart, editable categories, and a Cash Flow block (income/expense trend, click a bar for that month's transactions, a per-type income breakdown, per-transaction exclusions). See <code>finance/ARCHITECTURE.md</code> Part A.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Finance: net worth</span>
+          <span class="pill pill-next">Partly built</span>
+        </div>
+        <div class="desc">Cash, Bitcoin, Debt, and Lines of Credit now have real, dated balance history (<code>account_balance_snapshots</code> etc.) and a manual-entry route, seeded from the old sample values &mdash; <code>finance/ARCHITECTURE.md</code> Part C, Phase&nbsp;1. <code>/finance</code> itself hasn't been switched over yet, so those sections (plus Investments and Net Worth Over Time) still render the old static <code>finance-dashboard.json</code>.</div>
+      </div>
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">Real database</span>
+          <span class="pill pill-done">Done</span>
+        </div>
+        <div class="desc">Tasks moved off flat JSON onto SQLite: <code>data/tasks.db</code> with <code>sections</code>/<code>tasks</code>/<code>tags</code> tables, a generated <code>done</code> column that can't drift from <code>status</code>, and transactional writes. <code>backend/tasks_export.py</code> regenerates the committed JSON snapshot from it. See <code>DATABASE-MIGRATION.md</code>. Finance ended up with its own SQLite store too (<code>backend/finance/</code>, <code>data/finance/finance.db</code>) &mdash; built around CSV import rather than <code>finance/schema.sql</code>'s original Plaid-oriented design, which stays unused; see <code>finance/ARCHITECTURE.md</code> Part A1. Fitness stays on JSON deliberately (<code>fitness/ARCHITECTURE.md</code> &sect;6).</div>
+      </div>
+
+      <div class="status-item">
+        <div class="label-row">
+          <span class="name">One design system</span>
+          <span class="pill pill-done">Done</span>
+        </div>
+        <div class="desc">Every section now shares one palette, type scale and set of components, in both light and dark. <code>/fitness</code> had carried the ported <code>personal_health</code> project's own slate/blue look, <code>system-ui</code> type and opposite-corner theme toggle, so it read as a different product next to <code>/finance</code>; it now loads <code>static/styles/styles.css</code> like every other page, with fitness-only components layered on top. Its charts take theme tokens instead of hex, so they follow the toggle. Every page also finally declares a <code>viewport</code> meta, without which none of the mobile breakpoints ever fired. See <code>DESIGN-SYSTEM.md</code>.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Recommendation</h2>
+    <p>Fitness visitor sign-in, the tasks database, and Finance's Spending/Cash Flow sections are all done. Finance's net worth side just got its own real tables (Part C Phase&nbsp;1) but the dashboard hasn't been pointed at them yet.</p>
+    <div class="rec-box">
+      <p><strong>Continue Part C: investment holdings (Phase&nbsp;2), then cut the net worth dashboard over to real data (Phase&nbsp;3).</strong> Investments is the one net-worth section still missing its own tables (<code>securities</code>/<code>investment_holdings_snapshots</code>) &mdash; landing those lets Cash/Investments/Bitcoin/Debt/Lines&nbsp;of&nbsp;Credit/Net&nbsp;Worth&nbsp;Over&nbsp;Time all switch off the static sample JSON in one cutover instead of half-migrating the page. See <code>finance/ARCHITECTURE.md</code> Part C, &sect;C10 for the full phased plan.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Soft sequencing</h2>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-done">Done</span></div>
+      <div class="phase-body">
+        <h3>Fitness: per-visitor Google sign-in</h3>
+        <ul>
+          <li>Browser-driven OAuth: <code>/fitness/login</code> &rarr; <code>/fitness/auth/start</code> &rarr; consent screen &rarr; <code>/fitness/auth/callback</code> in <code>backend/server.py</code> &mdash; adapted from the CLI-only flow in <code>backend/fitness/auth.py</code></li>
+          <li>A signed-cookie session layer (<code>backend/fitness/session.py</code>) &mdash; stateless, no server-side session store</li>
+          <li>Per-user token storage (<code>data/fitness/users/&lt;user_id&gt;/tokens.json</code>), replacing the single <code>backend/fitness/config.json</code></li>
+          <li>Per-user data storage (<code>data/fitness/users/&lt;user_id&gt;/health_data.json</code>), replacing the single <code>data/fitness/health_data.json</code></li>
+          <li>Each expected visitor's email still needs adding to the OAuth client's Test users list in Google Cloud Console <span class="fine">(manual, outside code, required today per the cap above)</span>, plus one of <code>FITNESS_OWNER_EMAIL</code>/<code>FITNESS_ALLOWED_EMAILS</code>/<code>data/fitness/allowed_users.json</code> set as this app's own allowlist</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-done">Done</span></div>
+      <div class="phase-body">
+        <h3>Finance: CSV-import pipeline, and its first real net worth tables</h3>
+        <ul>
+          <li>Decided against Plaid for now <span class="fine">(no developer account, no production-approval process, no auth gate needed yet)</span> &mdash; manual CSV export from the credit card and bank sites instead, into <code>backend/finance/</code> + <code>data/finance/finance.db</code>. See <code>finance/ARCHITECTURE.md</code> Part A.</li>
+          <li>Spending (category donut, click-to-filter top merchants, monthly chart, one-time/permanent category fixes) and Cash Flow (income/expense trend, click a bar for its transactions, per-row exclusions, a per-type income breakdown) &mdash; both reading real imported data</li>
+          <li>Transaction ids moved from file position to content-derived hashes, fixing a live bug where a re-import could silently move a category correction or Cash Flow exclusion onto the wrong transaction <span class="fine">(finance/ARCHITECTURE.md &sect;A3b)</span></li>
+          <li>Part C Phase&nbsp;1: real, dated balance history for Cash/Bitcoin/Debt/Lines of Credit (<code>account_balance_snapshots</code>, <code>account_terms_snapshots</code>), a manual-entry route (<code>POST /finance/balance-entries</code>), seeded from the old sample values</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-next">Up next</span></div>
+      <div class="phase-body">
+        <h3>Finance: investment holdings (Part C, Phase 2)</h3>
+        <ul>
+          <li><code>securities</code> + <code>investment_holdings_snapshots</code> tables, <code>POST /finance/holding-entries</code></li>
+          <li>Seed today's TFSA/RRSP/FHSA/Non-Registered holdings from the sample JSON, same as Phase 1 did for Cash/Bitcoin/Debt/Lines of Credit</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-later">Later</span></div>
+      <div class="phase-body">
+        <h3>Finance: cut the net worth dashboard over, and the second credit card</h3>
+        <ul>
+          <li>Part C Phase&nbsp;3: point Cash/Investments/Bitcoin/Debt/Lines of Credit/Net Worth Over Time at the real tables instead of <code>finance-dashboard.json</code>; retire that file <span class="fine">(the visible payoff of Phases 1-2 &mdash; deliberately sequenced after Investments so every section moves at once)</span></li>
+          <li>A second credit card, from a different institution <span class="fine">(documented in <code>finance/ARCHITECTURE.md</code> &sect;A9 &mdash; blocked on a real sample export to design a parser against, not on a decision)</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-later">Further out</span></div>
+      <div class="phase-body">
+        <h3>Finance: raw/staging layer under CSV transactions, then an auth gate</h3>
+        <ul>
+          <li>Part C Phase&nbsp;4: <code>raw_credit_card_transactions</code>/<code>raw_bank_activity</code> plus the replay rule, so a parsing fix can be replayed over all history instead of only affecting new imports; backfill today's already-imported CSVs into it</li>
+          <li>A real auth gate in front of the upload/route endpoints <span class="fine">(still just the same-origin check from Part A4 &mdash; fine for a single-user personal tool today, but the actual prerequisite before Plaid/Part B could ever be revisited)</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker"><span class="pill pill-idea">Watch list</span></div>
+      <div class="phase-body">
+        <h3>Not urgent, but resurface before it gets expensive</h3>
+        <ul>
+          <li>Flask/Django migration decision <span class="fine">(cheap to defer now, expensive to defer once finance route code piles up further on stdlib <code>http.server</code>)</span></li>
+          <li>Basic test suite for <code>backend/server.py</code>'s handlers <span class="fine">(the storage layers all have one now &mdash; <code>backend/tests/test_tasks_db.py</code>, <code>backend/finance/tests/</code>; the request handlers themselves still don't)</span></li>
+          <li>Shared <code>static/js/api.js</code> module to stop the 4-way duplication across tasks pages</li>
+          <li>Plaid-based live sync <span class="fine">(kept in full as Part B of <code>finance/ARCHITECTURE.md</code>, fully deferred rather than dropped &mdash; revisit only if CSV import + manual entry stops being enough)</span></li>
+          <li>Fitness OAuth client verification in Google Cloud Console <span class="fine">(removes the 7-day refresh-token expiry and 100-user Test users cap &mdash; the single biggest thing making sign-in feel unfinished past family/friends scale, see <code>fitness/google_health.md</code> &sect;9)</span></li>
+          <li>Scheduled fitness sync for every visitor (<code>cli.py sync --all</code> on a cron) <span class="fine">(today, a visitor's data only refreshes on first sign-in or a manual Sync now click)</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer class="notes">
+    <p>Full detail lives in <a href="finance/ARCHITECTURE.md">finance/ARCHITECTURE.md</a> (phased plan, data model, security requirements) and <a href="architecture_Review.md">architecture_Review.md</a> (the cheap-fix findings referenced above). This page is a snapshot for orientation, not a replacement for either.</p>
+  </footer>
+
+</div>
+</body>
+</html>

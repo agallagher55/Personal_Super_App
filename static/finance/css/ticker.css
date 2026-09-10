@@ -1,0 +1,116 @@
+.ticker-panel {
+  flex: 0 0 260px;
+  position: sticky;
+  top: 24px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px 20px 20px;
+}
+
+.ticker-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.ticker-panel-title {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.ticker-bar {
+  display: flex;
+  flex-direction: column;
+}
+
+.ticker-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ticker-item:last-child {
+  border-bottom: none;
+}
+
+.ticker-label {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.ticker-price {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-top: 4px;
+}
+
+.ticker-change {
+  font-family: var(--mono);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.ticker-change.is-up { color: var(--status-green); }
+.ticker-change.is-down { color: var(--status-red); }
+.ticker-change.is-flat { color: var(--ink-soft); }
+
+.ticker-item.is-loading .ticker-price,
+.ticker-item.is-loading .ticker-change {
+  color: var(--ink-soft);
+}
+
+.ticker-item.is-error .ticker-price {
+  color: var(--status-red);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ticker-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.ticker-refresh {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.ticker-refresh:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
+.ticker-updated {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 8px;
+}
+
+@media (max-width: 860px) {
+  .ticker-panel {
+    flex: 1 1 auto;
+    width: 100%;
+    position: static;
+  }
+}

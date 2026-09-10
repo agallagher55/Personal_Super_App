@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fitness - Personal Super App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles/styles.css">
+<link rel="stylesheet" href="/static/styles/nav.css">
+<link rel="stylesheet" href="/static/fitness/css/styles.css">
+<script>
+  (function () {
+    var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+</head>
+<body>
+  <div id="site-nav"></div>
+  <script src="/static/js/nav.js"></script>
+  <div class="page page-fitness">
+    <div class="sheet fitness-sheet">
+      <header class="app-header" id="page-header"></header>
+
+      <p id="status" class="status" role="status"></p>
+
+      <main class="dashboard-grid">
+        <section class="card">
+          <h2>
+            <svg class="card-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="color: var(--metric-steps)">
+              <ellipse cx="7.5" cy="15.5" rx="3.2" ry="4.8"/>
+              <circle cx="7.7" cy="8.6" r="1.6"/>
+              <ellipse cx="16.5" cy="8.5" rx="3.2" ry="4.8"/>
+              <circle cx="16.3" cy="15.4" r="1.6"/>
+            </svg>
+            <a href="/fitness/steps">Steps</a>
+          </h2>
+          <div id="steps-card-body"></div>
+        </section>
+
+        <section class="card">
+          <h2>
+            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--metric-calories)">
+              <path d="M12 22c4.4 0 8-3.6 8-8 0-4-2.4-7-6-11 .2 3-1.5 5-3 6.5C9.5 8 8.5 6.5 8.7 4 5.8 6.7 4 9.7 4 13.5 4 18.2 7.6 22 12 22z"></path>
+            </svg>
+            <a href="/fitness/calories">Calories Burned</a>
+          </h2>
+          <div id="calories-card-body"></div>
+        </section>
+
+        <section class="card">
+          <h2>
+            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--metric-heart-rate)">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+            </svg>
+            <a href="/fitness/heart-rate">Resting Heart Rate</a>
+          </h2>
+          <div id="heart-rate-card-body"></div>
+        </section>
+
+        <section class="card">
+          <h2>
+            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--metric-sleep)">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+            <a href="/fitness/sleep">Sleep</a>
+          </h2>
+          <div id="sleep-card-body"></div>
+        </section>
+
+        <section class="card">
+          <h2>
+            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--metric-spo2)">
+              <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+            </svg>
+            <a href="/fitness/spo2">Blood Oxygen (SpO2)</a>
+          </h2>
+          <div id="spo2-card-body"></div>
+        </section>
+
+        <section class="card">
+          <h2>
+            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--metric-hrv)">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            <a href="/fitness/hrv">Heart Rate Variability</a>
+          </h2>
+          <div id="hrv-card-body"></div>
+        </section>
+
+        <section class="card">
+          <h2>
+            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--metric-breathing)">
+              <path d="M9.59 4.59A2 2 0 1 1 11 8H2"></path>
+              <path d="M12.59 19.41A2 2 0 1 0 14 16H2"></path>
+              <path d="M17.73 7.73A2.5 2.5 0 1 1 19.5 12H2"></path>
+            </svg>
+            <a href="/fitness/breathing-rate">Breathing Rate</a>
+          </h2>
+          <div id="breathing-rate-card-body"></div>
+        </section>
+
+        <section class="card">
+          <h2>
+            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--metric-temperature)">
+              <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0z"></path>
+            </svg>
+            <a href="/fitness/temperature">Temperature Variation</a>
+          </h2>
+          <div id="temperature-card-body"></div>
+        </section>
+
+        <section class="card">
+          <h2>
+            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--metric-weight)">
+              <rect x="3" y="3" width="18" height="18" rx="3"></rect>
+              <path d="M12 12l3.2-2.2"></path>
+              <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"></circle>
+            </svg>
+            <a href="/fitness/weight">Weight</a>
+          </h2>
+          <div id="weight-card-body"></div>
+        </section>
+
+        <section class="card">
+          <h2>
+            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--metric-food)">
+              <path d="M4 11h16"></path><path d="M6 11a6 6 0 0 1 12 0"></path><path d="M5 11v2a7 7 0 0 0 14 0v-2"></path><path d="M12 5V3"></path>
+            </svg>
+            Food
+          </h2>
+          <div id="food-card-body"></div>
+        </section>
+      </main>
+    </div>
+
+    <aside class="activity-panel">
+      <section class="card">
+        <h2>
+          <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--metric-activity)">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <a href="/fitness/activity">Activity</a>
+        </h2>
+        <div id="activity-card-body"></div>
+      </section>
+    </aside>
+  </div>
+
+  <script src="/static/js/theme.js"></script>
+  <script type="module" src="/static/fitness/js/dashboard.js"></script>
+</body>
+</html>

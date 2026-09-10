@@ -1,0 +1,10 @@
+TASKS
+- have a link on the all tasks page (endpoint "/") to "/tasks"
+- rename Own tasks to work tasks
+- main page: break down count by open/closed
+- maintain a modified and added date for each task
+- for the date at the top right of the page, have this dynamic, as today's date 
+
+NEW TASKS
+- when creating a new task, add middleware to capitalize description and note sentences and finish with a period.
+- after creating a task, reroute to the page section/category of the task that was just created.

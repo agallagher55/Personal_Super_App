@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Personal Tasks - Aug 5, 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles/styles.css">
+<script>
+  (function () {
+    var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+</head>
+<body>
+  <div class="page page-tasks">
+    <div class="sheet tasks-sheet">
+      <nav class="site-nav">
+        <span class="current">Tasks</span>
+        <a href="/tasks">Categories</a>
+        <a href="/tasks/new">+ New Task</a>
+        <a href="/fitness">Fitness</a>
+        <a href="/finance">Finance</a>
+      </nav>
+
+      <header>
+        <div class="title" id="page-title">Personal Tasks</div>
+        <div class="meta" id="page-meta">
+          <span id="page-date"></span><br>
+          ALEX GALLAGHER
+        </div>
+      </header>
+
+      <a class="new-task-cta" id="new-task-cta" href="/tasks/new">+ New Task</a>
+
+      <div class="task-search-wrap">
+        <input type="text" id="task-search" class="task-search" placeholder="Search tasks..." autocomplete="off">
+      </div>
+
+      <div class="added-banner" id="added-banner">Task added.</div>
+
+      <div id="sections"></div>
+
+      <div class="footnote" id="footnote-text"></div>
+    </div>
+
+    <aside class="completed-panel">
+      <div class="completed-header" id="completed-header">
+        <span class="section-arrow" id="completed-arrow">&#9660;</span>
+        <span class="section-label">Completed</span>
+        <span class="section-count" id="completed-count"></span>
+      </div>
+      <div class="completed-filter-bar" id="completed-filter-bar">
+        <button type="button" class="completed-filter-pill active" data-filter="all">All</button>
+      </div>
+
+      <div class="completed-body" id="completed-body"></div>
+    </aside>
+  </div>
+
+  <button type="button" id="save-changes-btn" class="save-changes-btn">Save Changes</button>
+  <div id="save-status" class="save-status"></div>
+
+  <script src="/static/js/theme.js"></script>
+  <script src="/static/js/script.js"></script>
+</body>
+</html>
