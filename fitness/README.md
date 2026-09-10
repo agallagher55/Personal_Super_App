@@ -18,12 +18,15 @@ until 2026-09-08, which is why `/fitness` used to look like a different
 product from the rest of the app.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how it's wired into the rest of
-this app (§5 covers the frontend), [`API-CONTRACT.md`](API-CONTRACT.md) for
-the `/fitness/api/*` response shapes, [`google_health.md`](google_health.md)
-for the one-time Google Cloud/OAuth setup required before anyone can sign
-in, [`VISITOR-SIGNIN-PLAN.md`](VISITOR-SIGNIN-PLAN.md) for the sign-in
-design itself, and [`../DESIGN-SYSTEM.md`](../DESIGN-SYSTEM.md) for the
-tokens and components these pages are built from.
+this app (§5 covers the frontend),
+[`GOOGLE-HEALTH-API-REFERENCE.md`](GOOGLE-HEALTH-API-REFERENCE.md) for the
+Google endpoints, implemented data types, sync flow, and extension checklist,
+[`API-CONTRACT.md`](API-CONTRACT.md) for the `/fitness/api/*` response shapes,
+[`google_health.md`](google_health.md) for the one-time Google Cloud/OAuth
+setup required before anyone can sign in,
+[`VISITOR-SIGNIN-PLAN.md`](VISITOR-SIGNIN-PLAN.md) for the sign-in design
+itself, and [`../DESIGN-SYSTEM.md`](../DESIGN-SYSTEM.md) for the tokens and
+components these pages are built from.
 
 ## Local setup (one-time)
 
