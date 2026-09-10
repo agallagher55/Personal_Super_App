@@ -95,8 +95,8 @@ Rather than running fitness as a second server, `backend/server.py`:
   instead of `backend/` itself.
 - routes `GET /fitness` and `GET /fitness/<page>` (`steps`, `heart-rate`,
   `sleep`, `activity`, `spo2`, `hrv`, `breathing-rate`, `temperature`,
-  `weight`) to the matching file under `html/fitness/`, gated on
-  `current_user_id()` (302 to `/fitness/login` if signed out).
+  `weight`, `calories`, `food`) to the matching file under `html/fitness/`,
+  gated on `current_user_id()` (302 to `/fitness/login` if signed out).
 - routes `GET /fitness/login`, `GET /fitness/auth/start`,
   `GET /fitness/auth/callback`, and `POST /fitness/auth/logout` to the
   sign-in flow methods on `TaskHandler` itself (cookie/session plumbing

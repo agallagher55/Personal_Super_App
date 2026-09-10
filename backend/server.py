@@ -92,7 +92,7 @@ import networth as finance_networth
 
 FITNESS_PAGES = (
     'steps', 'heart-rate', 'sleep', 'activity', 'spo2', 'hrv',
-    'breathing-rate', 'temperature', 'weight', 'calories',
+    'breathing-rate', 'temperature', 'weight', 'calories', 'food',
 )
 
 SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
