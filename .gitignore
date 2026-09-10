@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+.idea/
+.vscode/
 service_now/.env
 backend/fitness/config.json
 data/fitness/

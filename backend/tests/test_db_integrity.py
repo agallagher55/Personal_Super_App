@@ -2,8 +2,8 @@
 finance.db). These make the guarantees each module's migrate() relies on
 explicit - a broken migration or an accidentally dropped index/view fails
 a test here instead of surfacing later as corrupted data or a silent
-missing feature. See GITHUB-ISSUES-HANDOFF.md's "Add cross-schema
-integrity checks and migration fixtures".
+missing feature. See issue #149, "Add cross-schema integrity checks and
+migration fixtures".
 
 Migration-path fixtures for a *specific* old schema (a database from
 before some particular column/version existed) live next to the module
