@@ -8,6 +8,10 @@ standalone `personal_health` project's `google_health.md`, with paths
 updated for where things live in this repo (see `README.md`'s "what
 changed" table).
 
+For runtime behavior, Google and app endpoint inventories, the implemented
+data-type registry, and the process for adding a metric, see
+[`GOOGLE-HEALTH-API-REFERENCE.md`](GOOGLE-HEALTH-API-REFERENCE.md).
+
 This is written from Google's own setup docs
 (`developers.google.com/health/setup`, `/get-started`,
 `/developer-checklist`) plus their Fitbit migration docs. Some details
