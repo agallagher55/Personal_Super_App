@@ -29,6 +29,18 @@
   var DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   var MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
+  // The viewer's own local calendar date as YYYY-MM-DD - never the
+  // server's, and never UTC (Date#toISOString would silently roll over at
+  // the wrong wall-clock hour for anyone west of UTC). Computed fresh at
+  // every call site rather than cached, so a tab left open across midnight
+  // still saves under the day it actually is right now.
+  function getLocalDateString(date) {
+    var d = date || new Date();
+    var month = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + month + '-' + day;
+  }
+
   var pageDateEl = document.getElementById('page-date');
   if (pageDateEl) {
     var today = new Date();
@@ -953,8 +965,10 @@
       return;
     }
 
+    var entryDate = getLocalDateString();
+
     if (useBeacon && navigator.sendBeacon) {
-      var blob = new Blob([JSON.stringify({ text: text })], { type: 'application/json' });
+      var blob = new Blob([JSON.stringify({ date: entryDate, text: text })], { type: 'application/json' });
       if (navigator.sendBeacon('/tasks/scratchpad', blob)) {
         scratchpadLastSaved = text;
         return;
@@ -967,7 +981,7 @@
     fetch('/tasks/scratchpad', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text })
+      body: JSON.stringify({ date: entryDate, text: text })
     })
       .then(function (response) {
         if (!response.ok) {
@@ -1007,8 +1021,9 @@
 
   function render(data) {
     if (scratchpadInput) {
-      scratchpadInput.value = data.scratchpad || '';
-      scratchpadLastSaved = data.scratchpad || '';
+      var scratchpadText = (data.scratchpad && data.scratchpad.text) || '';
+      scratchpadInput.value = scratchpadText;
+      scratchpadLastSaved = scratchpadText;
     }
 
     taskById = {};
@@ -1348,7 +1363,7 @@
   }
 
   Promise.all([
-    fetch('/tasks.json').then(function (response) {
+    fetch('/tasks.json?scratchpad_date=' + encodeURIComponent(getLocalDateString())).then(function (response) {
       if (!response.ok) {
         throw new Error('Could not load tasks.json (status ' + response.status + ')');
       }

@@ -14,9 +14,9 @@ this app will eventually use in a real database:
 
 GET /tasks.json joins them back into the nested shape the frontend expects,
 the same way a database query/view would. It also includes `scratchpad`, a
-single freeform text field backed by the `scratchpad` table - the "Today's
-List" notepad shown alongside the task list, unrelated to any one task or
-section, saved via POST /tasks/scratchpad.
+{date, text} pair backed by the `scratchpad_entries` table (one row per
+calendar date) - the "Today's List" notepad shown alongside the task list,
+unrelated to any one task or section, saved via POST /tasks/scratchpad.
 
 data/tasks.json's columns mirror a Notion-style tasks database: desc (Task),
 status/done (Status), priority (Priority), due_date (Due Date), completed
@@ -62,6 +62,11 @@ WORK_TYPES = ('new-feature', 'schema-change')
 ENVIRONMENTS = ('dev', 'qa', 'prod')
 
 MAX_CATEGORY_LENGTH = 60  # finance category override names (see finance/ARCHITECTURE.md)
+
+# Scratchpad entries are keyed by the viewer's own local calendar date, sent
+# by the client rather than derived from the server's clock - see
+# handle_update_scratchpad and serve_tasks_json.
+DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
 # The ported Personal Health app (see fitness/ARCHITECTURE.md) lives at
 # backend/fitness/ as its own flat-import module set (config.py, auth.py,
@@ -125,16 +130,25 @@ def format_sentence(text):
     return text
 
 
-def build_nested():
+def build_nested(scratchpad_date=None):
     """Join sections + tasks + tags into the nested shape the frontend
-    expects, the same way a database view would."""
+    expects, the same way a database view would.
+
+    scratchpad_date is the viewer's own local calendar date (the client
+    always knows this instantly; the server never guesses at it). When it's
+    omitted or malformed, the most recently-dated saved entry is served
+    instead, so a caller that doesn't pass one still sees the last thing
+    actually written rather than an empty day.
+    """
     conn = tasks_db.connect()
 
     try:
         sections = tasks_db.load_sections(conn)
         tasks = tasks_db.load_tasks(conn)
         tags = tasks_db.load_tags(conn)
-        scratchpad = tasks_db.load_scratchpad(conn)
+        if not scratchpad_date:
+            scratchpad_date = tasks_db.most_recent_scratchpad_date(conn)
+        scratchpad_text = tasks_db.load_scratchpad(conn, scratchpad_date) if scratchpad_date else ''
     finally:
         conn.close()
 
@@ -169,7 +183,10 @@ def build_nested():
             nested_section['note'] = section['note']
         result_sections.append(nested_section)
 
-    return {'sections': result_sections, 'scratchpad': scratchpad}
+    return {
+        'sections': result_sections,
+        'scratchpad': {'date': scratchpad_date, 'text': scratchpad_text}
+    }
 
 
 class TaskHandler(http.server.SimpleHTTPRequestHandler):
@@ -196,7 +213,7 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.path = '/html/home.html'
             return super().do_GET()
         if path == '/tasks.json':
-            return self.serve_tasks_json()
+            return self.serve_tasks_json(parsed)
         if path == '/tasks/sync-status.json':
             return self.serve_tasks_sync_status()
         if path == '/tasks':
@@ -523,8 +540,11 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def serve_tasks_json(self):
-        body = json.dumps(build_nested(), indent=2).encode('utf-8')
+    def serve_tasks_json(self, parsed):
+        scratchpad_date = parse_qs(parsed.query).get('scratchpad_date', [''])[0].strip()
+        if not DATE_RE.match(scratchpad_date):
+            scratchpad_date = None
+        body = json.dumps(build_nested(scratchpad_date), indent=2).encode('utf-8')
 
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
@@ -1169,11 +1189,16 @@ class TaskHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_error(400, 'Missing text field')
             return
 
+        entry_date = payload.get('date') if isinstance(payload, dict) else None
+        if not isinstance(entry_date, str) or not DATE_RE.match(entry_date):
+            self.send_json_error(400, 'Missing or malformed date field')
+            return
+
         conn = tasks_db.connect()
 
         try:
             with conn:
-                tasks_db.save_scratchpad(conn, text, now_iso())
+                tasks_db.save_scratchpad(conn, entry_date, text, now_iso())
         finally:
             conn.close()
 

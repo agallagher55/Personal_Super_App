@@ -122,11 +122,14 @@ CREATE TABLE IF NOT EXISTS tags (
 CREATE INDEX IF NOT EXISTS idx_tags_task ON tags(task_id);
 
 -- The freeform "Today's List" notepad shown next to the task list on
--- /tasks, unrelated to any one task or section - always exactly one row.
-CREATE TABLE IF NOT EXISTS scratchpad (
-  id       INTEGER PRIMARY KEY CHECK (id = 1),
-  text     TEXT NOT NULL DEFAULT '',
-  modified TEXT NOT NULL DEFAULT ''
+-- /tasks, unrelated to any one task or section - one row per calendar date
+-- (the viewer's local date, sent by the client - see backend/server.py's
+-- handle_update_scratchpad) so yesterday's entry is never presented as
+-- today's just because the clock rolled over.
+CREATE TABLE IF NOT EXISTS scratchpad_entries (
+  entry_date TEXT PRIMARY KEY CHECK (entry_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  text       TEXT NOT NULL DEFAULT '',
+  modified   TEXT NOT NULL DEFAULT ''
     CHECK (modified = '' OR
            modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );

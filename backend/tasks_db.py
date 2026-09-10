@@ -30,6 +30,7 @@ import json
 import os
 import sqlite3
 import sys
+from datetime import datetime, timezone
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -65,7 +66,7 @@ MIN_SQLITE_VERSION = (3, 31, 0)
 # in test_tasks_db.py that stages a database at the previous version (see
 # TestSchemaMigrations below) and asserts the upgrade preserves data and
 # is idempotent.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # Order matters: the dicts built from these are serialized straight into
 # GET /tasks.json, and keeping the old JSON files' key order means the
@@ -148,6 +149,9 @@ def migrate(conn):
     if version < 5:
         _add_sync_health_fields(conn)
 
+    if version < 6:
+        _add_scratchpad_entries(conn)
+
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is our
         # own int constant, never user input.
@@ -205,6 +209,52 @@ def _add_sync_health_fields(conn):
         )
     ''' % (_TIMESTAMP_GLOB, _TIMESTAMP_GLOB))
     conn.execute('CREATE INDEX IF NOT EXISTS idx_sync_runs_started ON sync_runs(started_at DESC)')
+
+
+def _add_scratchpad_entries(conn):
+    """Migration 6: replaces the single timeless scratchpad row with one row
+    per calendar date, so the sidebar's date heading always matches what's
+    actually stored under it instead of yesterday's text being presented as
+    today's after midnight (see issue #164).
+
+    This is the one migration in the app that touches text the user typed
+    by hand and cannot reconstruct, so it only ever copies forward (never
+    reformats the text itself) and runs as one transaction: either the
+    existing text lands under its date and the old table goes away, or
+    nothing happens at all.
+
+    Idempotent by checking for the old table rather than relying solely on
+    the version gate in migrate(), matching the convention for every other
+    migration here.
+    """
+    tables = {row['name'] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    if 'scratchpad' not in tables:
+        return
+
+    conn.execute('BEGIN')
+    try:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS scratchpad_entries (
+              entry_date TEXT PRIMARY KEY CHECK (entry_date %s),
+              text       TEXT NOT NULL DEFAULT '',
+              modified   TEXT NOT NULL DEFAULT ''
+                CHECK (modified = '' OR modified %s)
+            )
+        ''' % (_DATE_GLOB, _TIMESTAMP_GLOB))
+
+        row = conn.execute('SELECT text, modified FROM scratchpad WHERE id = 1').fetchone()
+        if row is not None and row['text']:
+            entry_date = row['modified'][:10] if row['modified'] else datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            conn.execute(
+                'INSERT INTO scratchpad_entries (entry_date, text, modified) VALUES (?, ?, ?)',
+                (entry_date, row['text'], row['modified'])
+            )
+
+        conn.execute('DROP TABLE scratchpad')
+        conn.execute('COMMIT')
+    except Exception:
+        conn.execute('ROLLBACK')
+        raise
 
 
 def _normalize_task_domain_values(conn):
@@ -349,21 +399,34 @@ _TIMESTAMP_GLOB = "GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[
 def _add_date_format_constraints(conn):
     """Migration 3: adds shape-only CHECK constraints (see tasks_schema.sql's
     date/timestamp comment) for tasks.due_date/created/modified/completed
-    and scratchpad.modified. Same table-rebuild procedure as migration 2;
+    and, when the pre-migration-6 `scratchpad` table is still around,
+    scratchpad.modified. Same table-rebuild procedure as migration 2;
     no normalization pass, for the same reason - a malformed date/
     timestamp can't be safely reinterpreted without knowing what it was
     supposed to be, so this refuses rather than guessing.
+
+    A brand new database never has `scratchpad`: init_schema() lays down
+    today's tasks_schema.sql (scratchpad_entries only) before running
+    migrate() from version 0, so this and every migration after it must
+    check rather than assume a table only pre-migration-6 databases have.
     """
-    bad = conn.execute(
+    tables = {row['name'] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    has_scratchpad = 'scratchpad' in tables
+
+    query = (
         f"SELECT DISTINCT due_date AS value, 'due_date' AS column_name FROM tasks "
         f"WHERE due_date != '' AND due_date NOT {_DATE_GLOB} "
         f"UNION SELECT DISTINCT created, 'created' FROM tasks WHERE created NOT {_TIMESTAMP_GLOB} "
         f"UNION SELECT DISTINCT modified, 'modified' FROM tasks WHERE modified NOT {_TIMESTAMP_GLOB} "
         f"UNION SELECT DISTINCT completed, 'completed' FROM tasks "
-        f"WHERE completed != '' AND completed NOT {_TIMESTAMP_GLOB} "
-        f"UNION SELECT DISTINCT modified, 'scratchpad.modified' FROM scratchpad "
-        f"WHERE modified != '' AND modified NOT {_TIMESTAMP_GLOB}"
-    ).fetchall()
+        f"WHERE completed != '' AND completed NOT {_TIMESTAMP_GLOB}"
+    )
+    if has_scratchpad:
+        query += (
+            f" UNION SELECT DISTINCT modified, 'scratchpad.modified' FROM scratchpad "
+            f"WHERE modified != '' AND modified NOT {_TIMESTAMP_GLOB}"
+        )
+    bad = conn.execute(query).fetchall()
     if bad:
         raise RuntimeError(
             'refusing to add the date/timestamp format constraints: malformed value(s) already stored '
@@ -430,18 +493,19 @@ def _add_date_format_constraints(conn):
         conn.execute('CREATE INDEX idx_tasks_section ON tasks(section_id)')
         conn.execute('CREATE INDEX idx_tasks_parent ON tasks(parent_id)')
 
-        conn.execute('''
-            CREATE TABLE scratchpad_new (
-              id       INTEGER PRIMARY KEY CHECK (id = 1),
-              text     TEXT NOT NULL DEFAULT '',
-              modified TEXT NOT NULL DEFAULT ''
-                CHECK (modified = '' OR
-                       modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
-            )
-        ''')
-        conn.execute('INSERT INTO scratchpad_new (id, text, modified) SELECT id, text, modified FROM scratchpad')
-        conn.execute('DROP TABLE scratchpad')
-        conn.execute('ALTER TABLE scratchpad_new RENAME TO scratchpad')
+        if has_scratchpad:
+            conn.execute('''
+                CREATE TABLE scratchpad_new (
+                  id       INTEGER PRIMARY KEY CHECK (id = 1),
+                  text     TEXT NOT NULL DEFAULT '',
+                  modified TEXT NOT NULL DEFAULT ''
+                    CHECK (modified = '' OR
+                           modified GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+                )
+            ''')
+            conn.execute('INSERT INTO scratchpad_new (id, text, modified) SELECT id, text, modified FROM scratchpad')
+            conn.execute('DROP TABLE scratchpad')
+            conn.execute('ALTER TABLE scratchpad_new RENAME TO scratchpad')
 
         violations = conn.execute('PRAGMA foreign_key_check').fetchall()
         if violations:
@@ -546,11 +610,26 @@ def load_tags(conn):
     return [_tag_from_row(row) for row in rows]
 
 
-def load_scratchpad(conn):
-    """The scratchpad's freeform text, or '' if nothing has been saved yet
-    (no row exists until the first save)."""
-    row = conn.execute('SELECT text FROM scratchpad WHERE id = 1').fetchone()
+def load_scratchpad(conn, entry_date):
+    """That calendar date's freeform text, or '' if nothing has been saved
+    under it yet."""
+    row = conn.execute(
+        'SELECT text FROM scratchpad_entries WHERE entry_date = ?', (entry_date,)
+    ).fetchone()
     return row['text'] if row is not None else ''
+
+
+def most_recent_scratchpad_date(conn):
+    """The entry_date of the most recently-dated saved entry, or '' if
+    nothing has ever been saved. Used when a caller doesn't supply a date
+    (see GET /tasks.json) so that case surfaces the last thing actually
+    written rather than silently looking like an empty day - never derived
+    from the server's own idea of "today", which may be the wrong calendar
+    date for a viewer in a different timezone."""
+    row = conn.execute(
+        'SELECT entry_date FROM scratchpad_entries ORDER BY entry_date DESC LIMIT 1'
+    ).fetchone()
+    return row['entry_date'] if row is not None else ''
 
 
 SYNC_RUN_COLUMNS = (
@@ -715,13 +794,13 @@ def reposition_section(conn, section_id):
     set_task_positions(conn, [(row['id'], i) for i, row in enumerate(rows)])
 
 
-def save_scratchpad(conn, text, modified):
-    """Upserts the single scratchpad row - there is never a second one to
-    insert, only ever the first save or a later overwrite."""
+def save_scratchpad(conn, entry_date, text, modified):
+    """Upserts the entry for one calendar date - the first save for that
+    date inserts it, a later one on the same date overwrites it."""
     conn.execute(
-        'INSERT INTO scratchpad (id, text, modified) VALUES (1, ?, ?) '
-        'ON CONFLICT(id) DO UPDATE SET text = excluded.text, modified = excluded.modified',
-        (text, modified),
+        'INSERT INTO scratchpad_entries (entry_date, text, modified) VALUES (?, ?, ?) '
+        'ON CONFLICT(entry_date) DO UPDATE SET text = excluded.text, modified = excluded.modified',
+        (entry_date, text, modified),
     )
 
 

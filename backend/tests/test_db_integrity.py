@@ -27,7 +27,7 @@ import tasks_db  # noqa: E402
 import db as finance_db  # noqa: E402
 
 
-TASKS_TABLES = {'sections', 'tasks', 'tags', 'scratchpad'}
+TASKS_TABLES = {'sections', 'tasks', 'tags', 'scratchpad_entries'}
 TASKS_INDEXES = {'idx_tasks_section', 'idx_tasks_parent', 'idx_tags_task'}
 
 FINANCE_TABLES = {
