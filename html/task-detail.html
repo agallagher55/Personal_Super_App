@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Task - Personal Tasks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,600;0,700;1,600&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles/styles.css">
+<script>
+  (function () {
+    var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+</head>
+<body>
+  <div class="page page-single">
+    <div class="sheet form-sheet task-detail-sheet">
+      <nav class="site-nav">
+        <a href="/">Tasks</a>
+        <a href="/tasks">Categories</a>
+        <span class="current">Task</span>
+        <a href="/fitness">Fitness</a>
+        <a href="/finance">Finance</a>
+      </nav>
+
+      <header>
+        <div class="title">Edit Task</div>
+        <div class="meta" id="task-meta"></div>
+      </header>
+
+      <div class="task-detail-status" id="task-detail-status"></div>
+
+      <form class="task-form" id="task-detail-form">
+        <label class="field">
+          <span class="field-label">Description</span>
+          <input type="text" name="desc" id="field-desc" required>
+        </label>
+
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Ticket number</span>
+            <input type="text" name="ticket_number" id="field-ticket-number" placeholder="e.g. TASK0329104">
+          </label>
+
+          <label class="field">
+            <span class="field-label">Due date</span>
+            <input type="date" name="due_date" id="field-due-date">
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Assignment group</span>
+            <input type="text" name="assignment_group" id="field-assignment-group" placeholder="e.g. Data Services Support">
+          </label>
+
+          <label class="field">
+            <span class="field-label">Requested by</span>
+            <input type="text" name="requested_by" id="field-requested-by" placeholder="e.g. Justin Chang">
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Note</span>
+          <textarea name="note" id="field-note"></textarea>
+        </label>
+
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Status</span>
+            <select name="status" id="field-status">
+              <option value="open">Open</option>
+              <option value="in-progress">In Progress</option>
+              <option value="pending">Pending</option>
+              <option value="done">Done</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Priority</span>
+            <select name="priority" id="field-priority">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Priority tag</span>
+            <input type="text" name="flag_tag" id="field-flag-tag" placeholder="e.g. top priority, overdue">
+          </label>
+
+          <label class="field">
+            <span class="field-label">Other tags</span>
+            <input type="text" name="tags" id="field-tags">
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Time estimate (hours)</span>
+            <input type="number" name="time_estimate" id="field-time-estimate" min="0" step="0.5">
+          </label>
+
+          <label class="field">
+            <span class="field-label">Parent task</span>
+            <select name="parent_id" id="field-parent-id">
+              <option value="">None</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Related files</span>
+          <input type="text" name="related_files" id="field-related-files" placeholder="paths or links, comma-separated">
+        </label>
+
+        <div class="field-row" id="detail-work-type-fields" style="display: none;">
+          <label class="field field-inline">
+            <input type="radio" name="work_type" id="field-work-type-none" value="">
+            <span class="field-label">None</span>
+          </label>
+
+          <label class="field field-inline">
+            <input type="radio" name="work_type" id="field-work-type-new-feature" value="new-feature">
+            <span class="field-label">New feature</span>
+          </label>
+
+          <label class="field field-inline">
+            <input type="radio" name="work_type" id="field-work-type-schema-change" value="schema-change">
+            <span class="field-label">Schema change</span>
+          </label>
+        </div>
+
+        <div class="field-row" id="detail-env-fields" style="display: none;">
+          <label class="field field-inline">
+            <input type="checkbox" name="env_dev" id="field-env-dev">
+            <span class="field-label">Dev</span>
+          </label>
+
+          <label class="field field-inline">
+            <input type="checkbox" name="env_qa" id="field-env-qa">
+            <span class="field-label">QA</span>
+          </label>
+
+          <label class="field field-inline">
+            <input type="checkbox" name="env_prod" id="field-env-prod">
+            <span class="field-label">Prod</span>
+          </label>
+
+          <label class="field field-inline" id="detail-cmdb-field" style="display: none;">
+            <input type="checkbox" name="cmdb_updated" id="field-cmdb-updated">
+            <span class="field-label">CMDB updated</span>
+          </label>
+        </div>
+
+        <div class="section-divider">Personal Notes</div>
+
+        <label class="field">
+          <textarea name="notes" id="field-notes" placeholder="Add notes..."></textarea>
+        </label>
+
+        <div class="task-detail-actions">
+          <button type="submit" class="submit-btn">Save Task</button>
+          <button type="button" class="delete-task-btn" id="delete-task-btn">Delete Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/js/theme.js"></script>
+  <script src="/static/js/task-detail.js"></script>
+</body>
+</html>
