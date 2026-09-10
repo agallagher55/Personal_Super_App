@@ -178,11 +178,23 @@ was when the store was three JSON files.
 `assignment_group`, `requested_by`, `due_date`, `focus_today`,
 `follow_up_date`, `time_estimate`, `related_files`, `parent_id`,
 `work_type`, `env_dev`/`env_qa`/`env_prod`, `cmdb_updated`,
-`servicenow_sys_id`) driving the task detail view, the queue pills on
-`/tasks`, and the ServiceNow sync. `focus_today` and `follow_up_date` are
-the personal triage layer: neither is imported from ServiceNow, and neither
-is pushed back to it. `backend/tasks_schema.sql` is the full, commented
-list.
+`servicenow_sys_id`, `source_opened_at`, `source_updated_at`,
+`last_seen_at`) driving the task detail view, the queue pills on `/tasks`,
+and the ServiceNow sync. `focus_today` and `follow_up_date` are the
+personal triage layer: neither is imported from ServiceNow, and neither is
+pushed back to it. The three `source_*`/`last_seen_at` timestamps are the
+opposite, written only by the sync: when the ticket was opened and last
+changed upstream, and when a sync last saw it. They are what makes a
+"changed since the last sync" badge possible, since the local `modified`
+moves whenever *you* edit a task and says nothing about the source.
+`backend/tasks_schema.sql` is the full, commented list.
+
+A fifth table, `sync_runs`, holds one row per real ServiceNow sync attempt
+(start and finish, `ok`/`error`, the record counts, the query fingerprint,
+and any error text). It is deliberately kept apart from the task rows: a
+local edit must never make the source data look fresher than it is, and a
+failed sync has to stay visible instead of being papered over by the last
+good one. `/tasks` reads it through `/tasks/sync-status.json`.
 
 ### Setting up the database
 

@@ -226,7 +226,7 @@
           <span class="name">Tasks tracker</span>
           <span class="pill pill-done">Done</span>
         </div>
-        <div class="desc">Full CRUD, categories, tags, notes &mdash; the one feature that's been end-to-end real since the start. It also pulls the "My Work" list out of Halifax's ServiceNow GIS dashboard (<code>service_now/sync.py</code>, a CLI script matched on <code>sys_id</code> so re-runs never duplicate a task or overwrite a note you typed), and layers a personal triage pass on top that ServiceNow never sees: Today / Waiting / Overdue queue pills, a per-task Today flag, and a follow-up date for blocked work. <code>service_now/TASKS-UX-REVIEW.md</code> is the review of that whole workflow; what's left of it is tracked in <a href="https://github.com/agallagher55/Personal_Super_App/issues/160">issue #160</a>.</div>
+        <div class="desc">Full CRUD, categories, tags, notes &mdash; the one feature that's been end-to-end real since the start. It also pulls the "My Work" list out of Halifax's ServiceNow GIS dashboard (<code>service_now/sync.py</code>, a CLI script matched on <code>sys_id</code> so re-runs never duplicate a task or overwrite a note you typed), and layers a personal triage pass on top that ServiceNow never sees: Today / Waiting / Overdue queue pills, a per-task Today flag, and a follow-up date for blocked work. Every sync attempt is logged, so the page can say how fresh its ServiceNow data is and flag what changed upstream since you last looked. <code>service_now/TASKS-UX-REVIEW.md</code> is the review of that whole workflow; what's left of it is tracked in <a href="https://github.com/agallagher55/Personal_Super_App/issues/160">issue #160</a>.</div>
       </div>
       <div class="status-item">
         <div class="label-row">
@@ -339,8 +339,8 @@
       <div class="phase-body">
         <h3>Tasks: make the ServiceNow layer trustworthy</h3>
         <ul>
-          <li>Phase&nbsp;1 of <code>service_now/TASKS-UX-REVIEW.md</code>: record when each ticket was opened and last changed upstream, and show on the page how fresh the sync is <span class="fine">(today nothing on <code>/tasks</code> says whether its ServiceNow data is 10 minutes or 10 days old, and a failed sync looks identical to a healthy one)</span></li>
-          <li>Persistent saved/unsaved state for task edits, and real button semantics on the collapsible sections <span class="fine">(they're <code>div</code>s with click handlers today, so none of them are keyboard reachable)</span></li>
+          <li>Sync health is <strong>done</strong>: each task now records when its ticket was opened and last changed upstream, every sync attempt is logged to <code>sync_runs</code> whether it succeeded or failed, and <code>/tasks</code> shows how fresh the data is <span class="fine">(schema migration 5, <code>/tasks/sync-status.json</code>)</span></li>
+          <li>Rest of Phase&nbsp;1: persistent saved/unsaved state for task edits, and real button semantics on the collapsible sections <span class="fine">(they're <code>div</code>s with click handlers today, so none of them are keyboard reachable)</span></li>
           <li>Then Phase&nbsp;2: date the scratchpad so yesterday's list stops being presented as today's, reconcile tickets that drop out of the active query without ever deleting their notes, and add real queue facets</li>
           <li>Full plan and per-item scope in <a href="https://github.com/agallagher55/Personal_Super_App/issues/160">issue #160</a>; the review itself is <code>service_now/TASKS-UX-REVIEW.md</code></li>
         </ul>

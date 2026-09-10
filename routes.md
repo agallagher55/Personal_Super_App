@@ -51,6 +51,7 @@ gets a 302 to `/fitness/login` (HTML pages) or a 401 (API routes). See
 | `/finance/api/holding-prices` | JSON | — | Live quotes for arbitrary portfolio holding symbols (`?symbols=A,B,C`, comma-separated), proxied from Yahoo the same way as `/finance/api/prices` — no Bank of Canada fallback, since these are always equity/ETF symbols. 400 if `symbols` is missing; otherwise always 200 with `{"quotes": {symbol: {"price", "change_pct"} \| null}}`, one entry per requested symbol. |
 | `/new` | — | — | 302 redirect to `/tasks/new`. |
 | `/tasks.json` | the `sections` + `tasks` + `tags` tables joined into the nested shape the three JSON files used to hold, plus the `scratchpad` table's text as a top-level `scratchpad` key | — | `no-store` cache headers. Every task-tracker page above fetches this client-side to render. |
+| `/tasks/sync-status.json` | JSON | — | `{"latest_run": {...} \| null, "previous_success_started_at": "..."}` from the `sync_runs` table, for the ServiceNow freshness line on `/tasks`. `latest_run` is the most recent attempt whatever its result, so a failed sync stays visible rather than being hidden behind the last good one. `previous_success_started_at` is the baseline the "changed" badge compares each task's `source_updated_at` against: the run before the latest when that one succeeded, otherwise the last successful run. Both are empty on a database that has never synced. |
 
 Any other path falls through to `SimpleHTTPRequestHandler`, i.e. plain
 static file serving from the repo root (`/static/...`, etc.).
