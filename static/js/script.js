@@ -151,7 +151,8 @@
     } else {
       var changed = document.querySelectorAll('.field-pill-source-changed').length;
       syncHealthEl.textContent = 'ServiceNow · synced ' + formatRelativeTime(latest.finished_at) +
-        ' · ' + latest.records_seen + ' active · ' + changed + ' changed';
+        ' · ' + latest.records_seen + ' active · ' + changed + ' changed' +
+        (latest.missing_count ? ' · ' + latest.missing_count + ' missing' : '');
     }
   }
 
@@ -184,6 +185,7 @@
     li.dataset.assignmentGroup = taskData.assignment_group || '';
     li.dataset.origin = taskData.ticket_number ? 'service-now' : 'local';
     li.dataset.freshness = changedSincePreviousSync(taskData) ? 'changed' : '';
+    li.dataset.sourceMissing = taskData.source_missing ? 'true' : 'false';
     li.dataset.modified = taskData.modified || '';
     li.dataset.sourceOpenedAt = taskData.source_opened_at || '';
     li.dataset.created = taskData.created || '';
@@ -301,6 +303,9 @@
     });
     if (isWorkTask && changedSincePreviousSync(taskData)) {
       fieldEntries.push({ value: 'Changed', className: 'source-changed' });
+    }
+    if (isWorkTask && taskData.source_missing) {
+      fieldEntries.push({ value: 'Missing from ServiceNow', className: 'source-missing' });
     }
     if (isWorkTask && sourceAgeLabel(taskData.source_opened_at)) {
       fieldEntries.push({ value: sourceAgeLabel(taskData.source_opened_at), className: 'source-age' });

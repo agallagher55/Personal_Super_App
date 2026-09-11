@@ -192,6 +192,7 @@ def upsert(tasks, section_id, mapped, sync_started_at, dry_run, pending):
             'source_opened_at': mapped['source_opened_at'],
             'source_updated_at': mapped['source_updated_at'],
             'last_seen_at': sync_started_at,
+            'source_missing': False,
             'created': now,
             'modified': now,
             'completed': now if mapped['status'] == 'done' else '',
@@ -223,6 +224,9 @@ def upsert(tasks, section_id, mapped, sync_started_at, dry_run, pending):
     if existing.get('last_seen_at', '') != sync_started_at:
         existing['last_seen_at'] = sync_started_at
         refreshed = True
+    if existing.get('source_missing', False):
+        existing['source_missing'] = False
+        refreshed = True
 
     if changed and not dry_run:
         existing['modified'] = now
@@ -232,6 +236,24 @@ def upsert(tasks, section_id, mapped, sync_started_at, dry_run, pending):
         pending['refreshed'].add(existing['id'])
 
     return 'updated' if changed else 'unchanged'
+
+
+def reconcile_missing(tasks, section_id, sync_started_at, dry_run, pending):
+    """Flag imported tasks not returned by this completed active-record query.
+
+    A failed or partially processed fetch never reaches this function. Personal
+    tasks are identified by the absence of a ServiceNow sys_id and are ignored;
+    missing source tasks remain intact, including all personal notes.
+    """
+    missing = []
+    for task in tasks:
+        if (task.get('section_id') == section_id and task.get('servicenow_sys_id')
+                and task.get('last_seen_at') != sync_started_at):
+            missing.append(task)
+            if not dry_run and not task.get('source_missing', False):
+                task['source_missing'] = True
+                pending['refreshed'].add(task['id'])
+    return missing
 
 
 def record_sync_error(conn, started_at, query, error, config):
@@ -290,7 +312,13 @@ def main():
                 counts[outcome] += 1
                 print('  [%s] %s - %s' % (outcome, mapped['ticket_number'] or '(no number)', mapped['desc']))
 
-            print('created=%d updated=%d unchanged=%d' % (counts['created'], counts['updated'], counts['unchanged']))
+            missing = reconcile_missing(tasks, section['id'], started_at, args.dry_run, pending)
+            for task in missing:
+                print('  [missing] %s - %s' % (task.get('ticket_number') or '(no number)', task['desc']))
+
+            print('created=%d updated=%d unchanged=%d missing=%d' % (
+                counts['created'], counts['updated'], counts['unchanged'], len(missing)
+            ))
 
             if args.dry_run:
                 print('Dry run -- data/tasks.db was not modified.')
@@ -316,6 +344,7 @@ def main():
                     'created_count': counts['created'],
                     'updated_count': counts['updated'],
                     'unchanged_count': counts['unchanged'],
+                    'missing_count': len(missing),
                     'query_fingerprint': query_fingerprint(query),
                 })
         except Exception as error:

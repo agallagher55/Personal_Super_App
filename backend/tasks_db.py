@@ -66,7 +66,7 @@ MIN_SQLITE_VERSION = (3, 31, 0)
 # in test_tasks_db.py that stages a database at the previous version (see
 # TestSchemaMigrations below) and asserts the upgrade preserves data and
 # is idempotent.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # Order matters: the dicts built from these are serialized straight into
 # GET /tasks.json, and keeping the old JSON files' key order means the
@@ -78,14 +78,14 @@ TASK_COLUMNS = (
     'follow_up_date', 'time_estimate',
     'related_files', 'parent_id', 'work_type', 'env_dev', 'env_qa', 'env_prod',
     'cmdb_updated', 'servicenow_sys_id', 'source_opened_at', 'source_updated_at',
-    'last_seen_at',
+    'last_seen_at', 'source_missing',
 )
 
 # Everything in TASK_COLUMNS except `done`, which is generated and so has no
 # column to write to.
 TASK_WRITE_COLUMNS = tuple(c for c in TASK_COLUMNS if c != 'done')
 
-TASK_BOOL_COLUMNS = ('focus_today', 'env_dev', 'env_qa', 'env_prod', 'cmdb_updated')
+TASK_BOOL_COLUMNS = ('focus_today', 'env_dev', 'env_qa', 'env_prod', 'cmdb_updated', 'source_missing')
 
 SECTION_COLUMNS = ('id', 'label', 'slug', 'note')
 
@@ -151,6 +151,9 @@ def migrate(conn):
 
     if version < 6:
         _add_scratchpad_entries(conn)
+
+    if version < 7:
+        _add_source_missing_fields(conn)
 
     if version < SCHEMA_VERSION:
         # No bind parameters allowed in a PRAGMA, and SCHEMA_VERSION is our
@@ -390,6 +393,23 @@ def _add_task_domain_constraints(conn):
         conn.execute('COMMIT')
     finally:
         conn.execute('PRAGMA foreign_keys = ON')
+
+
+def _add_source_missing_fields(conn):
+    """Migration 7: flag imported tasks absent from a successful source run."""
+    columns = {row['name'] for row in conn.execute('PRAGMA table_info(tasks)')}
+    if 'source_missing' not in columns:
+        conn.execute(
+            'ALTER TABLE tasks ADD COLUMN source_missing INTEGER NOT NULL DEFAULT 0 '
+            'CHECK (source_missing IN (0, 1))'
+        )
+
+    run_columns = {row['name'] for row in conn.execute('PRAGMA table_info(sync_runs)')}
+    if 'missing_count' not in run_columns:
+        conn.execute(
+            'ALTER TABLE sync_runs ADD COLUMN missing_count INTEGER NOT NULL DEFAULT 0 '
+            'CHECK (missing_count >= 0)'
+        )
 
 
 _DATE_GLOB = "GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"
@@ -634,7 +654,7 @@ def most_recent_scratchpad_date(conn):
 
 SYNC_RUN_COLUMNS = (
     'id', 'started_at', 'finished_at', 'result', 'records_seen', 'created_count',
-    'updated_count', 'unchanged_count', 'query_fingerprint', 'error',
+    'updated_count', 'unchanged_count', 'missing_count', 'query_fingerprint', 'error',
 )
 
 

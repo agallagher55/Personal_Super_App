@@ -1199,6 +1199,13 @@ a.field-pill-ticket:hover { border-color: var(--flag); color: var(--flag); }
   font-weight: 600;
 }
 
+.field-pill-source-missing {
+  color: var(--danger, #a33);
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-weight: 600;
+}
+
 .field-pill-source-age {
   color: var(--ink-soft);
   border: 1px solid var(--line);
