@@ -84,6 +84,52 @@ class TestUpsertFreshness(unittest.TestCase):
         self.assertEqual(pending['updated'], set())
         self.assertEqual(task['source_updated_at'], '2026-09-10T12:30:00Z')
 
+    def test_seen_task_clears_a_previous_missing_flag(self):
+        task = dict(self.mapped, id='task-1', section_id='own-tasks', position=0,
+                    last_seen_at='2026-09-09T14:00:00Z', source_missing=True)
+        pending = {'created': [], 'updated': set(), 'refreshed': set()}
+
+        sync.upsert([task], 'own-tasks', self.mapped, '2026-09-10T14:00:00Z', False, pending)
+
+        self.assertIs(task['source_missing'], False)
+        self.assertEqual(pending['refreshed'], {'task-1'})
+
+
+class TestMissingReconciliation(unittest.TestCase):
+
+    def test_flags_only_unseen_imported_tasks_in_the_synced_section(self):
+        tasks = [
+            {'id': 'missing', 'section_id': 'own-tasks', 'servicenow_sys_id': 'source-1',
+             'last_seen_at': '2026-09-09T00:00:00Z', 'source_missing': False},
+            {'id': 'seen', 'section_id': 'own-tasks', 'servicenow_sys_id': 'source-2',
+             'last_seen_at': '2026-09-10T00:00:00Z', 'source_missing': False},
+            {'id': 'personal', 'section_id': 'own-tasks', 'last_seen_at': ''},
+            {'id': 'other', 'section_id': 'personal', 'servicenow_sys_id': 'source-3',
+             'last_seen_at': '2026-09-09T00:00:00Z'},
+        ]
+        pending = {'created': [], 'updated': set(), 'refreshed': set()}
+
+        missing = sync.reconcile_missing(
+            tasks, 'own-tasks', '2026-09-10T00:00:00Z', False, pending
+        )
+
+        self.assertEqual([task['id'] for task in missing], ['missing'])
+        self.assertIs(tasks[0]['source_missing'], True)
+        self.assertEqual(pending['refreshed'], {'missing'})
+
+    def test_dry_run_reports_without_mutating(self):
+        task = {'id': 'missing', 'section_id': 'own-tasks', 'servicenow_sys_id': 'source-1',
+                'last_seen_at': '', 'source_missing': False}
+        pending = {'created': [], 'updated': set(), 'refreshed': set()}
+
+        missing = sync.reconcile_missing(
+            [task], 'own-tasks', '2026-09-10T00:00:00Z', True, pending
+        )
+
+        self.assertEqual(missing, [task])
+        self.assertIs(task['source_missing'], False)
+        self.assertEqual(pending['refreshed'], set())
+
 
 if __name__ == '__main__':
     unittest.main()

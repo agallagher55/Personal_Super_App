@@ -74,12 +74,18 @@ future runs.
 - Uses the same `backend/tasks_db.py` storage helpers as the web app and
   commits the entire sync in one SQLite transaction. A failed or interrupted
   run therefore cannot leave a partially applied import.
+- After a successful active-record query, flags previously imported tasks that
+  were not returned as `source_missing`. The task and all personal fields stay
+  intact, and the flag clears automatically if ServiceNow returns it again.
+  Failed syncs and dry runs never change this flag.
 
 The `/tasks` UI adds a personal triage layer without writing those choices
 back to ServiceNow: ticket pills link to their source records, **Today** can
 be toggled per task, **Waiting** includes imported awaiting/pending states,
 and **Overdue** is calculated from the due date. A follow-up date can be set
-on waiting work independently of the ServiceNow due date.
+on waiting work independently of the ServiceNow due date. A **Missing from
+ServiceNow** badge identifies records that need review rather than silently
+archiving or deleting them.
 
 ## If the task list looks empty
 

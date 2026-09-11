@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     CHECK (source_updated_at = '' OR source_updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
   last_seen_at      TEXT NOT NULL DEFAULT ''
     CHECK (last_seen_at = '' OR last_seen_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+  source_missing    INTEGER NOT NULL DEFAULT 0 CHECK (source_missing IN (0, 1)),
   created           TEXT NOT NULL
     CHECK (created GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
   modified          TEXT NOT NULL
@@ -148,6 +149,7 @@ CREATE TABLE IF NOT EXISTS sync_runs (
   created_count     INTEGER NOT NULL DEFAULT 0 CHECK (created_count >= 0),
   updated_count     INTEGER NOT NULL DEFAULT 0 CHECK (updated_count >= 0),
   unchanged_count   INTEGER NOT NULL DEFAULT 0 CHECK (unchanged_count >= 0),
+  missing_count     INTEGER NOT NULL DEFAULT 0 CHECK (missing_count >= 0),
   query_fingerprint TEXT NOT NULL DEFAULT '',
   error             TEXT NOT NULL DEFAULT ''
 );

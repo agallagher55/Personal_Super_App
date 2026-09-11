@@ -43,6 +43,7 @@ def a_task(task_id='t1', **overrides):
         'source_opened_at': '',
         'source_updated_at': '',
         'last_seen_at': '',
+        'source_missing': False,
     }
     task.update(overrides)
     return task
@@ -626,6 +627,7 @@ class TestTaskRoundTrip(DatabaseTestCase):
             source_opened_at='2024-01-01T04:00:00Z',
             source_updated_at='2026-09-10T14:15:16Z',
             last_seen_at='2026-09-10T15:00:00Z',
+            source_missing=True,
         )
         tasks_db.insert_task(self.conn, original)
         stored = tasks_db.find_task(self.conn, 't1')
@@ -639,7 +641,8 @@ class TestTaskRoundTrip(DatabaseTestCase):
         tasks_db.insert_task(self.conn, a_task(env_dev=True, cmdb_updated=True))
         stored = tasks_db.find_task(self.conn, 't1')
 
-        for field in ('focus_today', 'env_dev', 'env_qa', 'env_prod', 'cmdb_updated', 'done'):
+        for field in ('focus_today', 'env_dev', 'env_qa', 'env_prod', 'cmdb_updated',
+                      'source_missing', 'done'):
             self.assertIsInstance(stored[field], bool, field)
 
     def test_triage_fields_validate_and_round_trip(self):
@@ -749,6 +752,24 @@ class TestSyncHealthMigration(DatabaseTestCase):
         self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], tasks_db.SCHEMA_VERSION)
         self.assertIn('sync_runs', {
             row['name'] for row in self.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        })
+
+    def test_version_six_database_gains_missing_flags_without_losing_notes(self):
+        self.given_section()
+        tasks_db.insert_task(self.conn, a_task(notes='Keep this personal note'))
+        self.conn.execute('PRAGMA user_version = 6')
+        self.conn.execute('ALTER TABLE tasks DROP COLUMN source_missing')
+        self.conn.execute('ALTER TABLE sync_runs DROP COLUMN missing_count')
+        self.conn.commit()
+
+        tasks_db.migrate(self.conn)
+        tasks_db.migrate(self.conn)
+
+        stored = tasks_db.find_task(self.conn, 't1')
+        self.assertEqual(stored['notes'], 'Keep this personal note')
+        self.assertIs(stored['source_missing'], False)
+        self.assertIn('missing_count', {
+            row['name'] for row in self.conn.execute('PRAGMA table_info(sync_runs)')
         })
 
 
